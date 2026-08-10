@@ -54,6 +54,16 @@ importers:
         specifier: ^3.0.5
         version: 3.2.7(@types/node@22.20.1)(jsdom@30.0.1)(yaml@2.9.0)
 
+  packages/config-model:
+    dependencies:
+      '@mcs/yaml-engine':
+        specifier: workspace:*
+        version: link:../yaml-engine
+    devDependencies:
+      '@mcs/test-fixtures':
+        specifier: workspace:*
+        version: link:../test-fixtures
+
   packages/form-renderer:
     dependencies:
       '@mcs/schema-core':

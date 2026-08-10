@@ -1,0 +1,16 @@
+{
+  "name": "@mcs/config-model",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Domain entities extracted from a parsed Mihomo config, with internal ids stable across renames (FR-REL-01).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@mcs/yaml-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@mcs/test-fixtures": "workspace:*"
+  }
+}
