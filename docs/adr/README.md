@@ -13,6 +13,11 @@
 | [ADR-006](./ADR-006-two-tier-writeback.md)                  | 两级 YAML 回写策略（CST + AST）      | Accepted | M0 技术验证 |
 | [ADR-007](./ADR-007-source-only-workspace-packages.md)      | 工作区内部包直接导出 TypeScript 源码 | Accepted | M1 骨架     |
 | [ADR-008](./ADR-008-interpreted-json-schema-validator.md)   | 自建解释型 JSON Schema 子集校验器    | Accepted | M0 技术验证 |
+| [ADR-010](./ADR-010-bundle-signing-and-key-custody.md)      | Bundle 签名算法与签名密钥托管        | Accepted | PRD §19     |
+| [ADR-011](./ADR-011-visual-design-system.md)                | 视觉设计令牌来源与应用层扩展         | Accepted | M1 骨架     |
+| [ADR-012](./ADR-012-first-stable-compatibility-profile.md)  | 首个 Stable 兼容档案锁定 v1.19.29    | Accepted | PRD §19     |
 
 ADR-001 至 ADR-005 直接来自 PRD §17，本仓库补全其背景与工程约束。
 ADR-006 起为实施阶段新增的决策。
+
+ADR-009 预留给引用模型（实体标识与引用 Registry），随 M0-3 一起写入。
