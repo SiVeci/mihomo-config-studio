@@ -76,6 +76,19 @@ importers:
         specifier: ^19.0.0
         version: 19.2.8
 
+  packages/graph:
+    dependencies:
+      '@mcs/config-model':
+        specifier: workspace:*
+        version: link:../config-model
+      '@mcs/yaml-engine':
+        specifier: workspace:*
+        version: link:../yaml-engine
+    devDependencies:
+      '@mcs/test-fixtures':
+        specifier: workspace:*
+        version: link:../test-fixtures
+
   packages/schema-core:
     dependencies:
       '@mcs/yaml-engine':

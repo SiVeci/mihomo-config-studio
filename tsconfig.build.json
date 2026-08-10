@@ -5,6 +5,7 @@
     { "path": "./packages/yaml-engine" },
     { "path": "./packages/schema-core" },
     { "path": "./packages/form-renderer" },
-    { "path": "./packages/config-model" }
+    { "path": "./packages/config-model" },
+    { "path": "./packages/graph" }
   ]
 }

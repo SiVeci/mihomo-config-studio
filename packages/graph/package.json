@@ -1,0 +1,17 @@
+{
+  "name": "@mcs/graph",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Reference index over extracted entities and lossless cascading rename (FR-REL-02).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@mcs/config-model": "workspace:*",
+    "@mcs/yaml-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@mcs/test-fixtures": "workspace:*"
+  }
+}
