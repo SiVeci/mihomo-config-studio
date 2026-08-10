@@ -1,0 +1,18 @@
+# 架构决策记录（ADR）
+
+每条记录描述一个决策、它的背景、结果和代价。已接受的决策不再反复讨论，
+除非出现明确的技术证据证明其不可行——此时新增一条记录来 supersede 它，而不是原地改写。
+
+| 编号                                                        | 标题                                 | 状态     | 来源        |
+| ----------------------------------------------------------- | ------------------------------------ | -------- | ----------- |
+| [ADR-001](./ADR-001-modular-monolith.md)                    | 采用模块化单体，不建设微服务         | Accepted | PRD §17     |
+| [ADR-002](./ADR-002-declarative-schema-bundle.md)           | 采用声明式 Schema Bundle 热更新      | Accepted | PRD §17     |
+| [ADR-003](./ADR-003-yaml-document-ast.md)                   | 以 YAML Document/AST 作为可回写源    | Accepted | PRD §17     |
+| [ADR-004](./ADR-004-project-locks-compatibility-profile.md) | 项目锁定兼容档案，更新不自动迁移     | Accepted | PRD §17     |
+| [ADR-005](./ADR-005-no-server-side-subscription-proxy.md)   | 不提供服务端订阅代理                 | Accepted | PRD §17     |
+| [ADR-006](./ADR-006-two-tier-writeback.md)                  | 两级 YAML 回写策略（CST + AST）      | Accepted | M0 技术验证 |
+| [ADR-007](./ADR-007-source-only-workspace-packages.md)      | 工作区内部包直接导出 TypeScript 源码 | Accepted | M1 骨架     |
+| [ADR-008](./ADR-008-interpreted-json-schema-validator.md)   | 自建解释型 JSON Schema 子集校验器    | Accepted | M0 技术验证 |
+
+ADR-001 至 ADR-005 直接来自 PRD §17，本仓库补全其背景与工程约束。
+ADR-006 起为实施阶段新增的决策。

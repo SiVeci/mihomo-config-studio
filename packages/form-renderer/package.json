@@ -1,0 +1,17 @@
+{
+  "name": "@mcs/form-renderer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Schema-driven form renderer: maps a FormPlan onto controls with no per-field page code.",
+  "exports": {
+    ".": "./src/index.tsx"
+  },
+  "dependencies": {
+    "@mcs/schema-core": "workspace:*",
+    "@mcs/yaml-engine": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  }
+}

@@ -1,0 +1,170 @@
+# Mihomo Config Studio round-trip fixture.
+# Exercises comments, anchors, aliases, flow style, unknown fields,
+# quoted-number strings, IPv6, regex and block scalars.
+
+mixed-port: 7890
+allow-lan: true
+bind-address: "*"
+mode: rule
+log-level: info
+ipv6: true
+
+# An anchor that later entries reuse.
+common-hc: &common-hc
+  url: "http://www.gstatic.com/generate_204"
+  interval: 300
+
+external-controller: 127.0.0.1:9090
+secret: "s3cr3t-token" # keep quoted: looks like a plain word but is a secret
+
+# A key this build of the app has never heard of. It must survive editing.
+totally-new-mihomo-option:
+  nested:
+    deep: [1, 2, 3]
+    flag: false
+
+profile:
+  store-selected: true
+  store-fake-ip: true
+
+tun:
+  enable: false
+  stack: mixed
+  dns-hijack:
+    - "any:53"
+    - "tcp://any:53"
+  auto-route: true
+
+dns:
+  enable: true
+  listen: 0.0.0.0:1053
+  ipv6: true
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  fake-ip-filter:
+    - "*.lan"
+    - "+.local"
+    - "geosite:private"
+  default-nameserver: [223.5.5.5, 119.29.29.29]
+  nameserver:
+    - https://dns.alidns.com/dns-query
+    - tls://dns.google:853
+    - "[2606:4700:4700::1111]:53" # IPv6 literal, must stay quoted
+  proxy-server-nameserver:
+    - https://doh.pub/dns-query
+  nameserver-policy:
+    "geosite:cn": [223.5.5.5]
+    "+.example.com": "https://dns.google/dns-query"
+
+sniffer:
+  enable: true
+  sniff:
+    HTTP:
+      ports: [80, 8080-8880]
+      override-destination: true
+    TLS:
+      ports: [443, 8443]
+  skip-domain:
+    - "Mijia Cloud"
+
+proxies:
+  - name: "SS-Tokyo"
+    type: ss
+    server: tokyo.example.com
+    port: 8388
+    cipher: aes-256-gcm
+    password: "1234" # quoted on purpose: this is a string, not a number
+    udp: true
+  - name: "Vmess-HK"
+    type: vmess
+    server: hk.example.com
+    port: 443
+    uuid: 00000000-0000-0000-0000-000000000000
+    alterId: 0
+    cipher: auto
+    tls: true
+    servername: hk.example.com
+    network: ws
+    ws-opts:
+      path: "/ray"
+      headers: { Host: hk.example.com } # flow mapping, single-space style
+  - name: "Trojan-SG"
+    type: trojan
+    server: sg.example.com
+    port: 443
+    password: "pass-word"
+    sni: sg.example.com
+    skip-cert-verify: false
+
+proxy-providers:
+  provider-a:
+    type: http
+    url: "https://example.com/subscription"
+    path: ./providers/provider-a.yaml
+    interval: 3600
+    health-check:
+      enable: true
+      <<: *common-hc
+  provider-b:
+    type: file
+    path: ./providers/provider-b.yaml
+    health-check:
+      enable: true
+      <<: *common-hc
+
+proxy-groups:
+  - name: PROXY
+    type: select
+    proxies:
+      - AUTO
+      - SS-Tokyo
+      - Vmess-HK
+      - Trojan-SG
+    use:
+      - provider-a
+  - name: AUTO
+    type: url-test
+    tolerance: 50
+    use: [provider-a, provider-b]
+    url: "http://www.gstatic.com/generate_204"
+    interval: 300
+  - name: DIRECT-GROUP
+    type: select
+    proxies: [DIRECT, REJECT]
+
+rule-providers:
+  cn-domain:
+    type: http
+    behavior: domain
+    format: mrs
+    url: "https://example.com/cn.mrs"
+    path: ./rules/cn-domain.mrs
+    interval: 86400
+  private-ip:
+    behavior: ipcidr
+    type: http
+    format: yaml
+    url: "https://example.com/private.yaml"
+    path: ./rules/private-ip.yaml
+    interval: 86400
+
+rules:
+  # Order matters: MATCH must stay last.
+  - DOMAIN-SUFFIX,local,DIRECT
+  - DOMAIN-KEYWORD,speedtest,PROXY
+  - DOMAIN-REGEX,^ad[0-9]*\.example\.com$,REJECT
+  - RULE-SET,private-ip,DIRECT
+  - RULE-SET,cn-domain,DIRECT
+  - IP-CIDR,198.18.0.0/16,REJECT,no-resolve
+  - IP-CIDR6,2001:db8::/32,PROXY
+  - PROCESS-NAME,ssh,DIRECT
+  - GEOIP,CN,DIRECT
+  - MATCH,PROXY
+
+# A block scalar: certificates and keys arrive in this shape.
+experimental:
+  quic-go-disable-gso: false
+  fingerprint: |
+    -----BEGIN CERTIFICATE-----
+    RkFLRSBDRVJUSUZJQ0FURSBGT1IgVEVTVFMgT05MWQ==
+    -----END CERTIFICATE-----

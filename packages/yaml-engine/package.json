@@ -1,0 +1,16 @@
+{
+  "name": "@mcs/yaml-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lossless YAML Document/AST engine: parse, surgical patch, serialize, diff (ADR-003).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@mcs/test-fixtures": "workspace:*"
+  }
+}

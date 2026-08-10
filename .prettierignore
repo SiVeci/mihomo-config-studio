@@ -1,0 +1,8 @@
+node_modules
+dist
+coverage
+pnpm-lock.yaml
+DESIGN.md
+
+# Golden fixtures are byte-significant: formatting them would invalidate round-trip tests.
+packages/test-fixtures/fixtures/**

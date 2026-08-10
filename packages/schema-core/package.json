@@ -1,0 +1,14 @@
+{
+  "name": "@mcs/schema-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "JSON Schema 2020-12 subset, UI Schema, restricted condition DSL and form planning (ADR-002, ADR-008).",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/index.ts"
+  },
+  "dependencies": {
+    "@mcs/yaml-engine": "workspace:*"
+  }
+}

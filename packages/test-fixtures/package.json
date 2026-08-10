@@ -1,0 +1,10 @@
+{
+  "name": "@mcs/test-fixtures",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared golden files, official samples and adversarial inputs used across packages.",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

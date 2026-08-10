@@ -1,0 +1,6 @@
+* text=auto eol=lf
+
+# Golden YAML fixtures are byte-significant.
+packages/test-fixtures/fixtures/** -text
+*.png binary
+*.jar binary
