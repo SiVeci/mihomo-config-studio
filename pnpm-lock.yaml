@@ -95,6 +95,12 @@ importers:
         specifier: workspace:*
         version: link:../yaml-engine
 
+  packages/schema-registry:
+    dependencies:
+      '@mcs/schema-core':
+        specifier: workspace:*
+        version: link:../schema-core
+
   packages/test-fixtures: {}
 
   packages/yaml-engine:

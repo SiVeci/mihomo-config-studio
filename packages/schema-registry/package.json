@@ -1,0 +1,13 @@
+{
+  "name": "@mcs/schema-registry",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Schema Bundle manifest format and an offline-capable built-in bundle (FR-UPD-01, ADR-002).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@mcs/schema-core": "workspace:*"
+  }
+}

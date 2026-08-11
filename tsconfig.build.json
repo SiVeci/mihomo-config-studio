@@ -6,6 +6,7 @@
     { "path": "./packages/schema-core" },
     { "path": "./packages/form-renderer" },
     { "path": "./packages/config-model" },
-    { "path": "./packages/graph" }
+    { "path": "./packages/graph" },
+    { "path": "./packages/schema-registry" }
   ]
 }
