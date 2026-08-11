@@ -8,7 +8,7 @@
 
 > 本表随每个垂直切片更新。任何标记为 Done 的行都必须能指向具体测试文件。
 
-最近一次核对：2026-08-10。`pnpm run test:coverage` 91 例全绿，行覆盖率 92.14%。
+最近一次核对：2026-08-11。`pnpm run test:coverage` 150 例全绿，行覆盖率 93.94%。
 
 > 本表目前只覆盖 PRD §8.1、8.2、8.4、8.5、8.6、8.7、8.9、8.10 与 §11。
 > §8.3 配置模块覆盖、§8.8 模板、§8.11 订阅地址管理尚未建行，需在 M2 开始前补齐。
@@ -17,7 +17,7 @@
 
 | 本仓库阶段        | PRD 里程碑 | 状态                      |
 | ----------------- | ---------- | ------------------------- |
-| M0 技术风险验证   | PRD M0     | 进行中（5 项中 2 项通过） |
+| M0 技术风险验证   | PRD M0     | 进行中（5 项中 3 项通过） |
 | M1 骨架与配置内核 | PRD M1     | 进行中                    |
 | M2 及以后         | PRD M2–M7  | 未开始                    |
 
@@ -27,7 +27,7 @@
 | ---- | ------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | M0-1 | YAML AST 无损 Round-trip | **Done** | `packages/yaml-engine/src/document.test.ts`（26 例）、`diff.test.ts`（6 例）、`path.test.ts`（5 例）                                                                                                                                                                                                                                      |
 | M0-2 | Schema 驱动表单          | **Done** | `packages/schema-core/src/form-plan.test.ts`（13 例）、`condition.test.ts`（11 例）、`validate.test.ts`（19 例）、`packages/form-renderer/src/index.test.tsx`（9 例）。核心风险由「renders a brand-new field with no UI entry and no page code change」与「renders a field added by a bundle update with no renderer change」两例直接证明 |
-| M0-3 | 引用模型与关系图         | Todo     | 需要 `config-model` 与 `graph`                                                                                                                                                                                                                                                                                                            |
+| M0-3 | 引用模型与关系图         | **Done** | `packages/config-model/src/entity.test.ts`（12 例）、`rule-line.test.ts`（14 例）、`packages/graph/src/reference-index.test.ts`（15 例）、`impact.test.ts`（9 例）、`cycles.test.ts`（9 例）。ADR-009 记录实体标识策略、引用类型分类与规则解析口径来源                                                                                    |
 | M0-4 | Schema Bundle 校验与回滚 | Todo     | 需要 `schema-registry` 与 `tools/schema-cli`；签名算法与密钥托管已冻结（[ADR-010](./adr/ADR-010-bundle-signing-and-key-custody.md)）                                                                                                                                                                                                      |
 | M0-5 | Android 文件能力         | Todo     | 需要 `apps/android`；Android 最低支持版本待本项验证后冻结                                                                                                                                                                                                                                                                                 |
 
@@ -72,10 +72,14 @@
 
 ### 8.5 引用与关系管理
 
-| ID             | 优先级 | 状态        | 证据 / 缺口                                                                                                                                                                                                                                                                                                                                                                                   |
-| -------------- | ------ | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| FR-REL-01      | P0     | **Partial** | `packages/config-model/src/entity.test.ts`：对 `comprehensive.yaml` 提取出 3 个 proxy、3 个 proxy-group、2 个 proxy-provider、2 个 rule-provider、10 条 rule；`renameKeyIn`/`setScalarIn` 改名后 `id` 不变；导出文本不含任何 `id` 字面量。内置目标（`DIRECT`/`REJECT`/`REJECT-DROP`/`COMPATIBLE`/`PASS`/`PASS-RULE`/`GLOBAL`）作为预置实体一并纳入，避免 #3 误判为断裂引用。缺口：尚未接入 UI |
-| FR-REL-02 … 06 | P0/P1  | Todo        | M0-3 剩余部分，依赖 `packages/graph` 的引用索引、级联改名、影响分析、循环检测（均未开始）；实体基础已就绪（见 FR-REL-01）；引擎侧 `renameKeyIn()` 已可无损改名（`document.test.ts`「renames a map key in place」）                                                                                                                                                                            |
+| ID        | 优先级 | 状态     | 证据 / 缺口                                                                                                                                                                                                                                                                                                                                                                                        |
+| --------- | ------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-REL-01 | P0     | **Done** | `packages/config-model/src/entity.test.ts`（12 例）：对 `comprehensive.yaml` 提取出 3 个 proxy、3 个 proxy-group、2 个 proxy-provider、2 个 rule-provider、10 条 rule；`renameKeyIn`/`setScalarIn` 改名后 `id` 不变；导出文本不含任何 `id` 字面量。内置目标（`DIRECT`/`REJECT`/`REJECT-DROP`/`COMPATIBLE`/`PASS`/`PASS-RULE`，以及未被用户覆盖时的 `GLOBAL`）作为预置实体一并纳入。ADR-009 §1      |
+| FR-REL-02 | P0     | **Done** | `packages/config-model/src/rule-line.test.ts`（14 例，风险核心：规则字符串子片段偏移定位）+ `packages/graph/src/reference-index.test.ts`（15 例）：对 `comprehensive.yaml` 四组改名（`PROXY→PROXY-MAIN`、`provider-a→prov-a`、`cn-domain→cn-dom`、`AUTO→AUTO-URL`）用 `diffLines()` 断言变更行集合恰好等于预期集合，同名路径子串所在行字节不变；改名后 `anchors()` 与 flow 风格不变。ADR-009 §2/§3 |
+| FR-REL-03 | P0     | **Done** | `packages/graph/src/impact.test.ts`（9 例）：`{replaceable, cascading}` 判定——规则 target/payload 与不会清空所属组的 `proxies[]`/`use[]` 项判为可替换；移除后代理组 `proxies` 与 `use` 同时为空则该组级联删除并递归展开，下游组仍有其它成员时正确止步                                                                                                                                              |
+| FR-REL-04 | P0     | Todo     | 关系图可视化 UI，属 v0.4.0；`packages/graph` 已提供其所需的引用索引、影响分析与循环检测数据                                                                                                                                                                                                                                                                                                        |
+| FR-REL-05 | P0     | **Done** | `packages/graph/src/cycles.test.ts`（9 例）：代理组互嵌（`group-mutual.yaml`：A→B→A）与 `dialer-proxy` 链路（`dialer-chain.yaml`：A→B→C→A，另有 D 拨入环内验证尾巴不被误报）两类边的 DFS 循环检测，返回环路节点序列而非布尔值；`comprehensive.yaml` 验证不误报                                                                                                                                     |
+| FR-REL-06 | P1     | Todo     | 图上导航与筛选，依赖 FR-REL-04 的关系图 UI，属 v0.4.0                                                                                                                                                                                                                                                                                                                                              |
 
 ### 8.6 规则编辑器
 
