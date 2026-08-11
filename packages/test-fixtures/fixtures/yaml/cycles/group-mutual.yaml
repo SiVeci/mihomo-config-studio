@@ -1,0 +1,10 @@
+# Two proxy-groups that nest each other via `proxies[]`. Mihomo would loop
+# forever resolving either one; cycle detection must catch this before it
+# ever reaches upstream.
+proxy-groups:
+  - name: A
+    type: select
+    proxies: [B]
+  - name: B
+    type: select
+    proxies: [A]

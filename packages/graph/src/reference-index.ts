@@ -50,6 +50,7 @@ type Lookup = Map<EntityKind, Map<string, string>>;
 
 export class ReferenceIndex {
   #entities: readonly Entity[] = [];
+  #entitiesById = new Map<string, Entity>();
   #referencesToId = new Map<string, Reference[]>();
 
   /**
@@ -63,12 +64,17 @@ export class ReferenceIndex {
    */
   rebuild(document: MihomoYamlDocument, entities: readonly Entity[]): void {
     this.#entities = entities;
+    this.#entitiesById = new Map(entities.map((entity) => [entity.id, entity]));
     this.#referencesToId = new Map();
     for (const ref of collectReferences(document, entities)) {
       const existing = this.#referencesToId.get(ref.toId);
       if (existing) existing.push(ref);
       else this.#referencesToId.set(ref.toId, [ref]);
     }
+  }
+
+  entity(entityId: string): Entity | undefined {
+    return this.#entitiesById.get(entityId);
   }
 
   referencesTo(entityId: string): readonly Reference[] {
@@ -82,7 +88,7 @@ export class ReferenceIndex {
    * collides with another entity of the same kind — no half-done rewrite.
    */
   rename(document: MihomoYamlDocument, entityId: string, newName: string): void {
-    const entity = this.#entities.find((candidate) => candidate.id === entityId);
+    const entity = this.entity(entityId);
     if (!entity) {
       throw new GraphError('GRAPH_ENTITY_NOT_FOUND', 'No entity exists with this id.', entityId);
     }

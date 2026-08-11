@@ -1,0 +1,32 @@
+# A -> B -> C -> A chains through dialer-proxy, closing into a cycle mihomo
+# would loop forever dialing. D dials into the cycle without being part of
+# it, so detection must report only the cyclic portion (A, B, C).
+proxies:
+  - name: A
+    type: ss
+    server: a.example.com
+    port: 8388
+    cipher: aes-256-gcm
+    password: "password"
+    dialer-proxy: B
+  - name: B
+    type: ss
+    server: b.example.com
+    port: 8388
+    cipher: aes-256-gcm
+    password: "password"
+    dialer-proxy: C
+  - name: C
+    type: ss
+    server: c.example.com
+    port: 8388
+    cipher: aes-256-gcm
+    password: "password"
+    dialer-proxy: A
+  - name: D
+    type: ss
+    server: d.example.com
+    port: 8388
+    cipher: aes-256-gcm
+    password: "password"
+    dialer-proxy: A
