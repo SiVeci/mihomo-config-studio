@@ -113,6 +113,12 @@ importers:
         specifier: workspace:*
         version: link:../test-fixtures
 
+  tools/schema-cli:
+    dependencies:
+      '@mcs/schema-registry':
+        specifier: workspace:*
+        version: link:../../packages/schema-registry
+
 packages:
 
   '@ampproject/remapping@2.3.0':

@@ -1,0 +1,13 @@
+{
+  "name": "@mcs/schema-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Packs, statically checks and signs Schema Bundles from a source directory (FR-UPD-07, ADR-010 §4).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@mcs/schema-registry": "workspace:*"
+  }
+}
