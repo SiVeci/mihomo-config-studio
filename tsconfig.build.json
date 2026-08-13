@@ -8,6 +8,7 @@
     { "path": "./packages/config-model" },
     { "path": "./packages/graph" },
     { "path": "./packages/schema-registry" },
-    { "path": "./tools/schema-cli" }
+    { "path": "./tools/schema-cli" },
+    { "path": "./apps/android" }
   ]
 }

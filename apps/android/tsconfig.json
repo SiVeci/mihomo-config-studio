@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./build",
+    "rootDir": "./src",
+    // Down-level optional chaining/nullish coalescing: the target WebView
+    // (Android system WebView on API 29 test devices) predates Chrome 80.
+    "target": "ES2017",
+    "lib": ["ES2023", "DOM"],
+    "types": []
+  },
+  "include": ["src/**/*.ts"],
+  "references": []
+}

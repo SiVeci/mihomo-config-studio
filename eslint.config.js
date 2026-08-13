@@ -10,6 +10,7 @@ export default tseslint.config(
       '**/coverage/**',
       '**/*.tsbuildinfo',
       'apps/android/android/**',
+      'apps/android/build/**',
       'packages/test-fixtures/fixtures/**',
     ],
   },

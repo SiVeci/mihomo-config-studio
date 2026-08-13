@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MCS M0 Spike</string>
+    <string name="title_activity_main">MCS M0 Spike</string>
+    <string name="package_name">studio.mihomoconfig.m0spike</string>
+    <string name="custom_url_scheme">studio.mihomoconfig.m0spike</string>
+</resources>
