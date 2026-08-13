@@ -18,6 +18,7 @@
 | [ADR-011](./ADR-011-visual-design-system.md)                | 视觉设计令牌来源与应用层扩展                   | Accepted | M1 骨架     |
 | [ADR-012](./ADR-012-first-stable-compatibility-profile.md)  | 首个 Stable 兼容档案锁定 v1.19.29              | Accepted | PRD §19     |
 | [ADR-013](./ADR-013-ed25519-verifier-backend.md)            | Ed25519 验签后端：WebView 实测结论与可插拔端口 | Accepted | M0 技术验证 |
+| [ADR-014](./ADR-014-android-minimum-supported-version.md)   | Android 最低支持版本冻结在 API 29              | Accepted | M0 技术验证 |
 
 ADR-001 至 ADR-005 直接来自 PRD §17，本仓库补全其背景与工程约束。
 ADR-006 起为实施阶段新增的决策。
