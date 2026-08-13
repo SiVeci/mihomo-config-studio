@@ -129,6 +129,8 @@ importers:
         specifier: workspace:*
         version: link:../test-fixtures
 
+  tools/android-manifest-check: {}
+
   tools/schema-cli:
     dependencies:
       '@mcs/schema-registry':

@@ -1,0 +1,10 @@
+{
+  "name": "@mcs/android-manifest-check",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Asserts AndroidManifest.xml never declares VPN-related permissions or APIs (FR-AND-06, NG-02, PRD §13.5 release blocker).",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

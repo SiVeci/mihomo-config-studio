@@ -43,6 +43,31 @@ jobs:
       - name: Unit tests with coverage
         run: pnpm run test:coverage
 
+  android-manifest-check:
+    name: android manifest has no VPN permissions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # FR-AND-06 / NG-02 (PRD §13.5 release blocker): source-level scan only —
+      # no Android SDK on this runner, so the aapt2-based artifact check stays local (#13).
+      - name: Build checker
+        run: pnpm --filter @mcs/android-manifest-check exec tsc -p tsconfig.json
+
+      - name: Assert no VPN permissions or APIs in AndroidManifest.xml
+        run: node tools/android-manifest-check/dist/index.js apps/android/android/app/src
+
   no-network-egress:
     name: no configuration upload path
     runs-on: ubuntu-latest
