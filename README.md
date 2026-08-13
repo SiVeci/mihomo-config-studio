@@ -29,7 +29,7 @@
 
 ## 项目状态
 
-**早期开发中（M0 技术风险验证阶段）**，尚未发布可用版本。
+**早期开发中（M1 骨架与配置内核阶段）**，尚未发布可用版本。
 
 进度见 [需求追踪表](docs/requirements-traceability.md)。
 
@@ -57,8 +57,9 @@ packages/
 tools/
   schema-cli/          Bundle 校验、签名、差异和发布           ✅ M0 已验证
   android-manifest-check/ Android 清单 VPN 权限断言（CI 强制） ✅ M0 已验证
-  upstream-watch/      上游文档 / 示例变更监控
-  core-test-runner/    Mihomo 配置测试矩阵
+  webcrypto-probe/     Ed25519 WebCrypto 可用性实测载体        ✅ M0 已验证（ADR-013）
+  upstream-watch/      上游文档 / 示例变更监控                 🚧 规划中，未建
+  core-test-runner/    Mihomo 配置测试矩阵                     🚧 规划中，未建
 ```
 
 ## 本地开发
