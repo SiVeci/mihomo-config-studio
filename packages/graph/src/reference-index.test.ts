@@ -10,7 +10,9 @@ const COMPREHENSIVE = readFixture('yaml/comprehensive.yaml');
 function parse(source: string): MihomoYamlDocument {
   const result = MihomoYamlDocument.parse(source);
   if (!result.document) {
-    throw new Error(`fixture failed to parse: ${result.issues.map((i) => i.message).join('; ')}`);
+    throw new Error(
+      `fixture failed to parse: ${result.issues.map((i) => i.messageKey).join('; ')}`,
+    );
   }
   return result.document;
 }

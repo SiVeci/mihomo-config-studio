@@ -1,4 +1,4 @@
-import { formatPath, type ConfigPath } from '@mcs/yaml-engine';
+import type { ConfigPath, MessageParams } from '@mcs/yaml-engine';
 
 import { checkFormat } from './formats.js';
 import { resolveRef } from './ref.js';
@@ -10,8 +10,9 @@ export interface SchemaIssue {
   code: string;
   keyword: string;
   path: ConfigPath;
-  /** Never contains a configuration value (NFR-SEC-03). */
-  message: string;
+  /** i18n lookup key; the rendered text lives in resource files (NFR-SEC-03). */
+  messageKey: string;
+  messageParams?: MessageParams;
 }
 
 export interface ValidateOptions {
@@ -70,47 +71,32 @@ function walk(
 ) {
   if (state.issues.length >= state.maxIssues) return;
   if (depth > state.maxDepth) {
-    push(state, path, 'schema.depth', '$depth', `Validation depth limit reached.`);
+    push(state, path, 'schema.depth', '$depth', { depth, maxDepth: state.maxDepth });
     return;
   }
 
   let schema: JsonSchema;
   try {
     schema = resolveRef(rawSchema, state.root);
-  } catch (error) {
-    push(state, path, 'schema.ref', '$ref', (error as Error).message);
+  } catch {
+    push(state, path, 'schema.ref', '$ref', { ref: rawSchema.$ref ?? null });
     return;
   }
 
   if (schema.type !== undefined && !matchesType(value, schema.type)) {
-    push(
-      state,
-      path,
-      'schema.type',
-      'type',
-      `Expected ${asList(schema.type)} at ${formatPath(path)}, found ${describeType(value)}.`,
-    );
+    push(state, path, 'schema.type', 'type', {
+      expected: schema.type,
+      actual: describeType(value),
+    });
     return; // Further keywords would only produce noise.
   }
 
   if (schema.const !== undefined && !deepEqual(value, schema.const)) {
-    push(
-      state,
-      path,
-      'schema.const',
-      'const',
-      `${formatPath(path)} must be ${json(schema.const)}.`,
-    );
+    push(state, path, 'schema.const', 'const', { expected: schema.const });
   }
 
   if (schema.enum !== undefined && !schema.enum.some((option) => deepEqual(value, option))) {
-    push(
-      state,
-      path,
-      'schema.enum',
-      'enum',
-      `${formatPath(path)} must be one of: ${schema.enum.map(json).join(', ')}.`,
-    );
+    push(state, path, 'schema.enum', 'enum', { allowed: schema.enum });
   }
 
   if (typeof value === 'string') validateString(value, schema, path, state);
@@ -123,90 +109,45 @@ function walk(
 
 function validateString(value: string, schema: JsonSchema, path: ConfigPath, state: State) {
   if (schema.minLength !== undefined && value.length < schema.minLength) {
-    push(
-      state,
-      path,
-      'schema.minLength',
-      'minLength',
-      `${formatPath(path)} must be at least ${schema.minLength} characters.`,
-    );
+    push(state, path, 'schema.minLength', 'minLength', { min: schema.minLength });
   }
   if (schema.maxLength !== undefined && value.length > schema.maxLength) {
-    push(
-      state,
-      path,
-      'schema.maxLength',
-      'maxLength',
-      `${formatPath(path)} must be at most ${schema.maxLength} characters.`,
-    );
+    push(state, path, 'schema.maxLength', 'maxLength', { max: schema.maxLength });
   }
   if (schema.pattern !== undefined) {
     const regex = compilePattern(schema.pattern);
     if (regex === null) {
-      push(
-        state,
-        path,
-        'schema.pattern.invalid',
-        'pattern',
-        `${formatPath(path)} has an unusable pattern in its schema.`,
-      );
+      push(state, path, 'schema.pattern.invalid', 'pattern', { pattern: schema.pattern });
     } else if (value.length > MAX_PATTERN_INPUT) {
-      push(
-        state,
-        path,
-        'schema.pattern.tooLong',
-        'pattern',
-        `${formatPath(path)} is too long to be pattern-checked (limit ${MAX_PATTERN_INPUT}).`,
-      );
+      push(state, path, 'schema.pattern.tooLong', 'pattern', {
+        limit: MAX_PATTERN_INPUT,
+        length: value.length,
+      });
     } else if (!regex.test(value)) {
-      push(
-        state,
-        path,
-        'schema.pattern',
-        'pattern',
-        `${formatPath(path)} does not match the required pattern.`,
-      );
+      push(state, path, 'schema.pattern', 'pattern', { pattern: schema.pattern });
     }
   }
   if (schema.format !== undefined && !checkFormat(schema.format, value)) {
-    push(
-      state,
-      path,
-      'schema.format',
-      'format',
-      `${formatPath(path)} is not a valid ${schema.format}.`,
-    );
+    push(state, path, 'schema.format', 'format', { format: schema.format });
   }
 }
 
 function validateNumber(value: number, schema: JsonSchema, path: ConfigPath, state: State) {
-  const checks: Array<[number | undefined, (n: number, b: number) => boolean, string, string]> = [
-    [schema.minimum, (n, b) => n >= b, 'minimum', 'at least'],
-    [schema.maximum, (n, b) => n <= b, 'maximum', 'at most'],
-    [schema.exclusiveMinimum, (n, b) => n > b, 'exclusiveMinimum', 'greater than'],
-    [schema.exclusiveMaximum, (n, b) => n < b, 'exclusiveMaximum', 'less than'],
+  const checks: Array<[number | undefined, (n: number, b: number) => boolean, string]> = [
+    [schema.minimum, (n, b) => n >= b, 'minimum'],
+    [schema.maximum, (n, b) => n <= b, 'maximum'],
+    [schema.exclusiveMinimum, (n, b) => n > b, 'exclusiveMinimum'],
+    [schema.exclusiveMaximum, (n, b) => n < b, 'exclusiveMaximum'],
   ];
-  for (const [bound, ok, keyword, phrase] of checks) {
+  for (const [bound, ok, keyword] of checks) {
     if (bound !== undefined && !ok(value, bound)) {
-      push(
-        state,
-        path,
-        `schema.${keyword}`,
-        keyword,
-        `${formatPath(path)} must be ${phrase} ${bound}.`,
-      );
+      push(state, path, `schema.${keyword}`, keyword, { bound });
     }
   }
   if (schema.multipleOf !== undefined && schema.multipleOf > 0) {
     const quotient = value / schema.multipleOf;
     if (Math.abs(quotient - Math.round(quotient)) > Number.EPSILON * 8) {
-      push(
-        state,
-        path,
-        'schema.multipleOf',
-        'multipleOf',
-        `${formatPath(path)} must be a multiple of ${schema.multipleOf}.`,
-      );
+      push(state, path, 'schema.multipleOf', 'multipleOf', { multipleOf: schema.multipleOf });
     }
   }
 }
@@ -219,35 +160,17 @@ function validateArray(
   depth: number,
 ) {
   if (schema.minItems !== undefined && value.length < schema.minItems) {
-    push(
-      state,
-      path,
-      'schema.minItems',
-      'minItems',
-      `${formatPath(path)} must have at least ${schema.minItems} items.`,
-    );
+    push(state, path, 'schema.minItems', 'minItems', { min: schema.minItems });
   }
   if (schema.maxItems !== undefined && value.length > schema.maxItems) {
-    push(
-      state,
-      path,
-      'schema.maxItems',
-      'maxItems',
-      `${formatPath(path)} must have at most ${schema.maxItems} items.`,
-    );
+    push(state, path, 'schema.maxItems', 'maxItems', { max: schema.maxItems });
   }
   if (schema.uniqueItems === true) {
     const seen = new Set<string>();
     for (let i = 0; i < value.length; i += 1) {
       const key = json(value[i]);
       if (seen.has(key)) {
-        push(
-          state,
-          [...path, i],
-          'schema.uniqueItems',
-          'uniqueItems',
-          `${formatPath([...path, i])} duplicates an earlier item.`,
-        );
+        push(state, [...path, i], 'schema.uniqueItems', 'uniqueItems');
         break;
       }
       seen.add(key);
@@ -270,13 +193,7 @@ function validateObject(
 ) {
   for (const key of schema.required ?? []) {
     if (!Object.hasOwn(value, key)) {
-      push(
-        state,
-        [...path, key],
-        'schema.required',
-        'required',
-        `${formatPath(path)} is missing required field "${key}".`,
-      );
+      push(state, [...path, key], 'schema.required', 'required', { field: key });
     }
   }
 
@@ -293,13 +210,9 @@ function validateObject(
     if (schema.additionalProperties === false) {
       // Deliberately not fatal for the document as a whole: unknown fields are
       // preserved and surfaced, not used to reject the project (PRD §9.5.4).
-      push(
-        state,
-        [...path, key],
-        'schema.additionalProperties',
-        'additionalProperties',
-        `${formatPath(path)} does not define a field named "${key}".`,
-      );
+      push(state, [...path, key], 'schema.additionalProperties', 'additionalProperties', {
+        field: key,
+      });
     } else if (typeof schema.additionalProperties === 'object') {
       walk(entry, schema.additionalProperties, [...path, key], state, depth + 1);
     }
@@ -320,13 +233,7 @@ function validateCombinators(
   if (schema.anyOf) {
     const passes = schema.anyOf.some((branch) => subValidate(value, branch, path, state, depth));
     if (!passes) {
-      push(
-        state,
-        path,
-        'schema.anyOf',
-        'anyOf',
-        `${formatPath(path)} does not match any allowed shape.`,
-      );
+      push(state, path, 'schema.anyOf', 'anyOf');
     }
   }
 
@@ -335,20 +242,12 @@ function validateCombinators(
       subValidate(value, branch, path, state, depth),
     ).length;
     if (matches !== 1) {
-      push(
-        state,
-        path,
-        'schema.oneOf',
-        'oneOf',
-        matches === 0
-          ? `${formatPath(path)} does not match any allowed shape.`
-          : `${formatPath(path)} matches ${matches} shapes but must match exactly one.`,
-      );
+      push(state, path, 'schema.oneOf', 'oneOf', { matches });
     }
   }
 
   if (schema.not && subValidate(value, schema.not, path, state, depth)) {
-    push(state, path, 'schema.not', 'not', `${formatPath(path)} matches a disallowed shape.`);
+    push(state, path, 'schema.not', 'not');
   }
 }
 
@@ -365,9 +264,29 @@ function subValidate(
   return isolated.issues.length === 0;
 }
 
-function push(state: State, path: ConfigPath, code: string, keyword: string, message: string) {
+/**
+ * `messageKey` is always the same string as `code`: both are stable and
+ * schema-core has no locale concept of its own, so there is no benefit to
+ * inventing a second parallel identifier here (`@mcs/validator` is where a
+ * real i18n key namespace would diverge from the machine code, if it ever
+ * needs to).
+ */
+function push(
+  state: State,
+  path: ConfigPath,
+  code: string,
+  keyword: string,
+  messageParams?: MessageParams,
+) {
   if (state.issues.length >= state.maxIssues) return;
-  state.issues.push({ severity: 'error', code, keyword, path, message });
+  state.issues.push({
+    severity: 'error',
+    code,
+    keyword,
+    path,
+    messageKey: code,
+    ...(messageParams !== undefined ? { messageParams } : {}),
+  });
 }
 
 function compilePattern(pattern: string): RegExp | null {
@@ -415,10 +334,6 @@ function describeType(value: unknown): string {
   if (Array.isArray(value)) return 'array';
   if (typeof value === 'number') return Number.isInteger(value) ? 'integer' : 'number';
   return typeof value;
-}
-
-function asList(type: JsonSchemaType | JsonSchemaType[]): string {
-  return Array.isArray(type) ? type.join(' | ') : type;
 }
 
 function json(value: unknown): string {

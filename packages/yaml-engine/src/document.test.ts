@@ -17,7 +17,9 @@ type ParsedOk = {
 function parse(source: string, options?: ParseArgs[1]): ParsedOk {
   const result = MihomoYamlDocument.parse(source, options);
   if (!result.document) {
-    throw new Error(`fixture failed to parse: ${result.issues.map((i) => i.message).join('; ')}`);
+    throw new Error(
+      `fixture failed to parse: ${result.issues.map((i) => i.messageKey).join('; ')}`,
+    );
   }
   return { document: result.document, issues: result.issues };
 }

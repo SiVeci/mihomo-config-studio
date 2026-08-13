@@ -6,6 +6,14 @@ export { DEFAULT_YAML_LIMITS, resolveLimits, utf8ByteLength } from './limits.js'
 export type { YamlLimits } from './limits.js';
 export { changedLineNumbers, diffLines } from './diff.js';
 export type { DiffHunk, DiffLine, DiffOp, TextDiff } from './diff.js';
-export type { IssueSeverity, TextPosition, TextRange, YamlIssue } from './issues.js';
+export type {
+  IssueSeverity,
+  MessageParamPrimitive,
+  MessageParams,
+  MessageParamValue,
+  TextPosition,
+  TextRange,
+  YamlIssue,
+} from './issues.js';
 export { formatPath, fromPointer, isPathPrefix, pathsEqual, toPointer } from './path.js';
 export type { ConfigPath, PathSegment } from './path.js';

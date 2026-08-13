@@ -119,6 +119,15 @@ importers:
 
   packages/test-fixtures: {}
 
+  packages/validator:
+    dependencies:
+      '@mcs/schema-core':
+        specifier: workspace:*
+        version: link:../schema-core
+      '@mcs/yaml-engine':
+        specifier: workspace:*
+        version: link:../yaml-engine
+
   packages/yaml-engine:
     dependencies:
       yaml:

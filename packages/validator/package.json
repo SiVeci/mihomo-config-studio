@@ -1,0 +1,14 @@
+{
+  "name": "@mcs/validator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Unified ValidationIssue model spanning the YAML and Schema layers (FR-VAL-01).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@mcs/schema-core": "workspace:*",
+    "@mcs/yaml-engine": "workspace:*"
+  }
+}

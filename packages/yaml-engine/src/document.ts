@@ -94,7 +94,8 @@ export class MihomoYamlDocument {
           {
             severity: 'error',
             code: 'yaml.limit.size',
-            message: `YAML input is ${bytes} bytes, above the ${limits.maxBytes} byte limit.`,
+            messageKey: 'yaml.limit.size',
+            messageParams: { bytes, maxBytes: limits.maxBytes },
           },
         ],
       };
@@ -112,25 +113,17 @@ export class MihomoYamlDocument {
           merge: true,
         }).compose(tokens),
       );
-    } catch (cause) {
+    } catch {
       return {
         document: null,
-        issues: [
-          {
-            severity: 'error',
-            code: 'yaml.parse.failed',
-            message: cause instanceof Error ? cause.message : 'YAML could not be parsed.',
-          },
-        ],
+        issues: [{ severity: 'error', code: 'yaml.parse.failed', messageKey: 'yaml.parse.failed' }],
       };
     }
 
     if (docs.length === 0) {
       return {
         document: null,
-        issues: [
-          { severity: 'error', code: 'yaml.parse.empty', message: 'No YAML document found.' },
-        ],
+        issues: [{ severity: 'error', code: 'yaml.parse.empty', messageKey: 'yaml.parse.empty' }],
       };
     }
     if (docs.length > limits.maxDocuments) {
@@ -140,7 +133,8 @@ export class MihomoYamlDocument {
           {
             severity: 'error',
             code: 'yaml.limit.documents',
-            message: `Stream contains ${docs.length} documents, above the ${limits.maxDocuments} document limit.`,
+            messageKey: 'yaml.limit.documents',
+            messageParams: { count: docs.length, maxDocuments: limits.maxDocuments },
           },
         ],
       };
@@ -151,7 +145,7 @@ export class MihomoYamlDocument {
       issues.push({
         severity: 'error',
         code: `yaml.syntax.${error.code}`,
-        message: error.message,
+        messageKey: `yaml.syntax.${error.code}`,
         range: offsetsToRange(lineCounter, error.pos[0], error.pos[1]),
       });
     }
@@ -159,7 +153,7 @@ export class MihomoYamlDocument {
       issues.push({
         severity: 'warning',
         code: `yaml.syntax.${warning.code}`,
-        message: warning.message,
+        messageKey: `yaml.syntax.${warning.code}`,
         range: offsetsToRange(lineCounter, warning.pos[0], warning.pos[1]),
       });
     }
@@ -169,7 +163,8 @@ export class MihomoYamlDocument {
       issues.push({
         severity: 'error',
         code: 'yaml.limit.depth',
-        message: `YAML nesting depth ${depth} exceeds the ${limits.maxDepth} level limit.`,
+        messageKey: 'yaml.limit.depth',
+        messageParams: { depth, maxDepth: limits.maxDepth },
       });
       return { document: null, issues };
     }

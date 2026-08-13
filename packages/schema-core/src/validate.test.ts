@@ -27,8 +27,9 @@ describe('JSON Schema subset interpreter (ADR-008)', () => {
     const issues = validateValue({ mode: 'rule', 'mixed-port': 'seven' }, sampleModule.schema);
     expect(codes(issues)).toEqual(['schema.type']);
     expect(issues[0]?.path).toEqual(['mixed-port']);
-    expect(issues[0]?.message).toContain('mixed-port');
-    expect(issues[0]?.message).not.toContain('seven');
+    expect(issues[0]?.messageKey).toBe('schema.type');
+    expect(issues[0]?.messageParams).toEqual({ expected: 'integer', actual: 'string' });
+    expect(JSON.stringify(issues[0])).not.toContain('seven');
   });
 
   it('reports missing required fields at the field path', () => {
