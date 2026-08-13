@@ -8,11 +8,12 @@ export interface StoredBundle {
 }
 
 /**
- * Generic async key-value persistence for bundles. The real, durable
- * implementation belongs to `@mcs/storage` (v0.2.0); this version only ships
- * an in-memory one (`testing/memory-store.ts`) for tests. Keyed generically
- * rather than by a fixed slot enum so a future disk-backed implementation
- * isn't forced to model slots it doesn't need to know about.
+ * Generic async key-value persistence for bundles. `bundleStoreFrom()` in
+ * `storage-bridge.ts` adapts this onto `@mcs/storage`'s `StorageAdapter` for
+ * real persistence; `testing/memory-store.ts` remains for tests that don't
+ * need a real adapter. Keyed generically rather than by a fixed slot enum so
+ * a disk-backed implementation isn't forced to model slots it doesn't need
+ * to know about.
  */
 export interface BundleStore {
   read(key: string): Promise<StoredBundle | null>;

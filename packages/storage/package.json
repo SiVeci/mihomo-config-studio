@@ -1,0 +1,10 @@
+{
+  "name": "@mcs/storage",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Storage port with in-memory and IndexedDB adapters (NFR-REL-01).",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

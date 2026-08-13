@@ -1,6 +1,6 @@
 import type { BundleStore, StoredBundle } from '../store.js';
 
-/** In-memory `BundleStore` for tests. The durable implementation is `@mcs/storage` (v0.2.0). */
+/** In-memory `BundleStore` for tests; `bundleStoreFrom()` in `storage-bridge.ts` gives real durable persistence. */
 export class MemoryBundleStore implements BundleStore {
   readonly #slots = new Map<string, StoredBundle>();
 

@@ -46,11 +46,11 @@ packages/
   schema-registry/     模块发现、依赖解析和版本选择           ✅ M0 已验证
   schema-builtin/      随应用发布的默认 Bundle
   form-renderer/       Schema 驱动表单与控件映射              ✅ M0 已验证
-  validator/           语法、结构、语义、引用和安全检查
+  validator/           语法、结构、语义、引用和安全检查        ✅ 骨架 + 流水线（v0.2.0 #1-2）
   migration/           声明式迁移计划与预览
   graph/               引用索引、循环检测和关系图数据         ✅ M0 已验证
   templates/           模板定义与变量
-  storage/             Web/Android 存储抽象
+  storage/             Web/Android 存储抽象                  ✅ 端口 + 内存/IndexedDB（v0.2.0 #4）
   project-format/      .mcsproj 导入导出
   ui/                  通用 UI、主题与无障碍组件
   test-fixtures/       官方样例、边界样例和 Golden Files      ✅

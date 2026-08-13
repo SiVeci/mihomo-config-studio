@@ -21,6 +21,7 @@ export type {
   BundleStore,
   StoredBundle,
 } from './store.js';
+export { bundleStoreFrom } from './storage-bridge.js';
 export {
   bytesToHex,
   canonicalManifestJson,
