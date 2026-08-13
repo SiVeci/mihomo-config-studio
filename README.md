@@ -38,24 +38,25 @@
 ```text
 apps/
   web/                 Web、PWA、静态部署
-  android/             Capacitor Android 壳与原生适配
+  android/             Capacitor Android 壳与原生适配         🚧 M0-5 模拟器验证，Partial（真机推迟 v0.6.0）
 packages/
-  config-model/        领域实体、引用和项目模型
-  yaml-engine/         AST 解析、局部修改、序列化、差异   ✅ M0 已验证
-  schema-core/         JSON Schema、UI Schema 和类型
-  schema-registry/     模块发现、依赖解析和版本选择
+  config-model/        领域实体、引用和项目模型               ✅ M0 已验证
+  yaml-engine/         AST 解析、局部修改、序列化、差异        ✅ M0 已验证
+  schema-core/         JSON Schema、UI Schema 和类型          ✅ M0 已验证
+  schema-registry/     模块发现、依赖解析和版本选择           ✅ M0 已验证
   schema-builtin/      随应用发布的默认 Bundle
-  form-renderer/       Schema 驱动表单与控件映射
+  form-renderer/       Schema 驱动表单与控件映射              ✅ M0 已验证
   validator/           语法、结构、语义、引用和安全检查
   migration/           声明式迁移计划与预览
-  graph/               引用索引、循环检测和关系图数据
+  graph/               引用索引、循环检测和关系图数据         ✅ M0 已验证
   templates/           模板定义与变量
   storage/             Web/Android 存储抽象
   project-format/      .mcsproj 导入导出
   ui/                  通用 UI、主题与无障碍组件
-  test-fixtures/       官方样例、边界样例和 Golden Files ✅
+  test-fixtures/       官方样例、边界样例和 Golden Files      ✅
 tools/
-  schema-cli/          Bundle 校验、签名、差异和发布
+  schema-cli/          Bundle 校验、签名、差异和发布           ✅ M0 已验证
+  android-manifest-check/ Android 清单 VPN 权限断言（CI 强制） ✅ M0 已验证
   upstream-watch/      上游文档 / 示例变更监控
   core-test-runner/    Mihomo 配置测试矩阵
 ```
