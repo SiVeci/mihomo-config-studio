@@ -52,7 +52,7 @@ packages/
   templates/           模板定义与变量
   storage/             Web/Android 存储抽象                  ✅ 端口 + 内存/IndexedDB（v0.2.0 #4）
   project-format/      .mcsproj 导入导出
-  ui/                  通用 UI、主题与无障碍组件
+  ui/                  通用 UI、主题与无障碍组件                     ✅ 设计令牌 + 文字色层（v0.2.0 #7）
   test-fixtures/       官方样例、边界样例和 Golden Files      ✅
 tools/
   schema-cli/          Bundle 校验、签名、差异和发布           ✅ M0 已验证

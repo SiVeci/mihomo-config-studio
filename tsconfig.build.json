@@ -9,6 +9,7 @@
     { "path": "./packages/graph" },
     { "path": "./packages/schema-registry" },
     { "path": "./packages/storage" },
+    { "path": "./packages/ui" },
     { "path": "./packages/validator" },
     { "path": "./tools/schema-cli" },
     { "path": "./tools/android-manifest-check" },

@@ -1,0 +1,10 @@
+{
+  "name": "@mcs/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Design tokens: color, typography, spacing and the text-bearing color layer (ADR-011, ADR-017).",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}
