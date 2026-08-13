@@ -5,7 +5,7 @@ pnpm-lock.yaml
 
 # Source documents authored outside this repo: kept verbatim so a reformat never
 # shows up as a content change when they are revised upstream.
-DESIGN.md
+docs/design-system.md
 mihomo-config-studio-prd.md
 
 # Golden fixtures are byte-significant: formatting them would invalidate round-trip tests.

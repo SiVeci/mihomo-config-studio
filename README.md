@@ -91,6 +91,7 @@ pnpm run test:coverage
 ## 文档
 
 - [架构决策记录（ADR）](docs/adr/README.md)
+- [设计系统](docs/design-system.md)
 - [版本执行计划](docs/releases/README.md)
 - [需求追踪表](docs/requirements-traceability.md)
 - [PRD 与上游行为差异记录](docs/upstream-divergences.md)

@@ -1,3 +1,4 @@
+export { AA_NORMAL_TEXT_RATIO, contrastRatio } from './contrast.js';
 export {
   BREAKPOINTS,
   COLORS,
