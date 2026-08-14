@@ -8,5 +8,9 @@
     "types": ["node", "vite/client"]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.json"],
-  "references": [{ "path": "../../packages/ui" }]
+  "references": [
+    { "path": "../../packages/ui" },
+    { "path": "../../packages/validator" },
+    { "path": "../../packages/yaml-engine" }
+  ]
 }

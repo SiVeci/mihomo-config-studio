@@ -78,6 +78,12 @@ importers:
       '@mcs/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@mcs/validator':
+        specifier: workspace:*
+        version: link:../../packages/validator
+      '@mcs/yaml-engine':
+        specifier: workspace:*
+        version: link:../../packages/yaml-engine
       react:
         specifier: ^19.2.8
         version: 19.2.8

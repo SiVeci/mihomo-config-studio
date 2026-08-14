@@ -28,8 +28,11 @@ export default defineConfig({
         'tools/*/src/**/*.test.ts',
         'apps/web/src/**/*.test.ts',
         'apps/web/src/**/*.test.tsx',
-        // Bootstrap entry point: no logic of its own to cover.
+        // Bootstrap entry points: no logic of their own to cover (the real
+        // logic behind config.worker.ts lives in protocol.ts, which is
+        // covered directly since it needs no Worker global to run).
         'apps/web/src/main.tsx',
+        'apps/web/src/worker/config.worker.ts',
       ],
       // NFR-MAINT: core packages (and, from #10 on, tools/**) target >= 85% line coverage.
       thresholds: {

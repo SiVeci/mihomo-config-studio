@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@mcs/ui": "workspace:*",
+    "@mcs/validator": "workspace:*",
+    "@mcs/yaml-engine": "workspace:*",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
