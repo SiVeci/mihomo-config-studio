@@ -19,5 +19,12 @@
   "project.deleteButton": "Delete project",
   "project.deleteConfirmMessage": "Delete this project? We recommend exporting a backup first. This action cannot be undone.",
   "project.deleteConfirmButton": "Confirm delete",
-  "project.deleteCancelButton": "Cancel"
+  "project.deleteCancelButton": "Cancel",
+  "import.title": "Import configuration",
+  "import.dropHint": "Or drag a .yaml / .yml file here",
+  "import.fileButton": "Choose file",
+  "import.pasteLabel": "Paste YAML text",
+  "import.pasteButton": "Import",
+  "import.successMessage": "Import successful",
+  "import.errorMessage": "Import failed: the content has syntax errors"
 }

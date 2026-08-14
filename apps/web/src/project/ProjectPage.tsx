@@ -3,6 +3,8 @@ import { AutoSaver } from '@mcs/storage';
 import type { StorageAdapter } from '@mcs/storage';
 import { useEffect, useReducer, useRef, useState, type ReactNode } from 'react';
 
+import { ImportPanel } from '../import/ImportPanel.js';
+import type { ImportWorkerClient } from '../import/ImportPanel.js';
 import { t } from '../i18n/index.js';
 import { AppShell } from '../layout/AppShell.js';
 import {
@@ -21,6 +23,12 @@ type ProjectField = 'name' | 'description' | 'targetProfile';
 export interface ProjectPageProps {
   readonly adapter: StorageAdapter;
   /**
+   * Required, like `adapter`: a real client is backed by a real Worker,
+   * which throws to construct outside a browser, so there is no safe
+   * internal default (see `App.tsx`'s `createConfigWorkerClient()` call).
+   */
+  readonly client: ImportWorkerClient;
+  /**
    * Injectable for tests; production always takes the default (a fresh,
    * always-empty stack). Real document-level recording — the only thing that
    * would ever make `canUndo`/`canRedo` true outside a test — arrives in #13
@@ -35,6 +43,7 @@ export interface ProjectPageProps {
 
 export function ProjectPage({
   adapter,
+  client,
   historyStack: historyStackProp,
   now = Date.now,
 }: ProjectPageProps): ReactNode {
@@ -158,6 +167,19 @@ export function ProjectPage({
     autoSaverRef.current?.touch(now());
   }
 
+  async function handleImport(id: string, text: string): Promise<void> {
+    // A discrete, deliberate action (like create/delete), not a keystroke —
+    // saved immediately rather than through the debounced AutoSaver.
+    await saveProjectConfigText(adapter, id, text);
+    const updated = projectsRef.current.map((project) =>
+      project.id === id ? { ...project, updatedAt: new Date(now()).toISOString() } : project,
+    );
+    projectsRef.current = updated;
+    setProjects(updated);
+    const record = updated.find((project) => project.id === id);
+    if (record) await saveProjectManifest(adapter, record);
+  }
+
   async function handleConfirmDelete(id: string): Promise<void> {
     // Cancel any pending autosave for this project *before* deleting it: the
     // effect above flushes on cleanup when `selectedId` changes away, which
@@ -208,18 +230,21 @@ export function ProjectPage({
       }
     >
       {selected ? (
-        <ProjectDetail
-          project={selected}
-          canUndo={historyStack.canUndo}
-          canRedo={historyStack.canRedo}
-          onUndo={handleUndo}
-          onRedo={handleRedo}
-          onFieldChange={handleFieldChange}
-          confirmingDelete={confirmingDeleteId === selected.id}
-          onDeleteClick={() => setConfirmingDeleteId(selected.id)}
-          onCancelDelete={() => setConfirmingDeleteId(null)}
-          onConfirmDelete={() => void handleConfirmDelete(selected.id)}
-        />
+        <>
+          <ImportPanel client={client} onImport={(text) => void handleImport(selected.id, text)} />
+          <ProjectDetail
+            project={selected}
+            canUndo={historyStack.canUndo}
+            canRedo={historyStack.canRedo}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+            onFieldChange={handleFieldChange}
+            confirmingDelete={confirmingDeleteId === selected.id}
+            onDeleteClick={() => setConfirmingDeleteId(selected.id)}
+            onCancelDelete={() => setConfirmingDeleteId(null)}
+            onConfirmDelete={() => void handleConfirmDelete(selected.id)}
+          />
+        </>
       ) : (
         <p className="project-detail__empty">{t('project.noSelection')}</p>
       )}

@@ -2,12 +2,16 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// App.tsx builds a real IndexedDbStorageAdapter for ProjectPage, which throws
-// without a browser indexedDB; ProjectPage itself gets thorough, isolated
-// coverage in ProjectPage.test.tsx with an injected MemoryStorageAdapter.
-// This file's job is routing, not page content, so both are stubbed out.
+// App.tsx builds a real IndexedDbStorageAdapter and a real Worker-backed
+// client for ProjectPage, neither of which work without a browser (jsdom has
+// no IndexedDB or Worker implementation); ProjectPage itself gets thorough,
+// isolated coverage in ProjectPage.test.tsx with injected fakes. This file's
+// job is routing, not page content, so all three are stubbed out.
 vi.mock('@mcs/storage', () => ({
   IndexedDbStorageAdapter: class {},
+}));
+vi.mock('./worker/client.js', () => ({
+  createConfigWorkerClient: () => ({ parse: async () => ({ type: 'parse', issues: [] }) }),
 }));
 vi.mock('./project/ProjectPage.js', () => ({
   ProjectPage: () => <p>project-page-stub</p>,

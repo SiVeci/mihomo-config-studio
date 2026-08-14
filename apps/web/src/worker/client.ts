@@ -160,3 +160,23 @@ export class WorkerClient {
     }
   }
 }
+
+/**
+ * Builds a `WorkerClient` backed by a real `new Worker(...)`, adapting it to
+ * `WorkerLike` via a fresh object literal rather than passing the `Worker`
+ * instance directly: `Worker.postMessage`/`onmessage` are typed against the
+ * DOM lib's broader `any`-based signatures, and forwarding through an
+ * explicit adapter sidesteps that variance question entirely instead of
+ * relying on it working out. Not unit-testable — `jsdom` has no real Worker
+ * implementation — so this is exercised by `vite build` and manual/real
+ * browser checks instead (see this slice's verification notes).
+ */
+export function createConfigWorkerClient(): WorkerClient {
+  const worker = new Worker(new URL('./config.worker.ts', import.meta.url), { type: 'module' });
+  const adapter: WorkerLike = {
+    onmessage: null,
+    postMessage: (message) => worker.postMessage(message),
+  };
+  worker.onmessage = (event) => adapter.onmessage?.({ data: event.data as WorkerResponse });
+  return new WorkerClient(adapter);
+}

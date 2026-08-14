@@ -5,6 +5,7 @@ import { MihomoYamlDocument } from '@mcs/yaml-engine';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import type { ImportWorkerClient } from '../import/ImportPanel.js';
 import { t } from '../i18n/index.js';
 import { DEFAULT_PROJECT_CONFIG_TEXT, DEFAULT_TARGET_PROFILE } from './model.js';
 import { ProjectPage } from './ProjectPage.js';
@@ -12,6 +13,11 @@ import { ProjectPage } from './ProjectPage.js';
 afterEach(() => {
   cleanup();
 });
+
+/** ProjectPage requires a client but none of these tests exercise import behaviour directly. */
+const FAKE_CLIENT: ImportWorkerClient = {
+  parse: async (_text) => ({ type: 'parse', requestId: 'fake', issues: [] }),
+};
 
 const decoder = new TextDecoder();
 
@@ -25,19 +31,21 @@ async function readManifest(
 
 describe('ProjectPage / empty and loading state', () => {
   it('shows the empty-state message once loading finishes with no projects', async () => {
-    render(<ProjectPage adapter={new MemoryStorageAdapter()} />);
+    render(<ProjectPage client={FAKE_CLIENT} adapter={new MemoryStorageAdapter()} />);
 
     await screen.findByText(t('project.emptyState'));
   });
 
   it('shows the no-selection message with no project selected', async () => {
-    render(<ProjectPage adapter={new MemoryStorageAdapter()} />);
+    render(<ProjectPage client={FAKE_CLIENT} adapter={new MemoryStorageAdapter()} />);
 
     expect(screen.getByText(t('project.noSelection'))).toBeDefined();
   });
 
   it('unmounting before the initial load resolves does not warn about a state update on an unmounted component', () => {
-    const { unmount } = render(<ProjectPage adapter={new MemoryStorageAdapter()} />);
+    const { unmount } = render(
+      <ProjectPage client={FAKE_CLIENT} adapter={new MemoryStorageAdapter()} />,
+    );
 
     expect(() => unmount()).not.toThrow();
   });
@@ -46,7 +54,7 @@ describe('ProjectPage / empty and loading state', () => {
 describe('ProjectPage / create', () => {
   it('creates a project with the default name and target profile, persists it, and selects it', async () => {
     const adapter = new MemoryStorageAdapter();
-    render(<ProjectPage adapter={adapter} />);
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
     await screen.findByText(t('project.emptyState'));
 
     fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
@@ -66,7 +74,7 @@ describe('ProjectPage / create', () => {
 
   it('lists every created project by name in the sidebar', async () => {
     const adapter = new MemoryStorageAdapter();
-    render(<ProjectPage adapter={adapter} />);
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
     await screen.findByText(t('project.emptyState'));
 
     fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
@@ -83,7 +91,7 @@ describe('ProjectPage / create', () => {
 
   it('editing the selected project leaves every other project untouched', async () => {
     const adapter = new MemoryStorageAdapter();
-    render(<ProjectPage adapter={adapter} />);
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
     await screen.findByText(t('project.emptyState'));
 
     fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
@@ -102,7 +110,7 @@ describe('ProjectPage / create', () => {
 describe('ProjectPage / editing description and target profile', () => {
   it('editing the description and target profile fields updates each independently', async () => {
     const adapter = new MemoryStorageAdapter();
-    render(<ProjectPage adapter={adapter} />);
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
     await screen.findByText(t('project.emptyState'));
     fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
     await screen.findByLabelText(t('project.nameLabel'));
@@ -127,10 +135,97 @@ describe('ProjectPage / editing description and target profile', () => {
   });
 });
 
+describe('ProjectPage / import (FR-YAML-01 wiring)', () => {
+  it('a successful import overwrites the selected project config.yaml and bumps updatedAt', async () => {
+    const adapter = new MemoryStorageAdapter();
+    let current = 0;
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} now={() => current} />);
+    await screen.findByText(t('project.emptyState'));
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+    const id = (await adapter.list('project/'))
+      .find((key) => key.endsWith('/manifest.json'))!
+      .split('/')[1]!;
+    const manifestBefore = await readManifest(adapter, id);
+
+    current = 5000; // distinct from the creation timestamp, to prove updatedAt actually moved
+    fireEvent.change(screen.getByLabelText(t('import.pasteLabel')), {
+      target: { value: 'mode: direct\n' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: t('import.pasteButton') }));
+
+    await screen.findByText(t('import.successMessage'));
+    const configBytes = await adapter.get(`project/${id}/config.yaml`);
+    expect(configBytes ? decoder.decode(configBytes) : null).toBe('mode: direct\n');
+    const manifestAfter = await readManifest(adapter, id);
+    expect(manifestAfter?.updatedAt).not.toBe(manifestBefore?.updatedAt);
+  });
+
+  it('importing into the selected project leaves every other project untouched', async () => {
+    const adapter = new MemoryStorageAdapter();
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+    const otherId = (await adapter.list('project/'))
+      .find((key) => key.endsWith('/manifest.json'))!
+      .split('/')[1]!;
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText<HTMLInputElement>(t('project.nameLabel'));
+
+    fireEvent.change(screen.getByLabelText(t('import.pasteLabel')), {
+      target: { value: 'mode: direct\n' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: t('import.pasteButton') }));
+    await screen.findByText(t('import.successMessage'));
+
+    const otherConfigBytes = await adapter.get(`project/${otherId}/config.yaml`);
+    expect(otherConfigBytes ? decoder.decode(otherConfigBytes) : null).toBe(
+      DEFAULT_PROJECT_CONFIG_TEXT,
+    );
+  });
+
+  it('a blocking import does not touch the stored config.yaml', async () => {
+    const adapter = new MemoryStorageAdapter();
+    const blockingClient: typeof FAKE_CLIENT = {
+      parse: async () => ({
+        type: 'parse',
+        requestId: 'x',
+        issues: [
+          {
+            severity: 'error',
+            code: 'yaml.syntax.x',
+            module: 'yaml',
+            messageKey: 'yaml.syntax.x',
+            blocking: true,
+          },
+        ],
+      }),
+    };
+    render(<ProjectPage client={blockingClient} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+    const id = (await adapter.list('project/'))
+      .find((key) => key.endsWith('/manifest.json'))!
+      .split('/')[1]!;
+
+    fireEvent.change(screen.getByLabelText(t('import.pasteLabel')), {
+      target: { value: 'a: 1\n  b: 2\n' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: t('import.pasteButton') }));
+
+    await screen.findByText(t('import.errorMessage'));
+    const configBytes = await adapter.get(`project/${id}/config.yaml`);
+    expect(configBytes ? decoder.decode(configBytes) : null).toBe(DEFAULT_PROJECT_CONFIG_TEXT);
+  });
+});
+
 describe('ProjectPage / select', () => {
   it('selecting a project in the sidebar shows its own field values in the detail pane', async () => {
     const adapter = new MemoryStorageAdapter();
-    render(<ProjectPage adapter={adapter} />);
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
     await screen.findByText(t('project.emptyState'));
 
     fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
@@ -153,7 +248,7 @@ describe('ProjectPage / metadata autosave (FR-PROJ-02 UI wiring)', () => {
     const adapter = new MemoryStorageAdapter();
     let current = 0;
     const now = (): number => current;
-    render(<ProjectPage adapter={adapter} now={now} />);
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} now={now} />);
     await screen.findByText(t('project.emptyState'));
 
     fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
@@ -184,7 +279,7 @@ describe('ProjectPage / metadata autosave (FR-PROJ-02 UI wiring)', () => {
 
   it('force-flushes the pending edit when the tab becomes hidden', async () => {
     const adapter = new MemoryStorageAdapter();
-    render(<ProjectPage adapter={adapter} now={() => 0} />);
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} now={() => 0} />);
     await screen.findByText(t('project.emptyState'));
 
     fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
@@ -206,7 +301,7 @@ describe('ProjectPage / metadata autosave (FR-PROJ-02 UI wiring)', () => {
 
   it('force-flushes the pending edit on beforeunload', async () => {
     const adapter = new MemoryStorageAdapter();
-    render(<ProjectPage adapter={adapter} now={() => 0} />);
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} now={() => 0} />);
     await screen.findByText(t('project.emptyState'));
 
     fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
@@ -225,7 +320,7 @@ describe('ProjectPage / metadata autosave (FR-PROJ-02 UI wiring)', () => {
 
   it('force-flushes the outgoing project before selection moves to a different one', async () => {
     const adapter = new MemoryStorageAdapter();
-    render(<ProjectPage adapter={adapter} now={() => 0} />);
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} now={() => 0} />);
     await screen.findByText(t('project.emptyState'));
 
     fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
@@ -247,7 +342,7 @@ describe('ProjectPage / metadata autosave (FR-PROJ-02 UI wiring)', () => {
 describe('ProjectPage / delete (FR-PROJ-03)', () => {
   it('shows a confirmation mentioning export before deleting, and cancelling keeps the project', async () => {
     const adapter = new MemoryStorageAdapter();
-    render(<ProjectPage adapter={adapter} />);
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
     await screen.findByText(t('project.emptyState'));
     fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
     await screen.findByLabelText(t('project.nameLabel'));
@@ -265,7 +360,7 @@ describe('ProjectPage / delete (FR-PROJ-03)', () => {
 
   it('deletes both the manifest and config from storage, and clears the selection', async () => {
     const adapter = new MemoryStorageAdapter();
-    render(<ProjectPage adapter={adapter} />);
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
     await screen.findByText(t('project.emptyState'));
     fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
     await screen.findByLabelText(t('project.nameLabel'));
@@ -286,7 +381,7 @@ describe('ProjectPage / delete (FR-PROJ-03)', () => {
 describe('ProjectPage / undo-redo shell (FR-PROJ-04 UI wiring; see plan #11 deviation note)', () => {
   it('renders Undo and Redo disabled while the injected history stack is empty', async () => {
     const adapter = new MemoryStorageAdapter();
-    render(<ProjectPage adapter={adapter} />);
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
     await screen.findByText(t('project.emptyState'));
     fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
     await screen.findByLabelText(t('project.nameLabel'));
@@ -308,7 +403,7 @@ describe('ProjectPage / undo-redo shell (FR-PROJ-04 UI wiring; see plan #11 devi
     historyStack.record(doc!, 'test edit', () => doc!.setScalarIn(['mode'], 'direct'));
     expect(historyStack.canUndo).toBe(true);
 
-    render(<ProjectPage adapter={adapter} historyStack={historyStack} />);
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} historyStack={historyStack} />);
     await screen.findByText(t('project.emptyState'));
     fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
     await screen.findByLabelText(t('project.nameLabel'));
@@ -336,7 +431,7 @@ describe('ProjectPage / undo-redo shell (FR-PROJ-04 UI wiring; see plan #11 devi
     const { document: doc } = MihomoYamlDocument.parse('mode: rule\n');
     historyStack.record(doc!, 'test edit', () => doc!.setScalarIn(['mode'], 'direct'));
 
-    render(<ProjectPage adapter={adapter} historyStack={historyStack} />);
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} historyStack={historyStack} />);
     await screen.findByText(t('project.emptyState'));
     fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
     await screen.findByLabelText(t('project.nameLabel'));
@@ -352,7 +447,7 @@ describe('ProjectPage / undo-redo shell (FR-PROJ-04 UI wiring; see plan #11 devi
 
   it('a keyboard shortcut without a document to redo/undo is a no-op, not a crash', async () => {
     const adapter = new MemoryStorageAdapter();
-    render(<ProjectPage adapter={adapter} />);
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
     await screen.findByText(t('project.emptyState'));
 
     expect(() => fireEvent.keyDown(window, { key: 'z', ctrlKey: true })).not.toThrow();
@@ -364,7 +459,7 @@ describe('ProjectPage / undo-redo shell (FR-PROJ-04 UI wiring; see plan #11 devi
     const { document: doc } = MihomoYamlDocument.parse('mode: rule\n');
     historyStack.record(doc!, 'test edit', () => doc!.setScalarIn(['mode'], 'direct'));
 
-    render(<ProjectPage adapter={adapter} historyStack={historyStack} />);
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} historyStack={historyStack} />);
     await screen.findByText(t('project.emptyState'));
 
     fireEvent.keyDown(window, { key: 'a', ctrlKey: true });

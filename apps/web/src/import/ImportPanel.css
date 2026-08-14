@@ -1,0 +1,91 @@
+.import-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mcs-spacing-sm);
+  max-width: 480px;
+  border: 1px solid var(--mcs-color-hairline);
+  border-radius: var(--mcs-rounded-md);
+  padding: var(--mcs-spacing-md);
+  background-color: var(--mcs-color-surface-card);
+}
+
+.import-panel__title {
+  font-family: var(--mcs-font-family-title-sm);
+  font-size: var(--mcs-font-size-title-sm);
+  margin: 0;
+}
+
+.import-panel__dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--mcs-spacing-xs);
+  border: 1px dashed var(--mcs-color-hairline);
+  border-radius: var(--mcs-rounded-sm);
+  padding: var(--mcs-spacing-md);
+  text-align: center;
+}
+
+.import-panel__drop-hint {
+  color: var(--mcs-color-text-muted);
+  font-size: var(--mcs-font-size-body-sm);
+  margin: 0;
+}
+
+.import-panel__file-label {
+  display: inline-block;
+  background-color: var(--mcs-color-primary-active);
+  color: var(--mcs-color-on-primary);
+  border-radius: var(--mcs-rounded-sm);
+  padding: var(--mcs-spacing-xs) var(--mcs-spacing-sm);
+  cursor: pointer;
+}
+
+.import-panel__file-input {
+  /* Visually hidden but still focusable/clickable via its <label>. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.import-panel__label {
+  font-size: var(--mcs-font-size-caption);
+  color: var(--mcs-color-text-muted);
+}
+
+.import-panel__textarea {
+  min-height: 96px;
+  font-family: var(--mcs-font-family-code);
+  font-size: var(--mcs-font-size-code);
+}
+
+.import-panel__paste-button {
+  align-self: flex-start;
+  background-color: var(--mcs-color-primary-active);
+  color: var(--mcs-color-on-primary);
+  border: none;
+  border-radius: var(--mcs-rounded-sm);
+  padding: var(--mcs-spacing-xs) var(--mcs-spacing-sm);
+  cursor: pointer;
+}
+
+.import-panel__paste-button:disabled {
+  background-color: var(--mcs-color-primary-disabled);
+  color: var(--mcs-color-muted);
+  cursor: not-allowed;
+}
+
+.import-panel__status {
+  margin: 0;
+  font-size: var(--mcs-font-size-body-sm);
+}
+
+.import-panel__status--success {
+  color: var(--mcs-color-text-success);
+}
+
+.import-panel__status--error {
+  color: var(--mcs-color-text-error);
+}
