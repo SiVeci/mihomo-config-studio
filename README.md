@@ -37,7 +37,7 @@
 
 ```text
 apps/
-  web/                 Web、PWA、静态部署
+  web/                 Web、PWA、静态部署                       ✅ 脚手架 + 路由 + i18n（v0.2.0 #9）
   android/             Capacitor Android 壳与原生适配         🚧 M0-5 模拟器验证，Partial（真机推迟 v0.6.0）
 packages/
   config-model/        领域实体、引用和项目模型               ✅ M0 已验证
@@ -86,6 +86,16 @@ pnpm run test
 
 ```bash
 pnpm run test:coverage
+```
+
+`apps/web` 的开发服务器：
+
+```bash
+pnpm run dev
+```
+
+```bash
+pnpm run build
 ```
 
 ## 文档

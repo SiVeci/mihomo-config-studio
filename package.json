@@ -11,6 +11,8 @@
   },
   "scripts": {
     "typecheck": "tsc -b tsconfig.build.json",
+    "dev": "pnpm --filter @mcs/web dev",
+    "build": "pnpm --filter @mcs/web build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

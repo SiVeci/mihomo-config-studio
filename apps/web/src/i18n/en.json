@@ -1,0 +1,5 @@
+{
+  "app.title": "Mihomo Config Studio",
+  "app.tagline": "Local-first, schema-driven Mihomo configuration manager",
+  "app.notFoundPath": "No route matches path: {path}"
+}

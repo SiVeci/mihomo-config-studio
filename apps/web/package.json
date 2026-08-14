@@ -1,0 +1,20 @@
+{
+  "name": "@mcs/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Web application shell: routing, i18n, and (from #10 on) the Worker-boundary config editor.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@mcs/ui": "workspace:*",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^6.0.7"
+  }
+}

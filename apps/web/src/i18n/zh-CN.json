@@ -1,0 +1,5 @@
+{
+  "app.title": "Mihomo 配置工坊",
+  "app.tagline": "本地优先、Schema 驱动的 Mihomo 配置管理工具",
+  "app.notFoundPath": "找不到路径：{path}"
+}

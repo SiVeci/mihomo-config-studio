@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Baseline CSP: no `unsafe-eval` (ADR-008 already guarantees the schema
+      validator never needs it). Full hardening and a real deployment header
+      are v0.6.0 / v0.9.0 work — this is just the scaffold's starting point.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none';"
+    />
+    <title>Mihomo Config Studio</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
