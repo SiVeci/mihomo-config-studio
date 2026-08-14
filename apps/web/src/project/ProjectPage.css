@@ -1,0 +1,115 @@
+.project-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mcs-spacing-sm);
+}
+
+.project-sidebar__title {
+  font-family: var(--mcs-font-family-title-md);
+  font-size: var(--mcs-font-size-title-md);
+  margin: 0;
+}
+
+.project-sidebar__tagline {
+  color: var(--mcs-color-text-muted);
+  font-size: var(--mcs-font-size-body-sm);
+  margin: 0 0 var(--mcs-spacing-sm);
+}
+
+.project-sidebar__new-button {
+  background-color: var(--mcs-color-primary-active);
+  color: var(--mcs-color-on-primary);
+  border: none;
+  border-radius: var(--mcs-rounded-sm);
+  padding: var(--mcs-spacing-xs) var(--mcs-spacing-sm);
+  cursor: pointer;
+}
+
+.project-sidebar__empty {
+  color: var(--mcs-color-text-muted);
+  font-size: var(--mcs-font-size-body-sm);
+}
+
+.project-sidebar__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--mcs-spacing-xxs);
+}
+
+.project-sidebar__item {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: var(--mcs-rounded-xs);
+  padding: var(--mcs-spacing-xs) var(--mcs-spacing-sm);
+  cursor: pointer;
+  color: var(--mcs-color-body);
+}
+
+.project-sidebar__item[aria-current='true'] {
+  background-color: var(--mcs-color-surface-card);
+  color: var(--mcs-color-text-primary);
+  font-weight: 500;
+}
+
+.project-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mcs-spacing-sm);
+  max-width: 480px;
+}
+
+.project-detail__empty {
+  color: var(--mcs-color-text-muted);
+}
+
+.project-detail__toolbar {
+  display: flex;
+  gap: var(--mcs-spacing-xs);
+}
+
+.project-detail__label {
+  font-size: var(--mcs-font-size-caption);
+  color: var(--mcs-color-text-muted);
+}
+
+.project-detail__meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--mcs-spacing-xxs) var(--mcs-spacing-sm);
+  color: var(--mcs-color-text-muted);
+  font-size: var(--mcs-font-size-body-sm);
+}
+
+.project-detail__meta dt {
+  font-weight: 500;
+}
+
+.project-detail__meta dd {
+  margin: 0;
+}
+
+.project-detail__delete-button {
+  align-self: flex-start;
+  background-color: var(--mcs-color-error-tint);
+  color: var(--mcs-color-text-error);
+  border: 1px solid var(--mcs-color-text-error);
+  border-radius: var(--mcs-rounded-sm);
+  padding: var(--mcs-spacing-xs) var(--mcs-spacing-sm);
+  cursor: pointer;
+}
+
+.project-detail__delete-confirm {
+  border: 1px solid var(--mcs-color-text-error);
+  background-color: var(--mcs-color-error-tint);
+  border-radius: var(--mcs-rounded-sm);
+  padding: var(--mcs-spacing-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--mcs-spacing-xs);
+  align-items: flex-start;
+}

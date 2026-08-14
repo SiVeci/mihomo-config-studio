@@ -75,6 +75,12 @@ importers:
 
   apps/web:
     dependencies:
+      '@mcs/config-model':
+        specifier: workspace:*
+        version: link:../../packages/config-model
+      '@mcs/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@mcs/ui':
         specifier: workspace:*
         version: link:../../packages/ui

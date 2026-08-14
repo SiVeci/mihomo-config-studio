@@ -1,5 +1,23 @@
 {
   "app.title": "Mihomo Config Studio",
   "app.tagline": "Local-first, schema-driven Mihomo configuration manager",
-  "app.notFoundPath": "No route matches path: {path}"
+  "app.notFoundPath": "No route matches path: {path}",
+  "appShell.sidebarLabel": "Project list",
+  "appShell.asideLabel": "Auxiliary panel",
+  "appShell.asidePlaceholder": "The issue panel arrives in a later release",
+  "project.newButton": "New project",
+  "project.untitledName": "Untitled project",
+  "project.emptyState": "No projects yet — click “New project” to get started",
+  "project.noSelection": "Select a project on the left to view its details",
+  "project.nameLabel": "Name",
+  "project.descriptionLabel": "Description",
+  "project.targetProfileLabel": "Target compatibility profile",
+  "project.createdAtLabel": "Created",
+  "project.updatedAtLabel": "Updated",
+  "project.undoButton": "Undo",
+  "project.redoButton": "Redo",
+  "project.deleteButton": "Delete project",
+  "project.deleteConfirmMessage": "Delete this project? We recommend exporting a backup first. This action cannot be undone.",
+  "project.deleteConfirmButton": "Confirm delete",
+  "project.deleteCancelButton": "Cancel"
 }

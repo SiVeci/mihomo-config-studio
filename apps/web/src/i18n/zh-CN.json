@@ -1,5 +1,23 @@
 {
   "app.title": "Mihomo 配置工坊",
   "app.tagline": "本地优先、Schema 驱动的 Mihomo 配置管理工具",
-  "app.notFoundPath": "找不到路径：{path}"
+  "app.notFoundPath": "找不到路径：{path}",
+  "appShell.sidebarLabel": "项目列表",
+  "appShell.asideLabel": "辅助面板",
+  "appShell.asidePlaceholder": "问题面板将在后续版本提供",
+  "project.newButton": "新建项目",
+  "project.untitledName": "未命名项目",
+  "project.emptyState": "还没有项目，点击“新建项目”开始",
+  "project.noSelection": "选择左侧的项目查看详情",
+  "project.nameLabel": "名称",
+  "project.descriptionLabel": "描述",
+  "project.targetProfileLabel": "目标兼容档案",
+  "project.createdAtLabel": "创建于",
+  "project.updatedAtLabel": "更新于",
+  "project.undoButton": "撤销",
+  "project.redoButton": "重做",
+  "project.deleteButton": "删除项目",
+  "project.deleteConfirmMessage": "确定要删除这个项目吗？删除前建议先导出项目备份。此操作无法撤销。",
+  "project.deleteConfirmButton": "确认删除",
+  "project.deleteCancelButton": "取消"
 }

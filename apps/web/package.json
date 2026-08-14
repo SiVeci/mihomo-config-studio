@@ -9,6 +9,8 @@
     "build": "vite build"
   },
   "dependencies": {
+    "@mcs/config-model": "workspace:*",
+    "@mcs/storage": "workspace:*",
     "@mcs/ui": "workspace:*",
     "@mcs/validator": "workspace:*",
     "@mcs/yaml-engine": "workspace:*",
