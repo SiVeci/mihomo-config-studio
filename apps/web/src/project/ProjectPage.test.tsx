@@ -5,18 +5,23 @@ import { MihomoYamlDocument } from '@mcs/yaml-engine';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import type { ImportWorkerClient } from '../import/ImportPanel.js';
+import type { YamlEditorWorkerClient } from '../editor/YamlEditor.js';
 import { t } from '../i18n/index.js';
-import { DEFAULT_PROJECT_CONFIG_TEXT, DEFAULT_TARGET_PROFILE } from './model.js';
+import {
+  DEFAULT_PROJECT_CONFIG_TEXT,
+  DEFAULT_TARGET_PROFILE,
+  getProjectConfigText,
+} from './model.js';
 import { ProjectPage } from './ProjectPage.js';
 
 afterEach(() => {
   cleanup();
 });
 
-/** ProjectPage requires a client but none of these tests exercise import behaviour directly. */
-const FAKE_CLIENT: ImportWorkerClient = {
+/** ProjectPage requires a client but most of these tests exercise neither import nor the editor directly. */
+const FAKE_CLIENT: YamlEditorWorkerClient = {
   parse: async (_text) => ({ type: 'parse', requestId: 'fake', issues: [] }),
+  serialize: async (_options) => ({ type: 'serialize', requestId: 'fake', text: '' }),
 };
 
 const decoder = new TextDecoder();
@@ -28,6 +33,14 @@ async function readManifest(
   const bytes = await adapter.get(`project/${id}/manifest.json`);
   return bytes ? (JSON.parse(decoder.decode(bytes)) as Record<string, unknown>) : null;
 }
+
+describe('getProjectConfigText', () => {
+  it('returns null for a project with no stored config', async () => {
+    const adapter = new MemoryStorageAdapter();
+
+    expect(await getProjectConfigText(adapter, 'never-created')).toBeNull();
+  });
+});
 
 describe('ProjectPage / empty and loading state', () => {
   it('shows the empty-state message once loading finishes with no projects', async () => {
@@ -189,6 +202,7 @@ describe('ProjectPage / import (FR-YAML-01 wiring)', () => {
   it('a blocking import does not touch the stored config.yaml', async () => {
     const adapter = new MemoryStorageAdapter();
     const blockingClient: typeof FAKE_CLIENT = {
+      ...FAKE_CLIENT,
       parse: async () => ({
         type: 'parse',
         requestId: 'x',
@@ -239,6 +253,66 @@ describe('ProjectPage / select', () => {
 
     await waitFor(() => {
       expect(screen.getByLabelText<HTMLInputElement>(t('project.nameLabel')).value).toBe('Alpha');
+    });
+  });
+});
+
+describe('ProjectPage / editor wiring (FR-YAML-04/05)', () => {
+  it('unmounting while the selected project config text is still loading does not throw', async () => {
+    const adapter = new MemoryStorageAdapter();
+    const { unmount } = render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    // Unmounts before the config-load effect's own `getProjectConfigText`
+    // fetch (triggered by selecting the new project) can have resolved.
+    expect(() => unmount()).not.toThrow();
+  });
+
+  it('loads the newly-created project default config text into the editor', async () => {
+    const adapter = new MemoryStorageAdapter();
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+
+    // The textarea appears as soon as a project is selected, but its content
+    // loads asynchronously (a separate `getProjectConfigText` fetch) — so the
+    // value must be awaited, not just the element's presence.
+    await waitFor(() => {
+      const editorTextarea = screen.getByLabelText<HTMLTextAreaElement>(t('editor.title'));
+      expect(editorTextarea.value).toBe(DEFAULT_PROJECT_CONFIG_TEXT);
+    });
+  });
+
+  it('editing config text autosaves it once 5 seconds have elapsed, verified with an injected clock', async () => {
+    const adapter = new MemoryStorageAdapter();
+    let current = 0;
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} now={() => current} />);
+    await screen.findByText(t('project.emptyState'));
+
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+    const projectId = (await adapter.list('project/'))
+      .find((key) => key.endsWith('/manifest.json'))!
+      .split('/')[1]!;
+
+    // First edit establishes the AutoSaver's dirty-since timestamp; it alone
+    // must not flush yet (mirrors the metadata autosave test above).
+    fireEvent.change(screen.getByLabelText(t('editor.title')), {
+      target: { value: 'mode: direct\n' },
+    });
+    const stillDefault = await adapter.get(`project/${projectId}/config.yaml`);
+    expect(decoder.decode(stillDefault!)).toBe(DEFAULT_PROJECT_CONFIG_TEXT);
+
+    current = 6000;
+    fireEvent.change(screen.getByLabelText(t('editor.title')), {
+      target: { value: 'mode: direct\nport: 1\n' },
+    });
+
+    await waitFor(async () => {
+      const bytes = await adapter.get(`project/${projectId}/config.yaml`);
+      expect(bytes ? decoder.decode(bytes) : null).toBe('mode: direct\nport: 1\n');
     });
   });
 });
@@ -297,6 +371,24 @@ describe('ProjectPage / metadata autosave (FR-PROJ-02 UI wiring)', () => {
     });
 
     Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+  });
+
+  it('a visibilitychange event while still visible does not flush', async () => {
+    const adapter = new MemoryStorageAdapter();
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} now={() => 0} />);
+    await screen.findByText(t('project.emptyState'));
+
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    const nameInput = await screen.findByLabelText(t('project.nameLabel'));
+    fireEvent.change(nameInput, { target: { value: 'Not flushed' } });
+
+    // document.visibilityState defaults to 'visible' in jsdom; dispatching
+    // the event without changing it must not trigger a flush.
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    const keys = await adapter.list('project/');
+    const id = keys.find((key) => key.endsWith('/manifest.json'))!.split('/')[1]!;
+    expect((await readManifest(adapter, id))?.name).toBe(t('project.untitledName'));
   });
 
   it('force-flushes the pending edit on beforeunload', async () => {

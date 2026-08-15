@@ -3,14 +3,16 @@ import { AutoSaver } from '@mcs/storage';
 import type { StorageAdapter } from '@mcs/storage';
 import { useEffect, useReducer, useRef, useState, type ReactNode } from 'react';
 
+import { YamlEditor } from '../editor/YamlEditor.js';
+import type { YamlEditorWorkerClient } from '../editor/YamlEditor.js';
 import { ImportPanel } from '../import/ImportPanel.js';
-import type { ImportWorkerClient } from '../import/ImportPanel.js';
 import { t } from '../i18n/index.js';
 import { AppShell } from '../layout/AppShell.js';
 import {
   deleteProject,
   DEFAULT_PROJECT_CONFIG_TEXT,
   DEFAULT_TARGET_PROFILE,
+  getProjectConfigText,
   listProjects,
   saveProjectConfigText,
   saveProjectManifest,
@@ -26,8 +28,10 @@ export interface ProjectPageProps {
    * Required, like `adapter`: a real client is backed by a real Worker,
    * which throws to construct outside a browser, so there is no safe
    * internal default (see `App.tsx`'s `createConfigWorkerClient()` call).
+   * Typed to the widest shape any child needs (`YamlEditor` uses `parse` and
+   * `serialize`; `ImportPanel` only `parse`) so one instance serves both.
    */
-  readonly client: ImportWorkerClient;
+  readonly client: YamlEditorWorkerClient;
   /**
    * Injectable for tests; production always takes the default (a fresh,
    * always-empty stack). Real document-level recording — the only thing that
@@ -51,12 +55,16 @@ export function ProjectPage({
   const [loaded, setLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const [configText, setConfigText] = useState('');
   const [historyStack] = useState(() => historyStackProp ?? new HistoryStack());
   const [, bumpHistoryVersion] = useReducer((count: number) => count + 1, 0);
 
   const projectsRef = useRef(projects);
   projectsRef.current = projects;
-  const autoSaverRef = useRef<AutoSaver | null>(null);
+  const configTextRef = useRef(configText);
+  configTextRef.current = configText;
+  const manifestAutoSaverRef = useRef<AutoSaver | null>(null);
+  const configAutoSaverRef = useRef<AutoSaver | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,12 +78,29 @@ export function ProjectPage({
     };
   }, [adapter]);
 
+  // Loads the selected project's config.yaml on demand — unlike manifests
+  // (all loaded up front for the sidebar list), config text can be large, so
+  // only the currently-open project's is fetched.
+  useEffect(() => {
+    if (!selectedId) {
+      setConfigText('');
+      return;
+    }
+    let cancelled = false;
+    void getProjectConfigText(adapter, selectedId).then((text) => {
+      if (!cancelled) setConfigText(text ?? '');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [adapter, selectedId]);
+
   // One AutoSaver per selected project, flushed whenever selection moves away
   // from it (or the page unmounts) so a pending metadata edit is never lost
   // to a fresh 5-second window starting on the project the user just left.
   useEffect(() => {
     if (!selectedId) {
-      autoSaverRef.current = null;
+      manifestAutoSaverRef.current = null;
       return;
     }
     const id = selectedId;
@@ -87,23 +112,48 @@ export function ProjectPage({
         return new TextEncoder().encode(JSON.stringify(record));
       },
     });
-    autoSaverRef.current = saver;
+    manifestAutoSaverRef.current = saver;
     return () => {
       // `handleConfirmDelete` clears the ref itself before deleting, so a
       // flush here would otherwise resurrect the manifest it just removed by
       // writing back whatever `getContent()` finds once the record is gone.
-      if (autoSaverRef.current !== saver) return;
+      if (manifestAutoSaverRef.current !== saver) return;
       void saver.flush();
-      autoSaverRef.current = null;
+      manifestAutoSaverRef.current = null;
+    };
+  }, [adapter, selectedId]);
+
+  // Mirrors the manifest AutoSaver above, one level down: the raw editor
+  // (#13) edits config.yaml continuously, so it gets its own independently
+  // debounced/flushed AutoSaver rather than sharing the manifest's.
+  useEffect(() => {
+    if (!selectedId) {
+      configAutoSaverRef.current = null;
+      return;
+    }
+    const id = selectedId;
+    const saver = new AutoSaver({
+      adapter,
+      key: `project/${id}/config.yaml`,
+      getContent: () => new TextEncoder().encode(configTextRef.current),
+    });
+    configAutoSaverRef.current = saver;
+    return () => {
+      if (configAutoSaverRef.current !== saver) return;
+      void saver.flush();
+      configAutoSaverRef.current = null;
     };
   }, [adapter, selectedId]);
 
   useEffect(() => {
     function handleVisibilityChange(): void {
-      if (document.visibilityState === 'hidden') void autoSaverRef.current?.flush();
+      if (document.visibilityState !== 'hidden') return;
+      void manifestAutoSaverRef.current?.flush();
+      void configAutoSaverRef.current?.flush();
     }
     function handleBeforeUnload(): void {
-      void autoSaverRef.current?.flush();
+      void manifestAutoSaverRef.current?.flush();
+      void configAutoSaverRef.current?.flush();
     }
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -164,13 +214,15 @@ export function ProjectPage({
     );
     projectsRef.current = updated;
     setProjects(updated);
-    autoSaverRef.current?.touch(now());
+    manifestAutoSaverRef.current?.touch(now());
   }
 
   async function handleImport(id: string, text: string): Promise<void> {
     // A discrete, deliberate action (like create/delete), not a keystroke —
     // saved immediately rather than through the debounced AutoSaver.
     await saveProjectConfigText(adapter, id, text);
+    configTextRef.current = text;
+    setConfigText(text);
     const updated = projectsRef.current.map((project) =>
       project.id === id ? { ...project, updatedAt: new Date(now()).toISOString() } : project,
     );
@@ -180,11 +232,20 @@ export function ProjectPage({
     if (record) await saveProjectManifest(adapter, record);
   }
 
+  function handleConfigChange(text: string): void {
+    // No `!selectedId` guard, same reasoning as `handleFieldChange`: the only
+    // caller is `YamlEditor`'s onChange, which only exists while selected.
+    configTextRef.current = text;
+    setConfigText(text);
+    configAutoSaverRef.current?.touch(now());
+  }
+
   async function handleConfirmDelete(id: string): Promise<void> {
     // Cancel any pending autosave for this project *before* deleting it: the
-    // effect above flushes on cleanup when `selectedId` changes away, which
-    // would otherwise resurrect the manifest this is about to remove.
-    autoSaverRef.current = null;
+    // effects above flush on cleanup when `selectedId` changes away, which
+    // would otherwise resurrect the manifest/config this is about to remove.
+    manifestAutoSaverRef.current = null;
+    configAutoSaverRef.current = null;
     await deleteProject(adapter, id);
     setProjects((previous) => previous.filter((project) => project.id !== id));
     // The delete button only ever appears for the selected project (see
@@ -232,6 +293,7 @@ export function ProjectPage({
       {selected ? (
         <>
           <ImportPanel client={client} onImport={(text) => void handleImport(selected.id, text)} />
+          <YamlEditor text={configText} onChange={handleConfigChange} client={client} />
           <ProjectDetail
             project={selected}
             canUndo={historyStack.canUndo}

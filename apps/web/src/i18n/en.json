@@ -26,5 +26,14 @@
   "import.pasteLabel": "Paste YAML text",
   "import.pasteButton": "Import",
   "import.successMessage": "Import successful",
-  "import.errorMessage": "Import failed: the content has syntax errors"
+  "import.errorMessage": "Import failed: the content has syntax errors",
+  "editor.title": "Raw editor",
+  "editor.findPlaceholder": "Find…",
+  "editor.findButton": "Find",
+  "editor.findNotFound": "No match found",
+  "editor.formatButton": "Format",
+  "editor.structuredViewTitle": "Structured view",
+  "editor.structuredViewPlaceholder": "The structured view becomes available once a Schema module is loaded",
+  "editor.frozenMessage": "The YAML has a syntax error; the structured view is frozen",
+  "editor.frozenLocation": "Line {line}, column {column} — click to jump there"
 }

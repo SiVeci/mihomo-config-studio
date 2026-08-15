@@ -1,0 +1,98 @@
+.yaml-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mcs-spacing-sm);
+  max-width: 640px;
+}
+
+.yaml-editor__title {
+  font-family: var(--mcs-font-family-title-sm);
+  font-size: var(--mcs-font-size-title-sm);
+  margin: 0;
+}
+
+.yaml-editor__toolbar {
+  display: flex;
+  gap: var(--mcs-spacing-xs);
+  align-items: center;
+}
+
+.yaml-editor__search-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--mcs-color-hairline);
+  border-radius: var(--mcs-rounded-xs);
+  padding: var(--mcs-spacing-xxs) var(--mcs-spacing-xs);
+}
+
+.yaml-editor__search-status {
+  margin: 0;
+  color: var(--mcs-color-text-error);
+  font-size: var(--mcs-font-size-body-sm);
+}
+
+.yaml-editor__body {
+  display: flex;
+  border: 1px solid var(--mcs-color-hairline);
+  border-radius: var(--mcs-rounded-sm);
+  overflow: hidden;
+  height: 320px;
+}
+
+.yaml-editor__gutter {
+  flex: 0 0 auto;
+  padding: var(--mcs-spacing-xxs) var(--mcs-spacing-xs);
+  background-color: var(--mcs-color-surface-soft);
+  color: var(--mcs-color-text-muted);
+  font-family: var(--mcs-font-family-code);
+  font-size: var(--mcs-font-size-code);
+  line-height: var(--mcs-line-height-code);
+  text-align: right;
+  overflow: hidden;
+  user-select: none;
+}
+
+.yaml-editor__gutter-line--error {
+  color: var(--mcs-color-text-error);
+  font-weight: 700;
+}
+
+.yaml-editor__textarea {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  resize: none;
+  padding: var(--mcs-spacing-xxs) var(--mcs-spacing-xs);
+  font-family: var(--mcs-font-family-code);
+  font-size: var(--mcs-font-size-code);
+  line-height: var(--mcs-line-height-code);
+}
+
+.yaml-editor__frozen-banner {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background-color: var(--mcs-color-error-tint);
+  color: var(--mcs-color-text-error);
+  border: 1px solid var(--mcs-color-text-error);
+  border-radius: var(--mcs-rounded-sm);
+  padding: var(--mcs-spacing-xs) var(--mcs-spacing-sm);
+  margin-bottom: var(--mcs-spacing-xs);
+  cursor: pointer;
+}
+
+.yaml-editor__structured {
+  border: 1px solid var(--mcs-color-hairline);
+  border-radius: var(--mcs-rounded-sm);
+  padding: var(--mcs-spacing-sm);
+}
+
+.yaml-editor__structured:disabled {
+  opacity: 0.5;
+}
+
+.yaml-editor__structured-placeholder {
+  color: var(--mcs-color-text-muted);
+  font-size: var(--mcs-font-size-body-sm);
+  margin: 0;
+}

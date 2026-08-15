@@ -26,5 +26,14 @@
   "import.pasteLabel": "粘贴 YAML 文本",
   "import.pasteButton": "导入",
   "import.successMessage": "导入成功",
-  "import.errorMessage": "导入失败：内容包含语法错误"
+  "import.errorMessage": "导入失败：内容包含语法错误",
+  "editor.title": "原文编辑器",
+  "editor.findPlaceholder": "查找…",
+  "editor.findButton": "查找",
+  "editor.findNotFound": "未找到匹配项",
+  "editor.formatButton": "格式化",
+  "editor.structuredViewTitle": "结构化视图",
+  "editor.structuredViewPlaceholder": "结构化视图将在加载 Schema 模块后提供",
+  "editor.frozenMessage": "YAML 存在语法错误，结构化视图已冻结",
+  "editor.frozenLocation": "第 {line} 行第 {column} 列，点击定位"
 }

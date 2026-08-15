@@ -12,7 +12,7 @@ import { diffLines, MihomoYamlDocument, YamlEngineError } from '@mcs/yaml-engine
  */
 
 export type { IssueFix, ValidationIssue } from '@mcs/validator';
-export type { ConfigPath, SerializeOptions, TextDiff } from '@mcs/yaml-engine';
+export type { ConfigPath, SerializeOptions, TextDiff, TextRange } from '@mcs/yaml-engine';
 export { hasBlockingIssues, VALIDATION_DEBOUNCE_MS } from '@mcs/validator';
 
 export interface ParseRequest {

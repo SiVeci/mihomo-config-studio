@@ -64,6 +64,15 @@ export async function saveProjectConfigText(
   await adapter.put(configKey(id), encoder.encode(text));
 }
 
+/** `null` when the project has no stored config yet (should not happen past creation). */
+export async function getProjectConfigText(
+  adapter: StorageAdapter,
+  id: string,
+): Promise<string | null> {
+  const bytes = await adapter.get(configKey(id));
+  return bytes ? decoder.decode(bytes) : null;
+}
+
 export async function deleteProject(adapter: StorageAdapter, id: string): Promise<void> {
   await adapter.delete(manifestKey(id));
   await adapter.delete(configKey(id));
