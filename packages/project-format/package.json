@@ -1,0 +1,13 @@
+{
+  "name": "@mcs/project-format",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic .mcsproj ZIP container: zero-dependency ZIP read/write and sensitivity detection (FR-PROJ-06).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "devDependencies": {
+    "@mcs/test-fixtures": "workspace:*"
+  }
+}

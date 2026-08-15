@@ -139,6 +139,12 @@ importers:
         specifier: workspace:*
         version: link:../test-fixtures
 
+  packages/project-format:
+    devDependencies:
+      '@mcs/test-fixtures':
+        specifier: workspace:*
+        version: link:../test-fixtures
+
   packages/schema-core:
     dependencies:
       '@mcs/yaml-engine':
