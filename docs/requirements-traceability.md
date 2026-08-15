@@ -8,18 +8,20 @@
 
 > 本表随每个垂直切片更新。任何标记为 Done 的行都必须能指向具体测试文件。
 
-最近一次核对：2026-08-13（v0.1.0 收口）。`pnpm run test:coverage` 22 文件 /
-238 例全绿，行覆盖率 94.51%、分支 90.82%、函数 94.05%、语句 94.51%。
+最近一次核对：2026-08-16（v0.2.0 收口）。`pnpm run test:coverage` 50 文件 /
+610 例全绿，行覆盖率 96.77%、分支 93.97%、函数 95.49%、语句 96.77%。
 
 > 本表目前只覆盖 PRD §8.1、8.2、8.4、8.5、8.6、8.7、8.9、8.10 与 §11。
-> §8.3 配置模块覆盖、§8.8 模板、§8.11 订阅地址管理尚未建行，需在 M2 开始前补齐。
+> §8.3 配置模块覆盖、§8.8 模板、§8.11 订阅地址管理尚未建行——这些模块本身
+> 在 v0.2.0 没有任何实现（属 v0.3.0 起的范围），提前建行只会是一排没有证据的
+> Todo，留给对应版本开工时再建。
 
 ## 里程碑映射
 
 | 本仓库阶段        | PRD 里程碑 | 状态                                                    |
 | ----------------- | ---------- | ------------------------------------------------------- |
 | M0 技术风险验证   | PRD M0     | v0.1.0 已收口（5 项中 4 项 Done，M0-5 Partial，见下表） |
-| M1 骨架与配置内核 | PRD M1     | 进行中（v0.2.0）                                        |
+| M1 骨架与配置内核 | PRD M1     | v0.2.0 已收口（9 项退出条件全部 Done，见下表）          |
 | M2 及以后         | PRD M2–M7  | 未开始                                                  |
 
 ## M0 退出条件
@@ -31,6 +33,23 @@
 | M0-3 | 引用模型与关系图         | **Done** | `packages/config-model/src/entity.test.ts`（12 例）、`rule-line.test.ts`（14 例）、`packages/graph/src/reference-index.test.ts`（15 例）、`impact.test.ts`（9 例）、`cycles.test.ts`（9 例）。ADR-009 记录实体标识策略、引用类型分类与规则解析口径来源                                                                                    |
 | M0-4 | Schema Bundle 校验与回滚 | **Done** | `packages/schema-registry/src/verify.test.ts`（17 例）、`store.test.ts`（13 例）、`tools/schema-cli/src/static-check.test.ts`（16 例）、`pack.test.ts`（6 例）。签名算法与密钥托管见 [ADR-010](./adr/ADR-010-bundle-signing-and-key-custody.md)，验签后端策略见 [ADR-013](./adr/ADR-013-ed25519-verifier-backend.md)                      |
 | M0-5 | Android 文件能力         | Partial  | 模拟器 API 29 + API 36 跑通，真机验证推迟 v0.6.0。证据见 [v0.1.0-android-evidence.md](./releases/plans/v0.1.0-android-evidence.md)；最低支持版本已冻结在 API 29，见 [ADR-014](./adr/ADR-014-android-minimum-supported-version.md)                                                                                                         |
+
+## v0.2.0（M1）退出条件
+
+对应 [v0.2.0 版本文档](./releases/v0.2.0-config-core-and-web-shell.md)自己的「退出条件」
+清单，逐条核对，不能核对通过的不标 Done。
+
+| #   | 验证项                                                                | 状态               | 证据 / 缺口                                                                                                                                                                                                                                                                                                                                                                        |
+| --- | --------------------------------------------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 不装任何 Schema 模块，可完成「导入 → 原文编辑 → 差异 → 导出」完整闭环 | **Done**           | `apps/web/src/closed-loop.test.tsx`「walks the whole loop in one pass and exports byte-exact content」——单条用例，`FakeWorker` 转发到真实 `handleWorkerRequest`（真实解析/校验/差异，非预置响应），断言导出内容与编辑后文本逐字节相等。另有真实浏览器核对：粘贴 YAML → 导入成功 → 编辑一处 → 差异面板显示 `+1 / -1` → 导出 `config.yaml`/`.mcsproj` 均无报错，全程 console 无错误  |
+| 2   | 1 MB YAML 导入解析 + 首轮校验 < 2s，有基准测试脚本与记录数字          | **Done**           | `packages/validator/src/bench/import.bench.ts`（`pnpm vitest bench --run`）+ [v0.2.0-perf-baseline.md](./releases/plans/v0.2.0-perf-baseline.md)：总计耗时中位数 **580.57ms**，约 3.4 倍余量                                                                                                                                                                                       |
+| 3   | 解析、校验、差异确认运行在 Worker 中，主线程无长任务                  | **Done（结构性）** | `apps/web/src/worker/client.test.ts`「main-thread module boundary」静态扫描断言 `worker/protocol.ts`/`worker/config.worker.ts` 之外的 `apps/web/src` 任何文件都不直接 import `@mcs/yaml-engine`/`@mcs/validator`。真实浏览器 long-task 测量按决策 D3 留 v0.9.0，如实标注口径，不含糊标 Done                                                                                        |
+| 4   | 自动保存与崩溃恢复有自动化验证，最多丢失 5 秒编辑                     | **Done**           | `packages/storage/src/autosave.test.ts`「a crash before the interval elapses loses the unflushed edit」「a crash after the interval elapses recovers the latest edit」——t=4.9s/5.1s 双向断言，假时钟精确验证                                                                                                                                                                       |
+| 5   | `.mcsproj` 导入导出往返一致，含敏感数据提示                           | **Done**           | `packages/project-format/src/zip.test.ts`/`mcsproj.test.ts` 字节相等往返用例；`apps/web/src/export/ExportDialog.test.tsx`「never renders the matched secret value itself, only the category label」提示不含配置值                                                                                                                                                                  |
+| 6   | 撤销重做覆盖表单编辑与引用改名两类操作，走同一历史栈                  | **Done（引擎层）** | `packages/graph/src/history-integration.test.ts`「undoes a whole cascading rename...in one step」证明级联改名是单一历史项、一次 `undo()` 精确复原。UI 层壳（工具栏按钮/快捷键）已接线（见 FR-PROJ-04），但仍是 Partial——#10 把唯一的 `MihomoYamlDocument` 锁进 Worker 后，主线程还没有真实用户操作能让栈记录一条文档级编辑，需要 undo/redo 协议消息（v0.3.0+）补齐，如实标注不含糊 |
+| 7   | `ValidationIssue` 已统一，含 `module`、`range`、`fix`                 | **Done**           | `packages/validator/src/issue.test.ts`（23 例）+ `pipeline.test.ts`（12 例）                                                                                                                                                                                                                                                                                                       |
+| 8   | `packages/ui` token 已落地，CI 对比度断言通过                         | **Done**           | `packages/ui/src/contrast.test.ts`（45 例，表驱动校验全部 AA 声明），随 `pnpm run test` 进 CI 的 `check` job                                                                                                                                                                                                                                                                       |
+| 9   | `pnpm run check` 与 `format:check` 全绿，覆盖率不低于 85%             | **Done**           | 本次核对：50 files / 610 例全绿；行 96.77%、分支 93.97%、函数 95.49%、语句 96.77%，均高于 85%/80% 门槛                                                                                                                                                                                                                                                                             |
 
 ## 功能需求
 
@@ -102,16 +121,16 @@
 
 ### 8.9 版本与 Schema Bundle 管理
 
-| ID            | 优先级 | 状态        | 证据 / 缺口                                                                                                                                                                                                                                            |
-| ------------- | ------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| FR-UPD-01     | P0     | **Partial** | `packages/schema-registry/src/builtin.ts`（离线内置 Bundle，`manifest.test.ts` 证明能通过校验器）、`verify.test.ts`（内置 Bundle 用 #8 重新签发的真实签名通过全部四步）。缺口：真实 Schema 内容（覆盖全部 Mihomo 配置段）留到 v0.3.0，当前只是最小骨架 |
-| FR-UPD-02     | P0     | Todo        | 更新通道与下载逻辑属 v0.5.0（M4）                                                                                                                                                                                                                      |
-| FR-UPD-03     | P0     | **Done**    | `verify.test.ts`（17 例）：manifest 形状、formatVersion、requiresApp、逐文件 SHA-256、manifest 签名，固定短路顺序 + 三类否定用例 + 正向用例                                                                                                            |
-| FR-UPD-04     | P0     | **Done**    | `store.test.ts`（13 例）：双槽安装、三类否定用例后 `active` 回落上一版本、连装三份仅剩两份、`rollback()` 可逆、双槽全损回落内置 Bundle                                                                                                                 |
-| FR-UPD-05     | P0     | Todo        | 需要 `project-format` 的 `schema-lock`；首个 Stable 兼容档案已定（[ADR-012](./adr/ADR-012-first-stable-compatibility-profile.md)）                                                                                                                     |
-| FR-UPD-06     | P0     | Todo        | 需要项目升级差异 UI                                                                                                                                                                                                                                    |
-| FR-UPD-07     | P0     | **Done**    | `tools/schema-cli/src/static-check.test.ts`（16 例）+ `pack.test.ts`（6 例）：允许清单只放行 `.json`/`.yaml`/`.md`，JSON 内容拒绝函数体、表达式调用与模块说明符形态的取值                                                                              |
-| FR-UPD-08、09 | P1     | Todo        | 上游监控自动化与社区 Bundle 导入信任提示，均未开始                                                                                                                                                                                                     |
+| ID            | 优先级 | 状态        | 证据 / 缺口                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------- | ------ | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-UPD-01     | P0     | **Partial** | `packages/schema-registry/src/builtin.ts`（离线内置 Bundle，`manifest.test.ts` 证明能通过校验器）、`verify.test.ts`（内置 Bundle 用 #8 重新签发的真实签名通过全部四步）。缺口：真实 Schema 内容（覆盖全部 Mihomo 配置段）留到 v0.3.0，当前只是最小骨架                                                                                                                                                                        |
+| FR-UPD-02     | P0     | Todo        | 更新通道与下载逻辑属 v0.5.0（M4）                                                                                                                                                                                                                                                                                                                                                                                             |
+| FR-UPD-03     | P0     | **Done**    | `verify.test.ts`（17 例）：manifest 形状、formatVersion、requiresApp、逐文件 SHA-256、manifest 签名，固定短路顺序 + 三类否定用例 + 正向用例                                                                                                                                                                                                                                                                                   |
+| FR-UPD-04     | P0     | **Done**    | `store.test.ts`（13 例）：双槽安装、三类否定用例后 `active` 回落上一版本、连装三份仅剩两份、`rollback()` 可逆、双槽全损回落内置 Bundle                                                                                                                                                                                                                                                                                        |
+| FR-UPD-05     | P0     | Todo        | 数据形状已具备：`packages/project-format` 的 `McsProjSchemaLock`（`bundleVersion` + `compatibilityProfile`，ADR-004 口径）已随 #6 落地，不再是阻塞项；首个 Stable 兼容档案已定（[ADR-012](./adr/ADR-012-first-stable-compatibility-profile.md)）。仍是 Todo 的原因：本身依赖的 Bundle 安装/更新流程属 v0.5.0，v0.2.0 没有触发"升级项目"的 UI 路径，`schema-lock` 目前只是静态写入 `.mcsproj` 的字段，不会被更新流程读取或改写 |
+| FR-UPD-06     | P0     | Todo        | 需要项目升级差异 UI                                                                                                                                                                                                                                                                                                                                                                                                           |
+| FR-UPD-07     | P0     | **Done**    | `tools/schema-cli/src/static-check.test.ts`（16 例）+ `pack.test.ts`（6 例）：允许清单只放行 `.json`/`.yaml`/`.md`，JSON 内容拒绝函数体、表达式调用与模块说明符形态的取值                                                                                                                                                                                                                                                     |
+| FR-UPD-08、09 | P1     | Todo        | 上游监控自动化与社区 Bundle 导入信任提示，均未开始                                                                                                                                                                                                                                                                                                                                                                            |
 
 ### 8.10 Android 能力
 

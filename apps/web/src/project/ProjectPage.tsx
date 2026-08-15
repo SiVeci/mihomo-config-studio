@@ -8,6 +8,7 @@ import type { DiffPanelWorkerClient } from '../diff/DiffPanel.js';
 import { YamlEditor } from '../editor/YamlEditor.js';
 import type { YamlEditorHandle, YamlEditorWorkerClient } from '../editor/YamlEditor.js';
 import { ExportDialog } from '../export/ExportDialog.js';
+import type { DownloadFile } from '../export/ExportDialog.js';
 import { ImportPanel } from '../import/ImportPanel.js';
 import type { ImportWorkerClient } from '../import/ImportPanel.js';
 import { t } from '../i18n/index.js';
@@ -58,6 +59,8 @@ export interface ProjectPageProps {
   readonly historyStack?: HistoryStack;
   /** Injectable clock so autosave timing is exactly assertable in tests. */
   readonly now?: () => number;
+  /** Forwarded to `ExportDialog` as-is; injectable because jsdom has no `URL.createObjectURL` (see `ExportDialog`'s own doc comment). */
+  readonly downloadFile?: DownloadFile;
 }
 
 export function ProjectPage({
@@ -65,6 +68,7 @@ export function ProjectPage({
   client,
   historyStack: historyStackProp,
   now = Date.now,
+  downloadFile,
 }: ProjectPageProps): ReactNode {
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -380,6 +384,7 @@ export function ProjectPage({
               configText={configText}
               issues={issues}
               onClose={() => setShowExportDialog(false)}
+              {...(downloadFile ? { downloadFile } : {})}
             />
           )}
         </>

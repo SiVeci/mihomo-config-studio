@@ -29,15 +29,16 @@
 
 ## 项目状态
 
-**早期开发中（M1 骨架与配置内核阶段）**，尚未发布可用版本。
-
-进度见 [需求追踪表](docs/requirements-traceability.md)。
+**M1（骨架与配置内核）已完成（v0.2.0）**：不安装任何 Schema 模块即可走通
+「导入 → 原文编辑 → 差异 → 导出」完整闭环，全部退出条件见
+[需求追踪表](docs/requirements-traceability.md)。尚未发布可用版本——下一步是
+M2（Schema 表单，v0.3.0）。
 
 ## 仓库结构
 
 ```text
 apps/
-  web/                 Web、PWA、静态部署                       ✅ 脚手架 + 路由 + i18n（v0.2.0 #9）
+  web/                 Web、PWA、静态部署                     ✅ 三栏布局壳、导入/编辑/差异/导出闭环、Worker 边界（v0.2.0 全部切片）
   android/             Capacitor Android 壳与原生适配         🚧 M0-5 模拟器验证，Partial（真机推迟 v0.6.0）
 packages/
   config-model/        领域实体、引用和项目模型               ✅ M0 已验证
@@ -46,14 +47,14 @@ packages/
   schema-registry/     模块发现、依赖解析和版本选择           ✅ M0 已验证
   schema-builtin/      随应用发布的默认 Bundle
   form-renderer/       Schema 驱动表单与控件映射              ✅ M0 已验证
-  validator/           语法、结构、语义、引用和安全检查        ✅ 骨架 + 流水线（v0.2.0 #1-2）
+  validator/           语法、结构、语义、引用和安全检查        ✅ 骨架 + 流水线 + 1MB 导入基准（v0.2.0 #1-2、#16）
   migration/           声明式迁移计划与预览
   graph/               引用索引、循环检测和关系图数据         ✅ M0 已验证
   templates/           模板定义与变量
-  storage/             Web/Android 存储抽象                  ✅ 端口 + 内存/IndexedDB（v0.2.0 #4）
-  project-format/      .mcsproj 导入导出
-  ui/                  通用 UI、主题与无障碍组件                     ✅ 设计令牌 + 文字色层（v0.2.0 #7）
-  test-fixtures/       官方样例、边界样例和 Golden Files      ✅
+  storage/             Web/Android 存储抽象                  ✅ 端口 + 内存/IndexedDB + 自动保存/快照裁剪（v0.2.0 #4-5）
+  project-format/      .mcsproj 导入导出                     ✅ ZIP 往返 + 导出接线（v0.2.0 #6、#15）
+  ui/                  通用 UI、主题与无障碍组件               ✅ 设计令牌 + 文字色层 + 对比度断言（v0.2.0 #7-8）
+  test-fixtures/       官方样例、边界样例和 Golden Files      ✅ 含确定性大语料生成器（v0.2.0 #16）
 tools/
   schema-cli/          Bundle 校验、签名、差异和发布           ✅ M0 已验证
   android-manifest-check/ Android 清单 VPN 权限断言（CI 强制） ✅ M0 已验证
