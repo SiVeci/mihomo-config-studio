@@ -271,3 +271,45 @@ describe('handleWorkerRequest / serialize', () => {
     expect(response.text).toContain('\n    example.com: 1.2.3.4');
   });
 });
+
+describe('handleWorkerRequest / locate', () => {
+  it('reports NO_DOCUMENT before any successful parse', () => {
+    const state = createWorkerState();
+    const response = handleWorkerRequest(state, {
+      type: 'locate',
+      requestId: 'r1',
+      path: ['port'],
+    });
+
+    expect(response).toEqual({
+      type: 'error',
+      requestId: 'r1',
+      code: 'NO_DOCUMENT',
+      messageKey: 'worker.error.noDocument',
+    });
+  });
+
+  it('returns the range of an existing path', () => {
+    const state = parsed();
+    const response = handleWorkerRequest(state, {
+      type: 'locate',
+      requestId: 'r1',
+      path: ['port'],
+    });
+
+    if (response.type !== 'locate') throw new Error('unreachable');
+    expect(response.range).not.toBeNull();
+    expect(response.range?.start.line).toBe(2);
+  });
+
+  it('returns a null range for a path that does not resolve to any node', () => {
+    const state = parsed();
+    const response = handleWorkerRequest(state, {
+      type: 'locate',
+      requestId: 'r1',
+      path: ['does', 'not', 'exist'],
+    });
+
+    expect(response).toEqual({ type: 'locate', requestId: 'r1', range: null });
+  });
+});

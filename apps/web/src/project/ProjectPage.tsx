@@ -4,10 +4,14 @@ import type { StorageAdapter } from '@mcs/storage';
 import { useEffect, useReducer, useRef, useState, type ReactNode } from 'react';
 
 import { YamlEditor } from '../editor/YamlEditor.js';
-import type { YamlEditorWorkerClient } from '../editor/YamlEditor.js';
+import type { YamlEditorHandle, YamlEditorWorkerClient } from '../editor/YamlEditor.js';
 import { ImportPanel } from '../import/ImportPanel.js';
+import type { ImportWorkerClient } from '../import/ImportPanel.js';
 import { t } from '../i18n/index.js';
+import { IssuePanel } from '../issues/IssuePanel.js';
+import type { IssuePanelWorkerClient } from '../issues/IssuePanel.js';
 import { AppShell } from '../layout/AppShell.js';
+import type { TextRange, ValidationIssue } from '../worker/protocol.js';
 import {
   deleteProject,
   DEFAULT_PROJECT_CONFIG_TEXT,
@@ -28,10 +32,13 @@ export interface ProjectPageProps {
    * Required, like `adapter`: a real client is backed by a real Worker,
    * which throws to construct outside a browser, so there is no safe
    * internal default (see `App.tsx`'s `createConfigWorkerClient()` call).
-   * Typed to the widest shape any child needs (`YamlEditor` uses `parse` and
-   * `serialize`; `ImportPanel` only `parse`) so one instance serves both.
+   * An intersection of each child's own minimal interface (`ImportPanel`
+   * needs `parse`; `YamlEditor` adds `serialize`; `IssuePanel` adds
+   * `locate`) rather than one hand-widened shared interface, so each
+   * component's test fakes stay minimal and this type grows automatically
+   * as children are added instead of being manually re-widened each time.
    */
-  readonly client: YamlEditorWorkerClient;
+  readonly client: ImportWorkerClient & YamlEditorWorkerClient & IssuePanelWorkerClient;
   /**
    * Injectable for tests; production always takes the default (a fresh,
    * always-empty stack). Real document-level recording — the only thing that
@@ -56,6 +63,7 @@ export function ProjectPage({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const [configText, setConfigText] = useState('');
+  const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [historyStack] = useState(() => historyStackProp ?? new HistoryStack());
   const [, bumpHistoryVersion] = useReducer((count: number) => count + 1, 0);
 
@@ -65,6 +73,7 @@ export function ProjectPage({
   configTextRef.current = configText;
   const manifestAutoSaverRef = useRef<AutoSaver | null>(null);
   const configAutoSaverRef = useRef<AutoSaver | null>(null);
+  const editorRef = useRef<YamlEditorHandle>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -240,6 +249,10 @@ export function ProjectPage({
     configAutoSaverRef.current?.touch(now());
   }
 
+  function handleJumpToIssue(range: TextRange): void {
+    editorRef.current?.jumpToRange(range);
+  }
+
   async function handleConfirmDelete(id: string): Promise<void> {
     // Cancel any pending autosave for this project *before* deleting it: the
     // effects above flush on cleanup when `selectedId` changes away, which
@@ -289,11 +302,22 @@ export function ProjectPage({
           </ul>
         </div>
       }
+      aside={
+        selected ? (
+          <IssuePanel issues={issues} client={client} onJump={handleJumpToIssue} />
+        ) : undefined
+      }
     >
       {selected ? (
         <>
           <ImportPanel client={client} onImport={(text) => void handleImport(selected.id, text)} />
-          <YamlEditor text={configText} onChange={handleConfigChange} client={client} />
+          <YamlEditor
+            ref={editorRef}
+            text={configText}
+            onChange={handleConfigChange}
+            client={client}
+            onIssuesChange={setIssues}
+          />
           <ProjectDetail
             project={selected}
             canUndo={historyStack.canUndo}

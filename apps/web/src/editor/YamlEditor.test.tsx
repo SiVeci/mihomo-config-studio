@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { createRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { t } from '../i18n/index.js';
 import type { ValidationIssue } from '../worker/protocol.js';
 import { YamlEditor } from './YamlEditor.js';
-import type { YamlEditorWorkerClient } from './YamlEditor.js';
+import type { YamlEditorHandle, YamlEditorWorkerClient } from './YamlEditor.js';
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -125,6 +126,46 @@ describe('YamlEditor / debounced parse (NFR-PERF-03)', () => {
 
     expect(client.parse).toHaveBeenCalledTimes(1);
     expect(client.parse).toHaveBeenCalledWith('abc');
+  });
+
+  it('reports the parsed issues upward via onIssuesChange', async () => {
+    const onIssuesChange = vi.fn();
+    render(
+      <YamlEditor
+        text={'mode: rule\n  bad: 1'}
+        onChange={vi.fn()}
+        client={makeClient([BLOCKING_ISSUE])}
+        onIssuesChange={onIssuesChange}
+      />,
+    );
+
+    await advanceDebounce(300);
+
+    expect(onIssuesChange).toHaveBeenCalledWith([BLOCKING_ISSUE]);
+  });
+});
+
+describe('YamlEditor / jumpToRange handle', () => {
+  it('exposes a ref that moves the textarea selection to the given range', () => {
+    const ref = createRef<YamlEditorHandle>();
+    render(
+      <YamlEditor
+        ref={ref}
+        text={'mode: rule\nport: 7890'}
+        onChange={vi.fn()}
+        client={makeClient()}
+      />,
+    );
+
+    ref.current?.jumpToRange({
+      start: { offset: 11, line: 2, column: 1 },
+      end: { offset: 15, line: 2, column: 5 },
+    });
+
+    const textarea = screen.getByLabelText<HTMLTextAreaElement>(t('editor.title'));
+    expect(textarea.selectionStart).toBe(11);
+    expect(textarea.selectionEnd).toBe(15);
+    expect(document.activeElement).toBe(textarea);
   });
 });
 

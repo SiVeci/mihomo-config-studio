@@ -35,5 +35,17 @@
   "editor.structuredViewTitle": "结构化视图",
   "editor.structuredViewPlaceholder": "结构化视图将在加载 Schema 模块后提供",
   "editor.frozenMessage": "YAML 存在语法错误，结构化视图已冻结",
-  "editor.frozenLocation": "第 {line} 行第 {column} 列，点击定位"
+  "editor.frozenLocation": "第 {line} 行第 {column} 列，点击定位",
+  "yaml.limit.size": "YAML 内容过大：{bytes} 字节，超过 {maxBytes} 字节上限",
+  "yaml.parse.failed": "YAML 解析失败，请检查语法",
+  "yaml.parse.empty": "内容为空",
+  "yaml.limit.documents": "文档数量过多：{count} 个，超过 {maxDocuments} 个上限",
+  "yaml.limit.depth": "嵌套层级过深：{depth} 层，超过 {maxDepth} 层上限",
+  "issues.title": "问题",
+  "issues.emptyState": "未发现问题",
+  "issues.moduleFilterLabel": "模块",
+  "issues.moduleFilterAll": "全部",
+  "issues.severityError": "错误",
+  "issues.severityWarning": "警告",
+  "issues.severityInfo": "提示"
 }

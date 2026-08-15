@@ -53,7 +53,7 @@ describe('WorkerClient request/response correlation', () => {
     expect(worker.sent.map((request) => request.requestId)).toEqual(['req-1', 'req-2']);
   });
 
-  it('round-trips applyPatch / validate / diff / serialize against a parsed document', async () => {
+  it('round-trips applyPatch / validate / diff / serialize / locate against a parsed document', async () => {
     const worker = new FakeWorker();
     const client = new WorkerClient(worker);
     await client.parse('mode: rule\nport: 7890\n');
@@ -69,6 +69,9 @@ describe('WorkerClient request/response correlation', () => {
 
     const serialized = await client.serialize();
     expect(serialized.text).toContain('port: 7891');
+
+    const located = await client.locate(['port']);
+    expect(located.range?.start.line).toBe(2);
   });
 
   it('forwards serialize() options through to the request when given', async () => {

@@ -35,5 +35,17 @@
   "editor.structuredViewTitle": "Structured view",
   "editor.structuredViewPlaceholder": "The structured view becomes available once a Schema module is loaded",
   "editor.frozenMessage": "The YAML has a syntax error; the structured view is frozen",
-  "editor.frozenLocation": "Line {line}, column {column} — click to jump there"
+  "editor.frozenLocation": "Line {line}, column {column} — click to jump there",
+  "yaml.limit.size": "The YAML content is too large: {bytes} bytes (limit is {maxBytes} bytes)",
+  "yaml.parse.failed": "Failed to parse the YAML; check the syntax",
+  "yaml.parse.empty": "The content is empty",
+  "yaml.limit.documents": "Too many documents: {count} (limit is {maxDocuments})",
+  "yaml.limit.depth": "Nesting is too deep: {depth} levels (limit is {maxDepth})",
+  "issues.title": "Issues",
+  "issues.emptyState": "No issues found",
+  "issues.moduleFilterLabel": "Module",
+  "issues.moduleFilterAll": "All",
+  "issues.severityError": "Error",
+  "issues.severityWarning": "Warning",
+  "issues.severityInfo": "Info"
 }

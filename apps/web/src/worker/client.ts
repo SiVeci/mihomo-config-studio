@@ -1,8 +1,10 @@
 import { VALIDATION_DEBOUNCE_MS } from './protocol.js';
 import type {
   ApplyPatchResponse,
+  ConfigPath,
   DiffResponse,
   IssueFix,
+  LocateResponse,
   ParseResponse,
   SerializeOptions,
   SerializeResponse,
@@ -104,6 +106,14 @@ export class WorkerClient {
       requestId: this.#makeRequestId(),
       ...(options !== undefined ? { options } : {}),
     }) as Promise<SerializeResponse>;
+  }
+
+  locate(path: ConfigPath): Promise<LocateResponse> {
+    return this.#send({
+      type: 'locate',
+      requestId: this.#makeRequestId(),
+      path,
+    }) as Promise<LocateResponse>;
   }
 
   /**

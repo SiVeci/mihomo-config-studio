@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode, type UIEvent } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type UIEvent } from 'react';
 
 import { t } from '../i18n/index.js';
 import { hasBlockingIssues, VALIDATION_DEBOUNCE_MS } from '../worker/protocol.js';
@@ -20,6 +20,13 @@ export interface YamlEditorProps {
   readonly text: string;
   readonly onChange: (text: string) => void;
   readonly client: YamlEditorWorkerClient;
+  /** Reports the latest parse's issues upward — #14's IssuePanel is the consumer. */
+  readonly onIssuesChange?: (issues: ValidationIssue[]) => void;
+}
+
+/** Imperative surface for #14's IssuePanel: jump the raw editor to an issue's range. */
+export interface YamlEditorHandle {
+  jumpToRange: (range: TextRange) => void;
 }
 
 function splitLines(text: string): string[] {
@@ -39,7 +46,10 @@ function splitLines(text: string): string[] {
  * boundary). If this proves insufficient, that is an ADR-worthy decision to
  * revisit, not a silent scope creep here.
  */
-export function YamlEditor({ text, onChange, client }: YamlEditorProps): ReactNode {
+export const YamlEditor = forwardRef<YamlEditorHandle, YamlEditorProps>(function YamlEditor(
+  { text, onChange, client, onIssuesChange },
+  ref,
+) {
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchStatus, setSearchStatus] = useState<'idle' | 'not-found'>('idle');
@@ -55,7 +65,10 @@ export function YamlEditor({ text, onChange, client }: YamlEditorProps): ReactNo
   // React component: tests drive it with `vi.useFakeTimers()` instead.
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      void client.parse(text).then((response) => setIssues(response.issues));
+      void client.parse(text).then((response) => {
+        setIssues(response.issues);
+        onIssuesChange?.(response.issues);
+      });
     }, VALIDATION_DEBOUNCE_MS);
     return () => clearTimeout(timeoutId);
   }, [text, client]);
@@ -72,13 +85,16 @@ export function YamlEditor({ text, onChange, client }: YamlEditorProps): ReactNo
   const frozen = hasBlockingIssues(issues);
   const firstError = issues.find((issue) => issue.blocking && issue.range);
 
+  useImperativeHandle(ref, () => ({ jumpToRange: selectRange }));
+
   function handleScroll(event: UIEvent<HTMLTextAreaElement>): void {
     if (gutterRef.current) gutterRef.current.scrollTop = event.currentTarget.scrollTop;
   }
 
   function selectRange(range: TextRange): void {
-    // Non-null: only ever called from the frozen banner's onClick, which
-    // cannot render before the textarea below it in the same tree does.
+    // Non-null: reachable only from the frozen banner's onClick or the
+    // `jumpToRange` handle exposed to the parent (#14's IssuePanel) — both
+    // require this component to have already rendered, textarea included.
     const textarea = textareaRef.current!;
     textarea.focus();
     textarea.setSelectionRange(range.start.offset, range.end.offset);
@@ -200,4 +216,4 @@ export function YamlEditor({ text, onChange, client }: YamlEditorProps): ReactNo
       </div>
     </section>
   );
-}
+});

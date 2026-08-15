@@ -1,0 +1,97 @@
+.issue-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mcs-spacing-sm);
+}
+
+.issue-panel__title {
+  font-family: var(--mcs-font-family-title-sm);
+  font-size: var(--mcs-font-size-title-sm);
+  margin: 0;
+}
+
+.issue-panel__filter-label {
+  font-size: var(--mcs-font-size-caption);
+  color: var(--mcs-color-text-muted);
+}
+
+.issue-panel__filter-select {
+  border: 1px solid var(--mcs-color-hairline);
+  border-radius: var(--mcs-rounded-xs);
+  padding: var(--mcs-spacing-xxs) var(--mcs-spacing-xs);
+}
+
+.issue-panel__empty {
+  color: var(--mcs-color-text-muted);
+  font-size: var(--mcs-font-size-body-sm);
+}
+
+.issue-panel__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mcs-spacing-xxs);
+}
+
+.issue-panel__group-title {
+  font-size: var(--mcs-font-size-caption-uppercase);
+  letter-spacing: var(--mcs-letter-spacing-caption-uppercase);
+  margin: 0;
+}
+
+.issue-panel__group-title--error {
+  color: var(--mcs-color-text-error);
+}
+
+.issue-panel__group-title--warning {
+  color: var(--mcs-color-text-warning);
+}
+
+.issue-panel__group-title--info {
+  color: var(--mcs-color-text-info);
+}
+
+.issue-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--mcs-spacing-xxs);
+}
+
+.issue-panel__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--mcs-spacing-xxs);
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-radius: var(--mcs-rounded-xs);
+  padding: var(--mcs-spacing-xxs) var(--mcs-spacing-xs);
+  font-size: var(--mcs-font-size-body-sm);
+  cursor: pointer;
+}
+
+.issue-panel__item--static {
+  cursor: default;
+}
+
+.issue-panel__item--error {
+  background-color: var(--mcs-color-error-tint);
+  color: var(--mcs-color-text-error);
+}
+
+.issue-panel__item--warning {
+  background-color: var(--mcs-color-warning-tint);
+  color: var(--mcs-color-text-warning);
+}
+
+.issue-panel__item--info {
+  background-color: var(--mcs-color-info-tint);
+  color: var(--mcs-color-text-info);
+}
+
+.issue-panel__mark {
+  flex: 0 0 auto;
+  font-weight: 700;
+}

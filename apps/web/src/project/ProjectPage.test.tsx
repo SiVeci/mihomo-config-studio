@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import type { YamlEditorWorkerClient } from '../editor/YamlEditor.js';
 import { t } from '../i18n/index.js';
+import type { ImportWorkerClient } from '../import/ImportPanel.js';
+import type { IssuePanelWorkerClient } from '../issues/IssuePanel.js';
 import {
   DEFAULT_PROJECT_CONFIG_TEXT,
   DEFAULT_TARGET_PROFILE,
@@ -18,10 +20,13 @@ afterEach(() => {
   cleanup();
 });
 
-/** ProjectPage requires a client but most of these tests exercise neither import nor the editor directly. */
-const FAKE_CLIENT: YamlEditorWorkerClient = {
+type FakeClient = ImportWorkerClient & YamlEditorWorkerClient & IssuePanelWorkerClient;
+
+/** ProjectPage requires a client but most of these tests exercise neither import, the editor, nor the issue panel directly. */
+const FAKE_CLIENT: FakeClient = {
   parse: async (_text) => ({ type: 'parse', requestId: 'fake', issues: [] }),
   serialize: async (_options) => ({ type: 'serialize', requestId: 'fake', text: '' }),
+  locate: async (_path) => ({ type: 'locate', requestId: 'fake', range: null }),
 };
 
 const decoder = new TextDecoder();
@@ -313,6 +318,88 @@ describe('ProjectPage / editor wiring (FR-YAML-04/05)', () => {
     await waitFor(async () => {
       const bytes = await adapter.get(`project/${projectId}/config.yaml`);
       expect(bytes ? decoder.decode(bytes) : null).toBe('mode: direct\nport: 1\n');
+    });
+  });
+});
+
+describe('ProjectPage / issue panel wiring (FR-VAL-02 UI wiring)', () => {
+  it('shows the aside placeholder, not the issue panel, with no project selected', async () => {
+    const adapter = new MemoryStorageAdapter();
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+
+    expect(screen.getByText(t('appShell.asidePlaceholder'))).toBeDefined();
+    expect(screen.queryByText(t('issues.title'))).toBeNull();
+  });
+
+  it('reports the issues YamlEditor parsed up through to the IssuePanel in the aside', async () => {
+    const adapter = new MemoryStorageAdapter();
+    const client: FakeClient = {
+      ...FAKE_CLIENT,
+      parse: async () => ({
+        type: 'parse',
+        requestId: 'x',
+        issues: [
+          {
+            severity: 'error',
+            code: 'yaml.syntax.x',
+            module: 'yaml',
+            messageKey: 'yaml.syntax.x',
+            blocking: true,
+            range: {
+              start: { offset: 0, line: 1, column: 1 },
+              end: { offset: 1, line: 1, column: 2 },
+            },
+          },
+        ],
+      }),
+    };
+    render(<ProjectPage client={client} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('editor.title'));
+
+    await screen.findByText('yaml.syntax.x');
+    expect(screen.getByText(`${t('issues.severityError')} (1)`, { exact: false })).toBeDefined();
+  });
+
+  it('clicking an issue in the aside jumps the editor selection to its range', async () => {
+    const adapter = new MemoryStorageAdapter();
+    const range = {
+      start: { offset: 6, line: 2, column: 1 },
+      end: { offset: 10, line: 2, column: 5 },
+    };
+    const client: FakeClient = {
+      ...FAKE_CLIENT,
+      parse: async () => ({
+        type: 'parse',
+        requestId: 'x',
+        issues: [
+          {
+            severity: 'warning',
+            code: 'yaml.syntax.y',
+            module: 'yaml',
+            messageKey: 'yaml.syntax.y',
+            blocking: false,
+            range,
+          },
+        ],
+      }),
+    };
+    render(<ProjectPage client={client} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('editor.title'));
+    await screen.findByText('yaml.syntax.y');
+
+    fireEvent.click(
+      screen.getByRole('button', { name: `${t('issues.severityWarning')}: yaml.syntax.y` }),
+    );
+
+    const editorTextarea = screen.getByLabelText<HTMLTextAreaElement>(t('editor.title'));
+    await waitFor(() => {
+      expect(editorTextarea.selectionStart).toBe(6);
+      expect(editorTextarea.selectionEnd).toBe(10);
     });
   });
 });

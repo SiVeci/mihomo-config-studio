@@ -1,6 +1,12 @@
 import type { IssueFix, ValidationIssue } from '@mcs/validator';
 import { runPipeline } from '@mcs/validator';
-import type { ConfigPath, ParseResult, SerializeOptions, TextDiff } from '@mcs/yaml-engine';
+import type {
+  ConfigPath,
+  ParseResult,
+  SerializeOptions,
+  TextDiff,
+  TextRange,
+} from '@mcs/yaml-engine';
 import { diffLines, MihomoYamlDocument, YamlEngineError } from '@mcs/yaml-engine';
 
 /**
@@ -12,7 +18,14 @@ import { diffLines, MihomoYamlDocument, YamlEngineError } from '@mcs/yaml-engine
  */
 
 export type { IssueFix, ValidationIssue } from '@mcs/validator';
-export type { ConfigPath, SerializeOptions, TextDiff, TextRange } from '@mcs/yaml-engine';
+export type {
+  ConfigPath,
+  IssueSeverity,
+  MessageParams,
+  SerializeOptions,
+  TextDiff,
+  TextRange,
+} from '@mcs/yaml-engine';
 export { hasBlockingIssues, VALIDATION_DEBOUNCE_MS } from '@mcs/validator';
 
 export interface ParseRequest {
@@ -39,9 +52,19 @@ export interface SerializeRequest {
   requestId: string;
   options?: SerializeOptions;
 }
+export interface LocateRequest {
+  type: 'locate';
+  requestId: string;
+  path: ConfigPath;
+}
 
 export type WorkerRequest =
-  ParseRequest | ApplyPatchRequest | ValidateRequest | DiffRequest | SerializeRequest;
+  | ParseRequest
+  | ApplyPatchRequest
+  | ValidateRequest
+  | DiffRequest
+  | SerializeRequest
+  | LocateRequest;
 
 export interface ParseResponse {
   type: 'parse';
@@ -67,6 +90,12 @@ export interface SerializeResponse {
   requestId: string;
   text: string;
 }
+/** `range` is `null` when `path` does not resolve to any node in the current document. */
+export interface LocateResponse {
+  type: 'locate';
+  requestId: string;
+  range: TextRange | null;
+}
 /** NFR-SEC-03: never carries configuration values — only a stable code, an i18n key, and a path. */
 export interface WorkerErrorResponse {
   type: 'error';
@@ -82,6 +111,7 @@ export type WorkerResponse =
   | ValidateResponse
   | DiffResponse
   | SerializeResponse
+  | LocateResponse
   | WorkerErrorResponse;
 
 /** The Worker's own state: the document produced by the most recent `parse`. */
@@ -110,6 +140,8 @@ export function handleWorkerRequest(state: WorkerState, request: WorkerRequest):
       return handleDiff(state, request);
     case 'serialize':
       return handleSerialize(state, request);
+    case 'locate':
+      return handleLocate(state, request);
   }
 }
 
@@ -170,6 +202,15 @@ function handleSerialize(
     requestId: request.requestId,
     text: document.toText(request.options),
   };
+}
+
+function handleLocate(
+  state: WorkerState,
+  request: LocateRequest,
+): LocateResponse | WorkerErrorResponse {
+  const document = state.parseResult?.document;
+  if (!document) return noDocumentError(request.requestId);
+  return { type: 'locate', requestId: request.requestId, range: document.locate(request.path) };
 }
 
 function applyIssueFix(document: MihomoYamlDocument, patch: IssueFix): void {
