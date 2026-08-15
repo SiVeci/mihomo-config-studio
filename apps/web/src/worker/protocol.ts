@@ -20,6 +20,7 @@ import { diffLines, MihomoYamlDocument, YamlEngineError } from '@mcs/yaml-engine
 export type { IssueFix, ValidationIssue } from '@mcs/validator';
 export type {
   ConfigPath,
+  DiffOp,
   IssueSeverity,
   MessageParams,
   SerializeOptions,

@@ -3,8 +3,11 @@ import { AutoSaver } from '@mcs/storage';
 import type { StorageAdapter } from '@mcs/storage';
 import { useEffect, useReducer, useRef, useState, type ReactNode } from 'react';
 
+import { DiffPanel } from '../diff/DiffPanel.js';
+import type { DiffPanelWorkerClient } from '../diff/DiffPanel.js';
 import { YamlEditor } from '../editor/YamlEditor.js';
 import type { YamlEditorHandle, YamlEditorWorkerClient } from '../editor/YamlEditor.js';
+import { ExportDialog } from '../export/ExportDialog.js';
 import { ImportPanel } from '../import/ImportPanel.js';
 import type { ImportWorkerClient } from '../import/ImportPanel.js';
 import { t } from '../i18n/index.js';
@@ -16,8 +19,10 @@ import {
   deleteProject,
   DEFAULT_PROJECT_CONFIG_TEXT,
   DEFAULT_TARGET_PROFILE,
+  getImportBaseline,
   getProjectConfigText,
   listProjects,
+  saveImportBaseline,
   saveProjectConfigText,
   saveProjectManifest,
 } from './model.js';
@@ -38,7 +43,10 @@ export interface ProjectPageProps {
    * component's test fakes stay minimal and this type grows automatically
    * as children are added instead of being manually re-widened each time.
    */
-  readonly client: ImportWorkerClient & YamlEditorWorkerClient & IssuePanelWorkerClient;
+  readonly client: ImportWorkerClient &
+    YamlEditorWorkerClient &
+    IssuePanelWorkerClient &
+    DiffPanelWorkerClient;
   /**
    * Injectable for tests; production always takes the default (a fresh,
    * always-empty stack). Real document-level recording — the only thing that
@@ -64,6 +72,9 @@ export function ProjectPage({
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const [configText, setConfigText] = useState('');
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
+  const [importBaseline, setImportBaseline] = useState('');
+  const [savedBaseline, setSavedBaseline] = useState('');
+  const [showExportDialog, setShowExportDialog] = useState(false);
   const [historyStack] = useState(() => historyStackProp ?? new HistoryStack());
   const [, bumpHistoryVersion] = useReducer((count: number) => count + 1, 0);
 
@@ -89,15 +100,36 @@ export function ProjectPage({
 
   // Loads the selected project's config.yaml on demand — unlike manifests
   // (all loaded up front for the sidebar list), config text can be large, so
-  // only the currently-open project's is fetched.
+  // only the currently-open project's is fetched. The same fetch also seeds
+  // `savedBaseline` (FR-YAML-06's "most recently saved version" diff
+  // reference): a fixed snapshot of what was on disk when this project was
+  // opened, not updated again by this session's own autosave flushes —
+  // otherwise it would converge to match `configText` a few seconds after
+  // every pause in typing and the diff would show nothing.
   useEffect(() => {
     if (!selectedId) {
       setConfigText('');
+      setSavedBaseline('');
+      setImportBaseline('');
       return;
     }
     let cancelled = false;
-    void getProjectConfigText(adapter, selectedId).then((text) => {
-      if (!cancelled) setConfigText(text ?? '');
+    // Fetched together and applied from one callback rather than two
+    // independent `.then()`s: the two requests can resolve in either order,
+    // and the import-baseline fallback below needs *this* project's config
+    // text, not whatever `configText` state still holds from the project
+    // that was selected before this effect ran.
+    void Promise.all([
+      getProjectConfigText(adapter, selectedId),
+      getImportBaseline(adapter, selectedId),
+    ]).then(([savedText, importText]) => {
+      if (cancelled) return;
+      const text = savedText ?? '';
+      setConfigText(text);
+      setSavedBaseline(text);
+      // No recorded baseline (a project created before this existed) — the
+      // current text is the closest available stand-in.
+      setImportBaseline(importText ?? text);
     });
     return () => {
       cancelled = true;
@@ -203,6 +235,7 @@ export function ProjectPage({
     };
     await saveProjectManifest(adapter, record);
     await saveProjectConfigText(adapter, record.id, DEFAULT_PROJECT_CONFIG_TEXT);
+    await saveImportBaseline(adapter, record.id, DEFAULT_PROJECT_CONFIG_TEXT);
     setProjects((previous) => [...previous, record]);
     setSelectedId(record.id);
   }
@@ -228,10 +261,14 @@ export function ProjectPage({
 
   async function handleImport(id: string, text: string): Promise<void> {
     // A discrete, deliberate action (like create/delete), not a keystroke —
-    // saved immediately rather than through the debounced AutoSaver.
+    // saved immediately rather than through the debounced AutoSaver. Also
+    // resets the "imported version" diff baseline to this text — a fresh
+    // import is a new reference point, not an edit relative to the old one.
     await saveProjectConfigText(adapter, id, text);
+    await saveImportBaseline(adapter, id, text);
     configTextRef.current = text;
     setConfigText(text);
+    setImportBaseline(text);
     const updated = projectsRef.current.map((project) =>
       project.id === id ? { ...project, updatedAt: new Date(now()).toISOString() } : project,
     );
@@ -318,6 +355,12 @@ export function ProjectPage({
             client={client}
             onIssuesChange={setIssues}
           />
+          <DiffPanel
+            importBaseline={importBaseline}
+            savedBaseline={savedBaseline}
+            client={client}
+            issues={issues}
+          />
           <ProjectDetail
             project={selected}
             canUndo={historyStack.canUndo}
@@ -325,11 +368,20 @@ export function ProjectPage({
             onUndo={handleUndo}
             onRedo={handleRedo}
             onFieldChange={handleFieldChange}
+            onExportClick={() => setShowExportDialog(true)}
             confirmingDelete={confirmingDeleteId === selected.id}
             onDeleteClick={() => setConfirmingDeleteId(selected.id)}
             onCancelDelete={() => setConfirmingDeleteId(null)}
             onConfirmDelete={() => void handleConfirmDelete(selected.id)}
           />
+          {showExportDialog && (
+            <ExportDialog
+              project={selected}
+              configText={configText}
+              issues={issues}
+              onClose={() => setShowExportDialog(false)}
+            />
+          )}
         </>
       ) : (
         <p className="project-detail__empty">{t('project.noSelection')}</p>
@@ -345,6 +397,7 @@ interface ProjectDetailProps {
   readonly onUndo: () => void;
   readonly onRedo: () => void;
   readonly onFieldChange: (field: ProjectField, value: string) => void;
+  readonly onExportClick: () => void;
   readonly confirmingDelete: boolean;
   readonly onDeleteClick: () => void;
   readonly onCancelDelete: () => void;
@@ -358,6 +411,7 @@ function ProjectDetail({
   onUndo,
   onRedo,
   onFieldChange,
+  onExportClick,
   confirmingDelete,
   onDeleteClick,
   onCancelDelete,
@@ -366,6 +420,9 @@ function ProjectDetail({
   return (
     <section className="project-detail" aria-label={project.name}>
       <div className="project-detail__toolbar">
+        <button type="button" onClick={onExportClick}>
+          {t('export.triggerButton')}
+        </button>
         <button type="button" onClick={onUndo} disabled={!canUndo}>
           {t('project.undoButton')}
         </button>

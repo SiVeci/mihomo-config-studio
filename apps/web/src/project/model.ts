@@ -21,9 +21,19 @@ export const DEFAULT_TARGET_PROFILE = 'v1.19.29';
 /** Minimal syntactically-valid starting document; #12 replaces this via real import. */
 export const DEFAULT_PROJECT_CONFIG_TEXT = 'mode: rule\n';
 
+/**
+ * No Schema Bundle is installed in v0.2.0 ("不装任何 Schema 模块" is this
+ * release's own closed-loop scenario) — a real bundle version lands once
+ * Schema module installation does. `.mcsproj` still needs *some*
+ * `schemaLock.bundleVersion` to write (ADR-004), so this is the documented
+ * placeholder, same pattern as `DEFAULT_TARGET_PROFILE` above.
+ */
+export const DEFAULT_BUNDLE_VERSION = 'none';
+
 const PROJECT_PREFIX = 'project/';
 const MANIFEST_SUFFIX = '/manifest.json';
 const CONFIG_SUFFIX = '/config.yaml';
+const IMPORT_BASELINE_SUFFIX = '/import-baseline.yaml';
 
 function manifestKey(id: string): string {
   return `${PROJECT_PREFIX}${id}${MANIFEST_SUFFIX}`;
@@ -31,6 +41,10 @@ function manifestKey(id: string): string {
 
 function configKey(id: string): string {
   return `${PROJECT_PREFIX}${id}${CONFIG_SUFFIX}`;
+}
+
+function importBaselineKey(id: string): string {
+  return `${PROJECT_PREFIX}${id}${IMPORT_BASELINE_SUFFIX}`;
 }
 
 const encoder = new TextEncoder();
@@ -73,7 +87,31 @@ export async function getProjectConfigText(
   return bytes ? decoder.decode(bytes) : null;
 }
 
+/**
+ * The text as of the last explicit import (or the default template, for a
+ * project that was created but never imported into) — a fixed reference
+ * point for the "diff against the imported version" baseline (FR-YAML-06),
+ * distinct from `config.yaml` itself which changes on every keystroke.
+ */
+export async function saveImportBaseline(
+  adapter: StorageAdapter,
+  id: string,
+  text: string,
+): Promise<void> {
+  await adapter.put(importBaselineKey(id), encoder.encode(text));
+}
+
+/** `null` for a project created before this baseline existed — callers fall back to treating the current text as its own baseline. */
+export async function getImportBaseline(
+  adapter: StorageAdapter,
+  id: string,
+): Promise<string | null> {
+  const bytes = await adapter.get(importBaselineKey(id));
+  return bytes ? decoder.decode(bytes) : null;
+}
+
 export async function deleteProject(adapter: StorageAdapter, id: string): Promise<void> {
   await adapter.delete(manifestKey(id));
   await adapter.delete(configKey(id));
+  await adapter.delete(importBaselineKey(id));
 }

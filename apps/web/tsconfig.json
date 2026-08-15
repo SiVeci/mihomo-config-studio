@@ -10,6 +10,7 @@
   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.json"],
   "references": [
     { "path": "../../packages/config-model" },
+    { "path": "../../packages/project-format" },
     { "path": "../../packages/storage" },
     { "path": "../../packages/ui" },
     { "path": "../../packages/validator" },

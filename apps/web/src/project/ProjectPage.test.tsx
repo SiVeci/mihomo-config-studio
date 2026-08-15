@@ -3,8 +3,9 @@ import { HistoryStack } from '@mcs/config-model';
 import { MemoryStorageAdapter } from '@mcs/storage';
 import { MihomoYamlDocument } from '@mcs/yaml-engine';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { DiffPanelWorkerClient } from '../diff/DiffPanel.js';
 import type { YamlEditorWorkerClient } from '../editor/YamlEditor.js';
 import { t } from '../i18n/index.js';
 import type { ImportWorkerClient } from '../import/ImportPanel.js';
@@ -12,21 +13,33 @@ import type { IssuePanelWorkerClient } from '../issues/IssuePanel.js';
 import {
   DEFAULT_PROJECT_CONFIG_TEXT,
   DEFAULT_TARGET_PROFILE,
+  getImportBaseline,
   getProjectConfigText,
+  saveProjectConfigText,
+  saveProjectManifest,
 } from './model.js';
+import type { ProjectRecord } from './model.js';
 import { ProjectPage } from './ProjectPage.js';
 
 afterEach(() => {
   cleanup();
 });
 
-type FakeClient = ImportWorkerClient & YamlEditorWorkerClient & IssuePanelWorkerClient;
+type FakeClient = ImportWorkerClient &
+  YamlEditorWorkerClient &
+  IssuePanelWorkerClient &
+  DiffPanelWorkerClient;
 
-/** ProjectPage requires a client but most of these tests exercise neither import, the editor, nor the issue panel directly. */
+/** ProjectPage requires a client but most of these tests exercise neither import, the editor, the issue panel, nor the diff panel directly. */
 const FAKE_CLIENT: FakeClient = {
   parse: async (_text) => ({ type: 'parse', requestId: 'fake', issues: [] }),
   serialize: async (_options) => ({ type: 'serialize', requestId: 'fake', text: '' }),
   locate: async (_path) => ({ type: 'locate', requestId: 'fake', range: null }),
+  diff: async (_baseline) => ({
+    type: 'diff',
+    requestId: 'fake',
+    diff: { hunks: [], added: 0, removed: 0, identical: true, trailingNewlineChanged: false },
+  }),
 };
 
 const decoder = new TextDecoder();
@@ -553,6 +566,7 @@ describe('ProjectPage / delete (FR-PROJ-03)', () => {
     await screen.findByText(t('project.emptyState'));
     expect(await adapter.get(`project/${id}/manifest.json`)).toBeNull();
     expect(await adapter.get(`project/${id}/config.yaml`)).toBeNull();
+    expect(await adapter.get(`project/${id}/import-baseline.yaml`)).toBeNull();
     expect(screen.getByText(t('project.noSelection'))).toBeDefined();
   });
 });
@@ -646,5 +660,121 @@ describe('ProjectPage / undo-redo shell (FR-PROJ-04 UI wiring; see plan #11 devi
 
     expect(historyStack.canUndo).toBe(true);
     expect(historyStack.canRedo).toBe(false);
+  });
+});
+
+describe('ProjectPage / diff panel wiring (FR-YAML-06 UI wiring)', () => {
+  it('creating a project seeds the import baseline with the default template', async () => {
+    const adapter = new MemoryStorageAdapter();
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+    const id = (await adapter.list('project/'))
+      .find((key) => key.endsWith('/manifest.json'))!
+      .split('/')[1]!;
+
+    expect(await getImportBaseline(adapter, id)).toBe(DEFAULT_PROJECT_CONFIG_TEXT);
+  });
+
+  it('importing resets the import baseline to the newly imported text', async () => {
+    const adapter = new MemoryStorageAdapter();
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+    const id = (await adapter.list('project/'))
+      .find((key) => key.endsWith('/manifest.json'))!
+      .split('/')[1]!;
+
+    fireEvent.change(screen.getByLabelText(t('import.pasteLabel')), {
+      target: { value: 'mode: direct\n' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: t('import.pasteButton') }));
+    await screen.findByText(t('import.successMessage'));
+
+    expect(await getImportBaseline(adapter, id)).toBe('mode: direct\n');
+  });
+
+  it('renders the diff panel once a project is selected, wired to the shared client', async () => {
+    const adapter = new MemoryStorageAdapter();
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+
+    await screen.findByText(t('diff.title'));
+  });
+
+  it('falls back to the current config text as the import baseline for a project that predates this tracking', async () => {
+    const adapter = new MemoryStorageAdapter();
+    // Simulates a project persisted by an earlier release, before
+    // saveImportBaseline existed — manifest and config.yaml only.
+    const legacy: ProjectRecord = {
+      id: 'legacy',
+      name: 'Legacy project',
+      description: '',
+      targetProfile: DEFAULT_TARGET_PROFILE,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    await saveProjectManifest(adapter, legacy);
+    await saveProjectConfigText(adapter, legacy.id, 'mode: rule\nport: 1234\n');
+    const diffSpy = vi.fn(async (_baseline: string) => ({
+      type: 'diff' as const,
+      requestId: 'x',
+      diff: { hunks: [], added: 0, removed: 0, identical: true, trailingNewlineChanged: false },
+    }));
+
+    render(<ProjectPage client={{ ...FAKE_CLIENT, diff: diffSpy }} adapter={adapter} />);
+    await screen.findByRole('button', { name: 'Legacy project' });
+    fireEvent.click(screen.getByRole('button', { name: 'Legacy project' }));
+
+    await waitFor(() => expect(diffSpy).toHaveBeenCalledWith('mode: rule\nport: 1234\n'));
+  });
+
+  it('does not crash and shows an empty editor for a manifest with no corresponding config.yaml', async () => {
+    const adapter = new MemoryStorageAdapter();
+    // A manifest with no config.yaml at all — a corrupted/incomplete
+    // storage state ("should not happen past creation", per
+    // getProjectConfigText's own doc comment) rather than a realistic
+    // legacy project, but still worth confirming this degrades safely.
+    const orphaned: ProjectRecord = {
+      id: 'orphaned',
+      name: 'Orphaned project',
+      description: '',
+      targetProfile: DEFAULT_TARGET_PROFILE,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    await saveProjectManifest(adapter, orphaned);
+
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
+    await screen.findByRole('button', { name: 'Orphaned project' });
+
+    expect(() =>
+      fireEvent.click(screen.getByRole('button', { name: 'Orphaned project' })),
+    ).not.toThrow();
+    const editorTextarea = await screen.findByLabelText<HTMLTextAreaElement>(t('editor.title'));
+    expect(editorTextarea.value).toBe('');
+  });
+});
+
+describe('ProjectPage / export dialog wiring (FR-PROJ-06 / FR-YAML-07 UI wiring)', () => {
+  it('the export button opens the dialog, and its close button closes it', async () => {
+    const adapter = new MemoryStorageAdapter();
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+
+    expect(screen.queryByText(t('export.title'))).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: t('export.triggerButton') }));
+    await screen.findByText(t('export.title'));
+
+    fireEvent.click(screen.getByRole('button', { name: t('export.closeButton') }));
+    expect(screen.queryByText(t('export.title'))).toBeNull();
   });
 });

@@ -171,11 +171,15 @@ export interface SensitivityFinding {
   readonly kind: SensitivityKind;
 }
 
+// `(?:-[^\S\r\n]+)?` optionally absorbs a YAML list item's `-` marker: the
+// key under scrutiny is often the first key of a list entry (each `proxies`
+// item is one list item, and `password`/`url` etc. commonly appear right
+// after its own `-`), not always a nested key on its own indented line.
 const SENSITIVE_KEY_LINE =
-  /^[^\S\r\n]*(password|passwd|secret|token|psk|auth-?str|private-?key|client-?secret|credential|ca-?str)\s*:/im;
+  /^[^\S\r\n]*(?:-[^\S\r\n]+)?(password|passwd|secret|token|psk|auth-?str|private-?key|client-?secret|credential|ca-?str)\s*:/im;
 const UUID_PATTERN = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i;
 const PRIVATE_KEY_BLOCK = /-----BEGIN [A-Z ]*PRIVATE KEY-----/;
-const SUBSCRIPTION_URL_LINE = /^[^\S\r\n]*url\s*:\s*["']?https?:\/\//im;
+const SUBSCRIPTION_URL_LINE = /^[^\S\r\n]*(?:-[^\S\r\n]+)?url\s*:\s*["']?https?:\/\//im;
 
 /**
  * Structural-only determination of which `.mcsproj` segments *might* carry

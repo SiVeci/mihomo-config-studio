@@ -1,0 +1,48 @@
+.export-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mcs-spacing-sm);
+  max-width: 480px;
+  border: 1px solid var(--mcs-color-hairline);
+  border-radius: var(--mcs-rounded-sm);
+  padding: var(--mcs-spacing-sm);
+  background-color: var(--mcs-color-surface-card);
+}
+
+.export-dialog__title {
+  font-family: var(--mcs-font-family-title-sm);
+  font-size: var(--mcs-font-size-title-sm);
+  margin: 0;
+}
+
+.export-dialog__sensitivity {
+  border: 1px solid var(--mcs-color-text-warning);
+  background-color: var(--mcs-color-warning-tint);
+  border-radius: var(--mcs-rounded-sm);
+  padding: var(--mcs-spacing-xs) var(--mcs-spacing-sm);
+}
+
+.export-dialog__sensitivity-title {
+  color: var(--mcs-color-text-warning);
+  font-weight: 500;
+  margin: 0 0 var(--mcs-spacing-xxs);
+}
+
+.export-dialog__sensitivity-list {
+  margin: 0;
+  padding-left: var(--mcs-spacing-md);
+  color: var(--mcs-color-body);
+  font-size: var(--mcs-font-size-body-sm);
+}
+
+.export-dialog__draft-notice {
+  color: var(--mcs-color-text-error);
+  font-size: var(--mcs-font-size-body-sm);
+  margin: 0;
+}
+
+.export-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mcs-spacing-xs);
+}

@@ -237,6 +237,17 @@ describe('describeSensitivity (NFR-SEC-08 determination side)', () => {
     });
   });
 
+  it('flags a sensitive key that is the first key of a YAML list item, right after "- "', () => {
+    // Realistic shape for `proxies:` entries — the key immediately follows
+    // the list marker on the same line, not indented on its own line.
+    const project = sampleProject({ configText: 'proxies:\n  - password: hunter2\n' });
+
+    expect(describeSensitivity(project)).toContainEqual({
+      segment: 'config.yaml',
+      kind: 'password',
+    });
+  });
+
   it('never includes the matched secret value anywhere in the findings', () => {
     const secretToken = 'sk-live-do-not-leak-this-value';
     const project = sampleProject({ configText: `proxies:\n  - token: ${secretToken}\n` });

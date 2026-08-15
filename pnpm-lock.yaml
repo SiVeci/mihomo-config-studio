@@ -78,6 +78,9 @@ importers:
       '@mcs/config-model':
         specifier: workspace:*
         version: link:../../packages/config-model
+      '@mcs/project-format':
+        specifier: workspace:*
+        version: link:../../packages/project-format
       '@mcs/storage':
         specifier: workspace:*
         version: link:../../packages/storage
