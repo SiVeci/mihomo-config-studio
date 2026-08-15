@@ -23,6 +23,7 @@ export default defineConfig({
       exclude: [
         'packages/*/src/**/*.test.ts',
         'packages/*/src/**/*.test.tsx',
+        'packages/*/src/**/*.bench.ts',
         'packages/*/src/testing/**',
         'packages/test-fixtures/**',
         'tools/*/src/**/*.test.ts',

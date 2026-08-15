@@ -68,6 +68,31 @@ jobs:
       - name: Assert no VPN permissions or APIs in AndroidManifest.xml
         run: node tools/android-manifest-check/dist/index.js apps/android/android/app/src
 
+  perf-baseline:
+    name: 1 MB import benchmark (record only, non-blocking)
+    runs-on: ubuntu-latest
+    # NFR-PERF-02: exit condition is "< 2s", verified per-slice in
+    # docs/releases/plans/v0.2.0-perf-baseline.md — this job only keeps the
+    # number visible on every push. A hard threshold job is v0.9.0 scope
+    # (shared runners are too noisy to gate on before then).
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run the 1 MB corpus import benchmark
+        run: pnpm vitest bench --run packages/validator/src/bench/import.bench.ts
+
   no-network-egress:
     name: no configuration upload path
     runs-on: ubuntu-latest

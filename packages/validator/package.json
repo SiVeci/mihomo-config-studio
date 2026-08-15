@@ -10,5 +10,8 @@
   "dependencies": {
     "@mcs/schema-core": "workspace:*",
     "@mcs/yaml-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@mcs/test-fixtures": "workspace:*"
   }
 }

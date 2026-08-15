@@ -177,6 +177,10 @@ importers:
       '@mcs/yaml-engine':
         specifier: workspace:*
         version: link:../yaml-engine
+    devDependencies:
+      '@mcs/test-fixtures':
+        specifier: workspace:*
+        version: link:../test-fixtures
 
   packages/yaml-engine:
     dependencies:

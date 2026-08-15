@@ -15,3 +15,6 @@ export function listFixtures(relativeDir: string): string[] {
     .filter((name) => name.endsWith('.yaml') || name.endsWith('.yml'))
     .sort();
 }
+
+export { generateLargeCorpus } from './generate-large.js';
+export type { LargeCorpusOptions } from './generate-large.js';
