@@ -7,6 +7,8 @@
  * (FR-UPD-07, NFR-SEC-05, ADR-002).
  */
 
+import type { IssueSeverity, MessageParams } from '@mcs/yaml-engine';
+
 export type JsonPrimitive = string | number | boolean | null;
 
 export type JsonSchemaType =
@@ -182,8 +184,79 @@ export interface ModuleManifest {
   mihomo?: { minVersion?: string; maxTestedVersion?: string };
 }
 
+/**
+ * A declarative patch a `ValidationRule` may suggest when it fires. `path`
+ * is relative, in the same addressing scheme as `Condition.path` (dot
+ * segments, `$.` for the module root) — the evaluator (v0.3.0 #4) resolves
+ * it against the document to produce a real issue's `fix`. `value` may only
+ * be a JSON primitive the rule already knows about (its own literal), never
+ * a value read out of the document being validated (NFR-SEC-03).
+ */
+export interface RuleFix {
+  kind: 'set-scalar' | 'remove' | 'rename' | 'append';
+  /** Defaults to the owning rule's own `path` when omitted. */
+  path?: string;
+  value?: JsonPrimitive;
+}
+
+/**
+ * A cross-field or cross-object constraint a module declares instead of
+ * application code implementing it (PRD §9.3). `when` reuses the existing
+ * restricted `Condition` DSL — ADR-002 forbids a Bundle from introducing new
+ * operators, so reuse is the only way to add this capability without
+ * widening the closed opcode set. The evaluator lives in `rules.ts`
+ * (v0.3.0 #4); this type only defines the shape a Bundle may declare.
+ */
+export interface ValidationRule {
+  id: string;
+  severity: IssueSeverity;
+  when: Condition;
+  /** i18n lookup key; the rendered text lives in resource files (NFR-SEC-03). */
+  messageKey: string;
+  messageParams?: MessageParams;
+  /** Relative dot-path (same scheme as `Condition.path`) the issue anchors to. */
+  path?: string;
+  fix?: RuleFix;
+}
+
+/**
+ * A named, on-disk sample a module ships for its own use. Content is never
+ * read here — `packages/**` forbids `node:fs`, so only test code (and,
+ * later, `schema-cli`) opens the file at `path`. `kind` mirrors the four
+ * sample categories the exit criteria require per P0 module; a module
+ * missing one is a fact `examples[]` can be scanned for mechanically
+ * instead of eyeballed (v0.3.0 #22).
+ */
+export interface ModuleExample {
+  name: string;
+  kind: 'valid' | 'invalid' | 'edge' | 'unknown-fields';
+  /** Path to a `.yaml` file inside the module's own `examples/` directory. */
+  path: string;
+}
+
+/** Locale codes a module's own i18n resources may provide (mirrors ADR-016's fixed set). */
+export type ModuleLocale = 'zh-CN' | 'en';
+
+/**
+ * A module's own translated strings, one record per locale. Shape
+ * validation (`validateModuleShape`) enforces that every locale present has
+ * exactly the same key set — the same bidirectional-parity rule
+ * `apps/web/src/i18n/i18n.test.ts` applies to the application's own
+ * resources — and that no value is empty.
+ */
+export type ModuleI18n = Record<ModuleLocale, Record<string, string>>;
+
+/**
+ * `migrations` is deliberately not part of this shape yet: the version
+ * document only requires the first three additions, and a field with no
+ * consumer just invites someone to start populating it early. It gets a
+ * real meaning — and a real evaluator — when migration lands in v0.5.0.
+ */
 export interface SchemaModule {
   manifest: ModuleManifest;
   schema: JsonSchema;
   ui: UiSchema;
+  rules?: ValidationRule[];
+  examples?: ModuleExample[];
+  i18n?: ModuleI18n;
 }

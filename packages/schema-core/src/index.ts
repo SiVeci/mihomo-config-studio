@@ -2,6 +2,8 @@ export { ConditionError, evaluateCondition, resolve } from './condition.js';
 export type { ConditionContext } from './condition.js';
 export { checkFormat, isRiskyPattern } from './formats.js';
 export { buildFormPlan, inferControl } from './form-plan.js';
+export { validateModuleShape } from './module.js';
+export type { ModuleShapeIssue } from './module.js';
 export type {
   FormMode,
   FormPlan,
@@ -20,13 +22,18 @@ export type {
   JsonSchema,
   JsonSchemaType,
   KnownFormat,
+  ModuleExample,
+  ModuleI18n,
+  ModuleLocale,
   ModuleManifest,
   Platform,
+  RuleFix,
   SafetyLevel,
   SchemaModule,
   UiFieldSpec,
   UiGroup,
   UiSchema,
+  ValidationRule,
 } from './types.js';
 export { validateValue } from './validate.js';
 export type { SchemaIssue, ValidateOptions } from './validate.js';
