@@ -4,6 +4,8 @@ export { checkFormat, isRiskyPattern } from './formats.js';
 export { buildFormPlan, inferControl } from './form-plan.js';
 export { validateModuleShape } from './module.js';
 export type { ModuleShapeIssue } from './module.js';
+export { evaluateRules } from './rules.js';
+export type { RuleEvaluationOptions, RuleIssue } from './rules.js';
 export type {
   FormMode,
   FormPlan,
