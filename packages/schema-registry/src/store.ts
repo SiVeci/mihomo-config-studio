@@ -97,7 +97,16 @@ export async function resolveActiveBundle(
   return builtinAsStoredBundle();
 }
 
-function builtinAsStoredBundle(): StoredBundle {
+/**
+ * `BUILTIN_BUNDLE`'s live `SchemaModule`s, re-serialised as a `StoredBundle`
+ * ready for `createRegistry` — the same conversion `resolveActiveBundle`'s
+ * own fallback needs, exported so production code that has no installed
+ * override to check (v0.3.0 has no Bundle-install UI yet) can resolve the
+ * built-in modules directly instead of going through the full async
+ * store-and-verify path for a feature that cannot exist yet (v0.3.0 #14:
+ * the web app's form renderer, and the config Worker's own pipeline stages).
+ */
+export function builtinAsStoredBundle(): StoredBundle {
   const files = new Map<string, Uint8Array>();
   for (const [path, module] of Object.entries(BUILTIN_BUNDLE.modules)) {
     files.set(path, new TextEncoder().encode(JSON.stringify(module)));

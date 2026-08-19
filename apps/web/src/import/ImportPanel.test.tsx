@@ -27,7 +27,7 @@ const BLOCKING_ISSUE: ValidationIssue = {
 
 function fakeClient(issues: ValidationIssue[] = []): ImportWorkerClient {
   return {
-    parse: async () => ({ type: 'parse', requestId: 'fake', issues }),
+    parse: async () => ({ type: 'parse', requestId: 'fake', issues, value: {} }),
   };
 }
 

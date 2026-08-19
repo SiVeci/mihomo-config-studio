@@ -37,7 +37,12 @@ describe('WorkerClient request/response correlation', () => {
 
     const response = await client.parse('mode: rule\n');
 
-    expect(response).toEqual({ type: 'parse', requestId: 'req-1', issues: [] });
+    expect(response).toEqual({
+      type: 'parse',
+      requestId: 'req-1',
+      issues: [],
+      value: { mode: 'rule' },
+    });
   });
 
   it('assigns a distinct requestId to each call and resolves each independently', async () => {

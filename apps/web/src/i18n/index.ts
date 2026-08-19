@@ -46,6 +46,29 @@ export function t(key: TranslationKey, params?: Readonly<Record<string, string |
   return interpolate(template, params);
 }
 
+/**
+ * Translate a key that might belong to a Schema module's own `i18n` bundle
+ * (field/group labels — v0.3.0 #6-#11) rather than this app's own resource
+ * files: check `moduleI18n` first, then fall back to the app's own `t()`.
+ *
+ * `key` is `string`, not `TranslationKey`: a rendered `PlannedField`'s
+ * `ui.label`/group label is data from a Schema module, not a literal this
+ * app authored, so it can never be a member of the closed `TranslationKey`
+ * union at compile time. The cast below is safe only because `t()`'s own
+ * fallback chain (`RESOURCES[locale][key] ?? RESOURCES[DEFAULT_LOCALE][key]
+ * ?? key`) never throws for an unregistered key — it degrades to the raw
+ * key text, exactly like every other unregistered lookup in this file.
+ */
+export function translateModuleAware(
+  key: string,
+  moduleI18n: Record<string, string> | undefined,
+  params?: Readonly<Record<string, string | number>>,
+): string {
+  const fromModule = moduleI18n?.[key];
+  if (fromModule !== undefined) return interpolate(fromModule, params);
+  return t(key as TranslationKey, params);
+}
+
 function interpolate(template: string, params?: Readonly<Record<string, string | number>>): string {
   if (!params) return template;
   let result = template;

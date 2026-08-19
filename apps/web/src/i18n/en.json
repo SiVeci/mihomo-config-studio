@@ -66,5 +66,21 @@
   "export.sensitivity.subscriptionUrl": "Subscription URL",
   "export.sensitivity.password": "Password-like fields",
   "export.sensitivity.uuid": "UUID",
-  "export.sensitivity.privateKey": "Certificate private key"
+  "export.sensitivity.privateKey": "Certificate private key",
+  "group.general": "General",
+  "group.unknown": "Unrecognised fields",
+  "badge.deprecated": "Deprecated",
+  "badge.experimental": "Experimental",
+  "badge.danger": "Use with caution",
+  "link.officialDocs": "View official documentation",
+  "form.modeLabel": "Display mode",
+  "form.modeBasicOption": "Basic",
+  "form.modeAdvancedOption": "Advanced",
+  "form.emptyState": "The form is not ready yet",
+  "form.module.general": "General settings",
+  "form.module.dns": "DNS",
+  "form.module.sniffer": "Domain sniffing",
+  "form.module.inbound": "Inbound & TUN",
+  "form.module.proxies": "Proxy nodes",
+  "form.module.proxy-providers": "Proxy subscriptions"
 }

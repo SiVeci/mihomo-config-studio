@@ -21,7 +21,12 @@ export type {
   BundleManifestIssue,
   BundleManifestIssueCode,
 } from './manifest.js';
-export { installBundle, resolveActiveBundle, rollbackBundle } from './store.js';
+export {
+  builtinAsStoredBundle,
+  installBundle,
+  resolveActiveBundle,
+  rollbackBundle,
+} from './store.js';
 export type {
   BundleInstallResult,
   BundleRollbackResult,

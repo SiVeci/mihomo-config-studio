@@ -9,6 +9,7 @@ import type {
   SerializeOptions,
   SerializeResponse,
   ValidateResponse,
+  ValueResponse,
   WorkerRequest,
   WorkerResponse,
 } from './protocol.js';
@@ -114,6 +115,14 @@ export class WorkerClient {
       requestId: this.#makeRequestId(),
       path,
     }) as Promise<LocateResponse>;
+  }
+
+  /** The document's current value as plain JS — #14's form renderer plans against this. */
+  value(): Promise<ValueResponse> {
+    return this.#send({
+      type: 'value',
+      requestId: this.#makeRequestId(),
+    }) as Promise<ValueResponse>;
   }
 
   /**

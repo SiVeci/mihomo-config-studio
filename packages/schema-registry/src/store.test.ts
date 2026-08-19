@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import { BUILTIN_BUNDLE } from './builtin.js';
 import type { BundleManifest } from './manifest.js';
+import { createRegistry } from './registry.js';
 import {
+  builtinAsStoredBundle,
   installBundle,
   resolveActiveBundle,
   rollbackBundle,
@@ -268,5 +270,30 @@ describe('resolveActiveBundle (FR-UPD-01, FR-UPD-04)', () => {
     });
 
     expect(resolved.manifest.bundleId).toBe(BUILTIN_BUNDLE.manifest.bundleId);
+  });
+});
+
+describe('builtinAsStoredBundle (v0.3.0 #14)', () => {
+  it('resolves directly through createRegistry into all six real P0 modules, with no registry issues', () => {
+    const registry = createRegistry(builtinAsStoredBundle());
+    const ids = registry.modules().map((module) => module.manifest.id);
+
+    expect(ids.sort()).toEqual(
+      ['dns', 'general', 'inbound', 'proxies', 'proxy-providers', 'sniffer'].sort(),
+    );
+    expect(registry.issues()).toEqual([]);
+  });
+
+  it('matches the conversion resolveActiveBundle itself falls back to, given an empty store', async () => {
+    const store = new MemoryBundleStore();
+    const keyPair = await generateTestKeyPair();
+    const resolved = await resolveActiveBundle(store, {
+      ...DEFAULT_OPTIONS,
+      trustedPublicKeys: [keyPair.publicKeyRaw],
+    });
+
+    const direct = builtinAsStoredBundle();
+    expect(direct.manifest).toEqual(resolved.manifest);
+    expect([...direct.files.keys()].sort()).toEqual([...resolved.files.keys()].sort());
   });
 });

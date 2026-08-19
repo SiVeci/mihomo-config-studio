@@ -1,4 +1,6 @@
 import { HistoryStack } from '@mcs/config-model';
+import type { FormMode, SchemaModule } from '@mcs/schema-core';
+import { builtinAsStoredBundle, createRegistry } from '@mcs/schema-registry';
 import { AutoSaver } from '@mcs/storage';
 import type { StorageAdapter } from '@mcs/storage';
 import { useEffect, useReducer, useRef, useState, type ReactNode } from 'react';
@@ -9,13 +11,21 @@ import { YamlEditor } from '../editor/YamlEditor.js';
 import type { YamlEditorHandle, YamlEditorWorkerClient } from '../editor/YamlEditor.js';
 import { ExportDialog } from '../export/ExportDialog.js';
 import type { DownloadFile } from '../export/ExportDialog.js';
+import { ModuleFormPage } from '../form/ModuleFormPage.js';
 import { ImportPanel } from '../import/ImportPanel.js';
 import type { ImportWorkerClient } from '../import/ImportPanel.js';
 import { t } from '../i18n/index.js';
 import { IssuePanel } from '../issues/IssuePanel.js';
 import type { IssuePanelWorkerClient } from '../issues/IssuePanel.js';
 import { AppShell } from '../layout/AppShell.js';
-import type { TextRange, ValidationIssue } from '../worker/protocol.js';
+import type {
+  ApplyPatchResponse,
+  ConfigPath,
+  IssueFix,
+  TextRange,
+  ValidationIssue,
+  ValueResponse,
+} from '../worker/protocol.js';
 import {
   deleteProject,
   DEFAULT_PROJECT_CONFIG_TEXT,
@@ -32,6 +42,12 @@ import './ProjectPage.css';
 
 type ProjectField = 'name' | 'description' | 'targetProfile';
 
+/** `ModuleFormPage`'s own edits round-trip through these two — no dedicated child component owns this slice of the client since `ModuleFormPage` itself takes a plain `onFieldChange` callback, not a Worker client (v0.3.0 #14). */
+export interface ModuleFormWorkerClient {
+  applyPatch(patch: IssueFix): Promise<ApplyPatchResponse>;
+  value(): Promise<ValueResponse>;
+}
+
 export interface ProjectPageProps {
   readonly adapter: StorageAdapter;
   /**
@@ -47,7 +63,8 @@ export interface ProjectPageProps {
   readonly client: ImportWorkerClient &
     YamlEditorWorkerClient &
     IssuePanelWorkerClient &
-    DiffPanelWorkerClient;
+    DiffPanelWorkerClient &
+    ModuleFormWorkerClient;
   /**
    * Injectable for tests; production always takes the default (a fresh,
    * always-empty stack). Real document-level recording — the only thing that
@@ -81,6 +98,14 @@ export function ProjectPage({
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [historyStack] = useState(() => historyStackProp ?? new HistoryStack());
   const [, bumpHistoryVersion] = useReducer((count: number) => count + 1, 0);
+  const [documentValue, setDocumentValue] = useState<unknown>(null);
+  const [formMode, setFormMode] = useState<FormMode>('basic');
+  // Static for the process lifetime: v0.3.0 has no Bundle-install UI yet, so
+  // the built-in bundle is the only one that can ever be active (see
+  // `builtinAsStoredBundle`'s own doc comment).
+  const [modules] = useState<readonly SchemaModule[]>(() =>
+    createRegistry(builtinAsStoredBundle()).modules(),
+  );
 
   const projectsRef = useRef(projects);
   projectsRef.current = projects;
@@ -115,6 +140,9 @@ export function ProjectPage({
       setConfigText('');
       setSavedBaseline('');
       setImportBaseline('');
+      // Otherwise the form would keep rendering the previous project's
+      // fields until this project's own YamlEditor debounce fires.
+      setDocumentValue(null);
       return;
     }
     let cancelled = false;
@@ -294,6 +322,33 @@ export function ProjectPage({
     editorRef.current?.jumpToRange(range);
   }
 
+  /**
+   * A `ModuleFormPage` field edit — distinct from `handleFieldChange` above,
+   * which is project *metadata* (name/description/targetProfile), not
+   * document content. Always the `'set'` `IssueFix` kind (v0.3.0 #14):
+   * unlike a validator-suggested fix, a form edit's value is never
+   * schema-constant-shaped alone (a `tags`/`key-value` control edits an
+   * array/object), so `set-scalar` cannot carry every case this needs.
+   *
+   * `configText`/`documentValue` both refresh from the Worker afterward
+   * rather than being derived locally — the main thread never holds a
+   * `MihomoYamlDocument` to serialize or read a value from itself (v0.2.0's
+   * Worker boundary, reconfirmed by `schema-registry-boundary.test.ts` and
+   * `worker/client.test.ts`'s structural fences).
+   */
+  async function handleDocumentFieldChange(path: ConfigPath, value: unknown): Promise<void> {
+    const patch: IssueFix = { kind: 'set', path, value };
+    await client.applyPatch(patch);
+    const [valueResponse, serializeResponse] = await Promise.all([
+      client.value(),
+      client.serialize(),
+    ]);
+    setDocumentValue(valueResponse.value);
+    configTextRef.current = serializeResponse.text;
+    setConfigText(serializeResponse.text);
+    configAutoSaverRef.current?.touch(now());
+  }
+
   async function handleConfirmDelete(id: string): Promise<void> {
     // Cancel any pending autosave for this project *before* deleting it: the
     // effects above flush on cleanup when `selectedId` changes away, which
@@ -358,6 +413,14 @@ export function ProjectPage({
             onChange={handleConfigChange}
             client={client}
             onIssuesChange={setIssues}
+            onValueChange={setDocumentValue}
+          />
+          <ModuleFormPage
+            modules={modules}
+            value={documentValue}
+            mode={formMode}
+            onModeChange={setFormMode}
+            onFieldChange={(path, value) => void handleDocumentFieldChange(path, value)}
           />
           <DiffPanel
             importBaseline={importBaseline}

@@ -10,7 +10,7 @@ import {
   KERNEL_MODULES,
   type RangeLocator,
 } from './issue.js';
-import type { ValidationIssue } from './issue.js';
+import type { IssueFix, ValidationIssue } from './issue.js';
 
 describe('fromYamlIssue (FR-VAL-01)', () => {
   it('widens a hand-built YamlIssue, defaulting module to "yaml" and deriving blocking from severity', () => {
@@ -343,5 +343,34 @@ describe('type-level restrictions (NFR-SEC-03)', () => {
       value: { nested: true },
     });
     expect(build()).toBeDefined();
+  });
+});
+
+describe('IssueFix — the "set" kind (v0.3.0 #14, non-scalar form edits)', () => {
+  it('accepts a non-primitive value, unlike every other kind', () => {
+    const arrayFix: IssueFix = { kind: 'set', path: ['dns', 'nameserver'], value: ['1.1.1.1'] };
+    const objectFix: IssueFix = {
+      kind: 'set',
+      path: ['hosts'],
+      value: { 'a.example.com': '127.0.0.1' },
+    };
+    expect(arrayFix.value).toEqual(['1.1.1.1']);
+    expect(objectFix.value).toEqual({ 'a.example.com': '127.0.0.1' });
+  });
+
+  it('still narrows correctly in a kind switch alongside the original four kinds', () => {
+    function describeKind(fix: IssueFix): string {
+      switch (fix.kind) {
+        case 'set-scalar':
+        case 'remove':
+        case 'rename':
+        case 'append':
+          return 'scalar-shaped';
+        case 'set':
+          return 'unrestricted';
+      }
+    }
+    expect(describeKind({ kind: 'set', path: [], value: [1, 2] })).toBe('unrestricted');
+    expect(describeKind({ kind: 'set-scalar', path: [], value: 'x' })).toBe('scalar-shaped');
   });
 });

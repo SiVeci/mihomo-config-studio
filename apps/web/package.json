@@ -10,7 +10,11 @@
   },
   "dependencies": {
     "@mcs/config-model": "workspace:*",
+    "@mcs/form-renderer": "workspace:*",
     "@mcs/project-format": "workspace:*",
+    "@mcs/schema-builtin": "workspace:*",
+    "@mcs/schema-core": "workspace:*",
+    "@mcs/schema-registry": "workspace:*",
     "@mcs/storage": "workspace:*",
     "@mcs/ui": "workspace:*",
     "@mcs/validator": "workspace:*",

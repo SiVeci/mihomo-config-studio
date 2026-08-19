@@ -1,15 +1,20 @@
 // @vitest-environment jsdom
 import { HistoryStack } from '@mcs/config-model';
+import { GENERAL_MODULE } from '@mcs/schema-builtin';
 import { MemoryStorageAdapter } from '@mcs/storage';
 import { MihomoYamlDocument } from '@mcs/yaml-engine';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { DiffPanelWorkerClient } from '../diff/DiffPanel.js';
+import { WorkerClient } from '../worker/client.js';
+import type { WorkerLike, WorkerMessageEvent } from '../worker/client.js';
 import type { YamlEditorWorkerClient } from '../editor/YamlEditor.js';
 import { t } from '../i18n/index.js';
 import type { ImportWorkerClient } from '../import/ImportPanel.js';
 import type { IssuePanelWorkerClient } from '../issues/IssuePanel.js';
+import { createWorkerState, handleWorkerRequest } from '../worker/protocol.js';
+import type { WorkerRequest } from '../worker/protocol.js';
 import {
   DEFAULT_PROJECT_CONFIG_TEXT,
   DEFAULT_TARGET_PROFILE,
@@ -20,6 +25,7 @@ import {
 } from './model.js';
 import type { ProjectRecord } from './model.js';
 import { ProjectPage } from './ProjectPage.js';
+import type { ModuleFormWorkerClient } from './ProjectPage.js';
 
 afterEach(() => {
   cleanup();
@@ -28,11 +34,12 @@ afterEach(() => {
 type FakeClient = ImportWorkerClient &
   YamlEditorWorkerClient &
   IssuePanelWorkerClient &
-  DiffPanelWorkerClient;
+  DiffPanelWorkerClient &
+  ModuleFormWorkerClient;
 
 /** ProjectPage requires a client but most of these tests exercise neither import, the editor, the issue panel, nor the diff panel directly. */
 const FAKE_CLIENT: FakeClient = {
-  parse: async (_text) => ({ type: 'parse', requestId: 'fake', issues: [] }),
+  parse: async (_text) => ({ type: 'parse', requestId: 'fake', issues: [], value: {} }),
   serialize: async (_options) => ({ type: 'serialize', requestId: 'fake', text: '' }),
   locate: async (_path) => ({ type: 'locate', requestId: 'fake', range: null }),
   diff: async (_baseline) => ({
@@ -40,6 +47,8 @@ const FAKE_CLIENT: FakeClient = {
     requestId: 'fake',
     diff: { hunks: [], added: 0, removed: 0, identical: true, trailingNewlineChanged: false },
   }),
+  applyPatch: async (_patch) => ({ type: 'applyPatch', requestId: 'fake' }),
+  value: async () => ({ type: 'value', requestId: 'fake', value: {} }),
 };
 
 const decoder = new TextDecoder();
@@ -233,6 +242,7 @@ describe('ProjectPage / import (FR-YAML-01 wiring)', () => {
             blocking: true,
           },
         ],
+        value: null,
       }),
     };
     render(<ProjectPage client={blockingClient} adapter={adapter} />);
@@ -365,6 +375,7 @@ describe('ProjectPage / issue panel wiring (FR-VAL-02 UI wiring)', () => {
             },
           },
         ],
+        value: null,
       }),
     };
     render(<ProjectPage client={client} adapter={adapter} />);
@@ -397,6 +408,7 @@ describe('ProjectPage / issue panel wiring (FR-VAL-02 UI wiring)', () => {
             range,
           },
         ],
+        value: null,
       }),
     };
     render(<ProjectPage client={client} adapter={adapter} />);
@@ -776,5 +788,99 @@ describe('ProjectPage / export dialog wiring (FR-PROJ-06 / FR-YAML-07 UI wiring)
 
     fireEvent.click(screen.getByRole('button', { name: t('export.closeButton') }));
     expect(screen.queryByText(t('export.title'))).toBeNull();
+  });
+});
+
+/**
+ * Mirrors `closed-loop.test.tsx`'s own `FakeWorker` exactly: resolves every
+ * message through the real `handleWorkerRequest` (real `MihomoYamlDocument`,
+ * real Schema modules resolved via v0.3.0 #14's `RESOLVED_MODULES`) rather
+ * than canned responses — needed here because `ModuleFormPage`'s field edits
+ * must round-trip through a real document, not just prove component wiring.
+ */
+class RealWorker implements WorkerLike {
+  onmessage: ((event: WorkerMessageEvent) => void) | null = null;
+  readonly #state = createWorkerState();
+
+  postMessage(message: WorkerRequest): void {
+    const response = handleWorkerRequest(this.#state, message);
+    queueMicrotask(() => this.onmessage?.({ data: response }));
+  }
+}
+
+describe('ProjectPage / module form wiring (FR-SCHEMA-01, PRD §7.4, v0.3.0 #14)', () => {
+  async function setUpWithRealDocument(yaml: string) {
+    const adapter = new MemoryStorageAdapter();
+    const client = new WorkerClient(new RealWorker());
+    render(<ProjectPage client={client} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+    const editorTextarea = screen.getByLabelText<HTMLTextAreaElement>(t('editor.title'));
+    // The default config text loads asynchronously (a separate fetch, see
+    // "loads the newly-created project default config text into the editor"
+    // above) — must be awaited before overwriting it, otherwise that load
+    // can resolve after this edit and clobber it back to the default.
+    await waitFor(() => expect(editorTextarea.value).toBe(DEFAULT_PROJECT_CONFIG_TEXT));
+    fireEvent.change(editorTextarea, { target: { value: yaml } });
+
+    // Real modules are only known once YamlEditor's own debounced parse
+    // resolves and reports the value upward — the same 300ms window every
+    // other real-document ProjectPage test in this file waits through.
+    await waitFor(
+      () => {
+        expect(document.querySelector('[data-module-section="general"]')).not.toBeNull();
+      },
+      { timeout: 2000 },
+    );
+    return { adapter, editorTextarea };
+  }
+
+  it('editing a real field through the form round-trips through the Worker and updates the raw editor', async () => {
+    const { editorTextarea } = await setUpWithRealDocument('mode: rule\nport: 7890\n');
+
+    const modeLabel = GENERAL_MODULE.i18n?.['zh-CN']?.['field.mode'];
+    if (!modeLabel) throw new Error('GENERAL_MODULE has no zh-CN field.mode label');
+    fireEvent.change(screen.getByLabelText(modeLabel), { target: { value: 'global' } });
+
+    await waitFor(() => expect(editorTextarea.value).toContain('mode: global'));
+  });
+
+  it('toggling basic -> advanced -> basic never itself edits the document (exit condition 6)', async () => {
+    const { editorTextarea } = await setUpWithRealDocument('mode: rule\nport: 7890\n');
+    const before = editorTextarea.value;
+
+    fireEvent.change(screen.getByLabelText(t('form.modeLabel')), { target: { value: 'advanced' } });
+    await waitFor(() =>
+      expect(screen.getByLabelText<HTMLSelectElement>(t('form.modeLabel')).value).toBe('advanced'),
+    );
+    fireEvent.change(screen.getByLabelText(t('form.modeLabel')), { target: { value: 'basic' } });
+    await waitFor(() =>
+      expect(screen.getByLabelText<HTMLSelectElement>(t('form.modeLabel')).value).toBe('basic'),
+    );
+
+    expect(editorTextarea.value).toBe(before);
+  });
+
+  it('an advanced-only field is absent from the DOM in basic mode but its value survives in the document (exit condition 6)', async () => {
+    const { editorTextarea } = await setUpWithRealDocument(
+      'mode: rule\nport: 7890\ntun:\n  enable: true\n',
+    );
+
+    fireEvent.change(screen.getByLabelText(t('form.modeLabel')), { target: { value: 'basic' } });
+    await waitFor(() =>
+      expect(screen.getByLabelText<HTMLSelectElement>(t('form.modeLabel')).value).toBe('basic'),
+    );
+    expect(document.querySelector('[data-field="/tun/enable"]')).toBeNull();
+    // Never edited via the form in this test — toggling mode alone must not
+    // have touched the document.
+    expect(editorTextarea.value).toContain('enable: true');
+
+    fireEvent.change(screen.getByLabelText(t('form.modeLabel')), { target: { value: 'advanced' } });
+    await waitFor(() => {
+      expect(document.querySelector('[data-field="/tun/enable"]')).not.toBeNull();
+    });
+    expect(editorTextarea.value).toContain('enable: true');
   });
 });

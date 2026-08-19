@@ -18,6 +18,18 @@ export interface FormPlanOptions {
   mode?: FormMode;
   /** Fields restricted to other platforms are hidden but never removed. */
   platform?: Platform;
+  /**
+   * Absolute paths (serialized the same way `computeKnownPaths` returns
+   * them) that this plan must not flag as `unknown`, even though this
+   * module's own schema does not describe them — e.g. a sibling module
+   * sharing the same document root (`general`/`inbound`, both `root: []`,
+   * v0.3.0 #8/#14). Planning a module never *needs* its own fields listed
+   * here: a property the schema does describe is never routed through the
+   * "extra key" path this option affects, so passing the full registry-wide
+   * set from `computeKnownPaths` back into every module's own plan call is
+   * always safe.
+   */
+  additionalKnownPaths?: ReadonlySet<string>;
 }
 
 /** One selectable branch of a `variant` field's discriminator (FR-SCHEMA-02). */
@@ -124,6 +136,9 @@ export function buildFormPlan(
     context,
     mode,
     ...(options.platform !== undefined ? { platform: options.platform } : {}),
+    ...(options.additionalKnownPaths !== undefined
+      ? { additionalKnownPaths: options.additionalKnownPaths }
+      : {}),
     depth: 0,
   });
 
@@ -138,6 +153,109 @@ export function buildFormPlan(
   };
 }
 
+/**
+ * Union, across every given module, of every path that module's own plan
+ * actually declares (never the `unknown`-flagged fallback rows). Feed the
+ * result back in as `additionalKnownPaths` when planning any one of those
+ * modules on its own, so two modules sharing a document root — `general`/
+ * `inbound`, both `root: []` (v0.3.0 #8) — never flag each other's declared
+ * fields as unknown (v0.3.0 #14). A module's own fields are always safe to
+ * include here too: a schema-declared property never reaches the "extra
+ * key" path this set suppresses, so passing the whole registry-wide result
+ * back into every module's own `buildFormPlan` call is always correct, not
+ * just for the modules that actually share a root.
+ */
+export function computeKnownPaths(
+  modules: readonly SchemaModule[],
+  documentValue: unknown,
+  options: FormPlanOptions = {},
+): ReadonlySet<string> {
+  const known = new Set<string>();
+  for (const module of modules) {
+    const plan = buildFormPlan(module, documentValue, options);
+    for (const field of plan.fields) {
+      if (!field.unknown) known.add(serializePath(field.path));
+    }
+  }
+  return known;
+}
+
+/**
+ * True when a module's root schema describes a single discriminated-union
+ * *element* (`oneOf`/`anyOf` at the schema's own top level, no `type` or
+ * `properties` there) rather than an object — `proxies`/`proxy-providers`
+ * (v0.3.0 #9-#11), where `manifest.root` addresses an *array* of such
+ * elements in the document. `buildFormPlan` plans one object; a module like
+ * this needs `buildArrayFormPlan` instead.
+ */
+export function isArrayEntryModule(module: SchemaModule): boolean {
+  const schema = module.schema;
+  return (
+    (schema.oneOf !== undefined || schema.anyOf !== undefined) &&
+    schema.type === undefined &&
+    schema.properties === undefined
+  );
+}
+
+/**
+ * `buildFormPlan`'s counterpart for `isArrayEntryModule` modules: one
+ * `PlannedField` per array element, in document order, each addressed by
+ * its real absolute path (`[...module.manifest.root, index, ...]`).
+ *
+ * `buildFormPlan` cannot plan this shape end-to-end — the schema's `oneOf`
+ * sits at its own root, and the document value there is an array, not a
+ * record `planObject` can walk. Each element is planned by wrapping it as
+ * `{ item: element }` under a synthetic `root: []` probe module (the same
+ * technique `schema-builtin`'s `builtin.test.ts` proved out per-protocol as
+ * `planOneUnionItem`), then unwrapping: the resulting single `item` field
+ * (typically `control: 'variant'`, discriminated on whichever property the
+ * union's branches share) has every path in its subtree — its own, its
+ * children's, and its `variant.discriminatorPath` — rewritten from a
+ * leading `'item'` segment to `[...module.manifest.root, index]`.
+ */
+export function buildArrayFormPlan(
+  module: SchemaModule,
+  documentValue: unknown,
+  options: FormPlanOptions = {},
+): PlannedField[] {
+  const entries = readPath(documentValue, module.manifest.root);
+  if (!Array.isArray(entries)) return [];
+
+  const probeModule: SchemaModule = {
+    manifest: { id: module.manifest.id, root: [], version: module.manifest.version },
+    schema: {
+      type: 'object',
+      properties: { item: module.schema },
+      ...(module.schema.$defs !== undefined ? { $defs: module.schema.$defs } : {}),
+    },
+    ui: { fields: { item: { fields: module.ui.fields ?? {} } } },
+  };
+
+  return entries.map((entry, index) => {
+    const plan = buildFormPlan(probeModule, { item: entry }, options);
+    // The probe schema always declares exactly one property ('item'), so
+    // `planObject` always produces exactly one field for it.
+    const itemField = plan.fields[0]!;
+    return reprefixField(itemField, [...module.manifest.root, index]);
+  });
+}
+
+/** Rewrites a field (and its children/variant discriminator) planned under a leading `'item'` segment to address `newPrefix` instead — see `buildArrayFormPlan`. */
+function reprefixField(field: PlannedField, newPrefix: ConfigPath): PlannedField {
+  const suffix = field.path.slice(1);
+  const reprefixed: PlannedField = { ...field, path: [...newPrefix, ...suffix] };
+  if (field.variant) {
+    reprefixed.variant = {
+      ...field.variant,
+      discriminatorPath: [...newPrefix, ...field.variant.discriminatorPath.slice(1)],
+    };
+  }
+  if (field.children) {
+    reprefixed.children = field.children.map((child) => reprefixField(child, newPrefix));
+  }
+  return reprefixed;
+}
+
 interface PlanArgs {
   schema: JsonSchema;
   rootSchema: JsonSchema;
@@ -147,6 +265,7 @@ interface PlanArgs {
   context: ConditionContext;
   mode: FormMode;
   platform?: Platform;
+  additionalKnownPaths?: ReadonlySet<string>;
   depth: number;
 }
 
@@ -183,15 +302,22 @@ function planObject(args: PlanArgs): PlannedField[] {
         required: (resolved.required ?? []).includes(key),
         mode,
         ...(args.platform !== undefined ? { platform: args.platform } : {}),
+        ...(args.additionalKnownPaths !== undefined
+          ? { additionalKnownPaths: args.additionalKnownPaths }
+          : {}),
         depth,
       }),
     );
   }
 
   // Anything in the document the schema does not describe still gets a row, so
-  // the user can find and edit it instead of silently carrying it along.
+  // the user can find and edit it instead of silently carrying it along —
+  // unless a sibling module sharing this same document root already claims
+  // it (`additionalKnownPaths`, v0.3.0 #14), in which case it is someone
+  // else's known field, not this module's unknown one.
   for (const key of Object.keys(record)) {
     if (Object.hasOwn(properties, key)) continue;
+    if (args.additionalKnownPaths?.has(serializePath([...basePath, key]))) continue;
     planned.push({
       key,
       path: [...basePath, key],
@@ -225,6 +351,7 @@ interface FieldArgs {
   required: boolean;
   mode: FormMode;
   platform?: Platform;
+  additionalKnownPaths?: ReadonlySet<string>;
   depth: number;
 }
 
@@ -278,6 +405,9 @@ function planField(args: FieldArgs): PlannedField {
       context,
       mode,
       ...(platform !== undefined ? { platform } : {}),
+      ...(args.additionalKnownPaths !== undefined
+        ? { additionalKnownPaths: args.additionalKnownPaths }
+        : {}),
       depth: args.depth + 1,
     });
   } else if (control === 'variant') {
@@ -348,6 +478,9 @@ function planVariantChildren(
     context: ctx.context,
     mode: ctx.mode,
     ...(ctx.platform !== undefined ? { platform: ctx.platform } : {}),
+    ...(args.additionalKnownPaths !== undefined
+      ? { additionalKnownPaths: args.additionalKnownPaths }
+      : {}),
     depth: args.depth + 1,
   });
   field.children = children.filter((child) => child.key !== analysis.discriminatorKey);
@@ -558,6 +691,10 @@ function flatten(fields: PlannedField[]): PlannedField[] {
     if (field.children) out.push(...flatten(field.children));
   }
   return out;
+}
+
+function serializePath(path: ConfigPath): string {
+  return JSON.stringify(path);
 }
 
 function readPath(value: unknown, path: ConfigPath): unknown {

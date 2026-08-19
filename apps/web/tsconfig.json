@@ -10,7 +10,11 @@
   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.json"],
   "references": [
     { "path": "../../packages/config-model" },
+    { "path": "../../packages/form-renderer" },
     { "path": "../../packages/project-format" },
+    { "path": "../../packages/schema-builtin" },
+    { "path": "../../packages/schema-core" },
+    { "path": "../../packages/schema-registry" },
     { "path": "../../packages/storage" },
     { "path": "../../packages/ui" },
     { "path": "../../packages/validator" },

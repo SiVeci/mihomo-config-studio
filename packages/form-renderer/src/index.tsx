@@ -1,4 +1,5 @@
 import {
+  buildArrayFormPlan,
   buildFormPlan,
   type FormMode,
   type FormPlan,
@@ -26,6 +27,13 @@ export interface SchemaFormProps {
   controls?: Record<string, ControlComponent>;
   /** Translate an i18n key. Defaults to echoing the key. */
   t?: (key: string) => string;
+  /**
+   * Paths this module's own plan must not flag `unknown` — a sibling module
+   * sharing this module's document root (v0.3.0 #14). Typically the whole
+   * registry's `computeKnownPaths` result; see that function's doc comment
+   * for why passing the full set is always safe.
+   */
+  additionalKnownPaths?: ReadonlySet<string>;
 }
 
 /**
@@ -43,6 +51,9 @@ export function SchemaForm(props: SchemaFormProps): JSX.Element {
   const plan: FormPlan = buildFormPlan(module, value, {
     mode: props.mode ?? 'basic',
     ...(props.platform !== undefined ? { platform: props.platform } : {}),
+    ...(props.additionalKnownPaths !== undefined
+      ? { additionalKnownPaths: props.additionalKnownPaths }
+      : {}),
   });
 
   return (
@@ -66,6 +77,47 @@ export function SchemaForm(props: SchemaFormProps): JSX.Element {
         );
       })}
     </form>
+  );
+}
+
+export interface SchemaArrayFormProps {
+  /** A module whose root addresses an array of discriminated-union elements (`isArrayEntryModule`) — `proxies`/`proxy-providers`. */
+  module: SchemaModule;
+  /** The whole Mihomo document; the module reads its own subtree. */
+  value: unknown;
+  mode?: FormMode;
+  platform?: Platform;
+  onChange: (path: ConfigPath, value: unknown) => void;
+  controls?: Record<string, ControlComponent>;
+  t?: (key: string) => string;
+}
+
+/**
+ * `SchemaForm`'s counterpart for a module whose root is an array of
+ * discriminated-union elements rather than a single object (v0.3.0 #9-#11,
+ * #14) — `buildFormPlan` cannot plan that shape end-to-end, so this renders
+ * `buildArrayFormPlan`'s one-`PlannedField`-per-element result instead, each
+ * in its own `<fieldset>`. No `additionalKnownPaths`: an array-entry
+ * module's root is never shared with another module.
+ */
+export function SchemaArrayForm(props: SchemaArrayFormProps): JSX.Element {
+  const { module, value, onChange } = props;
+  const translate = props.t ?? ((key: string) => key);
+  const controls = { ...DEFAULT_CONTROLS, ...props.controls };
+
+  const items = buildArrayFormPlan(module, value, {
+    mode: props.mode ?? 'basic',
+    ...(props.platform !== undefined ? { platform: props.platform } : {}),
+  });
+
+  return (
+    <div data-module={module.manifest.id} data-array-form="true">
+      {items.map((field, index) => (
+        <fieldset key={toPointer(field.path)} data-array-index={index}>
+          <FieldRow field={field} controls={controls} onChange={onChange} translate={translate} />
+        </fieldset>
+      ))}
+    </div>
   );
 }
 
@@ -94,9 +146,15 @@ function FieldRow({ field, controls, onChange, translate }: FieldRowProps): JSX.
     <>
       {translate(field.ui.label ?? field.schema.title ?? field.key)}
       {field.required ? <abbr title="required">*</abbr> : null}
-      {field.deprecated ? <span data-badge="deprecated">badge.deprecated</span> : null}
-      {field.ui.experimental ? <span data-badge="experimental">badge.experimental</span> : null}
-      {field.ui.safety === 'dangerous' ? <span data-badge="danger">badge.danger</span> : null}
+      {field.deprecated ? (
+        <span data-badge="deprecated">{translate('badge.deprecated')}</span>
+      ) : null}
+      {field.ui.experimental ? (
+        <span data-badge="experimental">{translate('badge.experimental')}</span>
+      ) : null}
+      {field.ui.safety === 'dangerous' ? (
+        <span data-badge="danger">{translate('badge.danger')}</span>
+      ) : null}
     </>
   );
 
@@ -128,7 +186,7 @@ function FieldRow({ field, controls, onChange, translate }: FieldRowProps): JSX.
       {field.ui.help ? <p data-help="true">{translate(field.ui.help)}</p> : null}
       {field.ui.docs ? (
         <a href={field.ui.docs} rel="noreferrer noopener" target="_blank">
-          link.officialDocs
+          {translate('link.officialDocs')}
         </a>
       ) : null}
 

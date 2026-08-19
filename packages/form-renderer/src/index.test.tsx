@@ -5,7 +5,7 @@ import type { ConfigPath } from '@mcs/yaml-engine';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { SchemaForm } from './index.js';
+import { SchemaArrayForm, SchemaForm } from './index.js';
 
 afterEach(cleanup);
 
@@ -109,6 +109,71 @@ describe('SchemaForm (FR-SCHEMA-01, FR-SCHEMA-05)', () => {
     const node = fieldNode('/sample/brand-new-flag');
     expect(node?.getAttribute('data-unknown')).toBe('true');
     expect(node?.textContent).toContain('42');
+  });
+});
+
+describe('non-colour badges (NFR-A11Y, v0.3.0 #14)', () => {
+  const BADGE_MODULE: SchemaModule = {
+    manifest: { id: 'badges', root: ['badges'], version: '1.0.0' },
+    schema: {
+      type: 'object',
+      properties: {
+        old: { type: 'string', deprecated: true },
+        beta: { type: 'string' },
+        risky: { type: 'string' },
+      },
+    },
+    ui: { fields: { beta: { experimental: true }, risky: { safety: 'dangerous' } } },
+  };
+
+  function translate(key: string): string {
+    return key === 'badge.deprecated'
+      ? '已废弃'
+      : key === 'badge.experimental'
+        ? '实验性'
+        : key === 'badge.danger'
+          ? '需谨慎'
+          : key;
+  }
+
+  it('renders real translated text for each badge, not just the data-badge attribute', () => {
+    render(
+      <SchemaForm
+        module={BADGE_MODULE}
+        value={{ badges: { old: 'x', beta: 'y', risky: 'z' } }}
+        mode="advanced"
+        onChange={vi.fn()}
+        t={translate}
+      />,
+    );
+
+    expect(document.querySelector('[data-badge="deprecated"]')?.textContent).toBe('已废弃');
+    expect(document.querySelector('[data-badge="experimental"]')?.textContent).toBe('实验性');
+    expect(document.querySelector('[data-badge="danger"]')?.textContent).toBe('需谨慎');
+  });
+
+  it('renders real translated text for the official-docs link too, not the raw i18n key', () => {
+    const docsModule: SchemaModule = {
+      manifest: { id: 'docs', root: ['docs'], version: '1.0.0' },
+      schema: { type: 'object', properties: { field: { type: 'string' } } },
+      ui: { fields: { field: { docs: 'https://example.com/docs' } } },
+    };
+    function translateDocs(key: string): string {
+      return key === 'link.officialDocs' ? '查看官方文档' : key;
+    }
+
+    render(
+      <SchemaForm
+        module={docsModule}
+        value={{ docs: { field: 'x' } }}
+        mode="advanced"
+        onChange={vi.fn()}
+        t={translateDocs}
+      />,
+    );
+
+    const link = fieldNode('/docs/field')?.querySelector('a[href="https://example.com/docs"]');
+    expect(link?.textContent).toBe('查看官方文档');
   });
 });
 
@@ -257,5 +322,120 @@ describe('variant control (FR-SCHEMA-02 rendering, E4)', () => {
     // No branch matched, so no children are planned — the raw value is not
     // decomposed into editable rows, but it is not lost either (see #0).
     expect(fieldNode('/sample/transport/mystery')).toBeNull();
+  });
+});
+
+// Two modules sharing a document root (`general`/`inbound`'s real shape),
+// mirroring `form-plan.test.ts`'s own fixture for the same scenario.
+const ALPHA_MODULE: SchemaModule = {
+  manifest: { id: 'alpha', root: [], version: '1.0.0' },
+  schema: { type: 'object', properties: { foo: { type: 'string' } } },
+  ui: {},
+};
+
+describe('SchemaForm additionalKnownPaths (FR-VAL-05, v0.3.0 #14)', () => {
+  it('without it, a sibling module’s own field renders as an unknown row', () => {
+    render(
+      <SchemaForm
+        module={ALPHA_MODULE}
+        value={{ foo: 'x', bar: 'y' }}
+        mode="advanced"
+        onChange={vi.fn()}
+      />,
+    );
+    expect(fieldNode('/bar')?.getAttribute('data-unknown')).toBe('true');
+  });
+
+  it('passing the sibling’s path in suppresses the unknown row entirely', () => {
+    render(
+      <SchemaForm
+        module={ALPHA_MODULE}
+        value={{ foo: 'x', bar: 'y' }}
+        mode="advanced"
+        onChange={vi.fn()}
+        additionalKnownPaths={new Set([JSON.stringify(['bar'])])}
+      />,
+    );
+    expect(fieldNode('/bar')).toBeNull();
+    expect(fieldNode('/foo')?.getAttribute('data-unknown')).toBeNull();
+  });
+});
+
+// A discriminated-union-of-array-elements module (`proxies`'/`proxy-providers`'
+// real shape), mirroring `form-plan.test.ts`'s own fixture for the same
+// scenario: the schema's own root is `oneOf`, `manifest.root` addresses an
+// array in the document.
+const ARRAY_MODULE: SchemaModule = {
+  manifest: { id: 'items', root: ['items'], version: '1.0.0' },
+  schema: {
+    $defs: {
+      shared: { type: 'object', properties: { label: { type: 'string' } } },
+      a: {
+        allOf: [
+          { $ref: '#/$defs/shared' },
+          { type: 'object', properties: { kind: { const: 'a' }, onlyA: { type: 'string' } } },
+        ],
+      },
+      b: {
+        allOf: [
+          { $ref: '#/$defs/shared' },
+          { type: 'object', properties: { kind: { const: 'b' }, onlyB: { type: 'string' } } },
+        ],
+      },
+    },
+    oneOf: [{ $ref: '#/$defs/a' }, { $ref: '#/$defs/b' }],
+  },
+  ui: { fields: { kind: { variantLabels: { a: 'variant.a', b: 'variant.b' } } } },
+};
+
+describe('SchemaArrayForm (FR-SCHEMA-01, v0.3.0 #14)', () => {
+  function renderArrayForm(overrides: Partial<Parameters<typeof SchemaArrayForm>[0]> = {}) {
+    const onChange = vi.fn<(path: ConfigPath, value: unknown) => void>();
+    render(
+      <SchemaArrayForm
+        module={ARRAY_MODULE}
+        value={{
+          items: [
+            { kind: 'a', label: 'first', onlyA: 'x' },
+            { kind: 'b', label: 'second', onlyB: 'y' },
+          ],
+        }}
+        mode="advanced"
+        onChange={onChange}
+        {...overrides}
+      />,
+    );
+    return onChange;
+  }
+
+  it('renders one discriminator select per array element, addressed by its own index', () => {
+    renderArrayForm();
+    expect(document.querySelectorAll('[data-array-index]')).toHaveLength(2);
+    expect(fieldNode('/items/0')?.querySelector('select[data-control="variant"]')).not.toBeNull();
+    expect(fieldNode('/items/1')?.querySelector('select[data-control="variant"]')).not.toBeNull();
+  });
+
+  it('each element renders its own matched branch fields, correctly addressed', () => {
+    renderArrayForm();
+    expect(fieldNode('/items/0/onlyA')).not.toBeNull();
+    expect(fieldNode('/items/0/onlyB')).toBeNull();
+    expect(fieldNode('/items/1/onlyB')).not.toBeNull();
+    expect(fieldNode('/items/1/onlyA')).toBeNull();
+  });
+
+  it('editing one element’s discriminator reports the change at that element’s own path, not another’s', () => {
+    const onChange = renderArrayForm();
+    const secondSelect = fieldNode('/items/1')?.querySelector(
+      'select[data-control="variant"]',
+    ) as HTMLSelectElement;
+
+    fireEvent.change(secondSelect, { target: { value: 'a' } });
+
+    expect(onChange).toHaveBeenCalledWith(['items', 1, 'kind'], 'a');
+  });
+
+  it('renders nothing when the module’s root is absent, without throwing', () => {
+    expect(() => renderArrayForm({ value: {} })).not.toThrow();
+    expect(document.querySelectorAll('[data-array-index]')).toHaveLength(0);
   });
 });

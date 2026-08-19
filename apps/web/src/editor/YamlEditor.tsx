@@ -20,8 +20,10 @@ export interface YamlEditorProps {
   readonly text: string;
   readonly onChange: (text: string) => void;
   readonly client: YamlEditorWorkerClient;
-  /** Reports the latest parse's issues upward — #14's IssuePanel is the consumer. */
+  /** Reports the latest parse's issues upward — the IssuePanel is the consumer. */
   readonly onIssuesChange?: (issues: ValidationIssue[]) => void;
+  /** Reports the latest parse's value upward — #14's ModuleFormPage stays in sync with every raw-text edit through this, without a second Worker round trip. */
+  readonly onValueChange?: (value: unknown) => void;
 }
 
 /** Imperative surface for #14's IssuePanel: jump the raw editor to an issue's range. */
@@ -47,7 +49,7 @@ function splitLines(text: string): string[] {
  * revisit, not a silent scope creep here.
  */
 export const YamlEditor = forwardRef<YamlEditorHandle, YamlEditorProps>(function YamlEditor(
-  { text, onChange, client, onIssuesChange },
+  { text, onChange, client, onIssuesChange, onValueChange },
   ref,
 ) {
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
@@ -68,6 +70,7 @@ export const YamlEditor = forwardRef<YamlEditorHandle, YamlEditorProps>(function
       void client.parse(text).then((response) => {
         setIssues(response.issues);
         onIssuesChange?.(response.issues);
+        onValueChange?.(response.value);
       });
     }, VALIDATION_DEBOUNCE_MS);
     return () => clearTimeout(timeoutId);

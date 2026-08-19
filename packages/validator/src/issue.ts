@@ -20,17 +20,24 @@ export const KERNEL_MODULES = ['yaml', 'schema', 'reference', 'security'] as con
 export type KernelModule = (typeof KERNEL_MODULES)[number];
 
 /**
- * A declarative patch suggestion, never anything executable (ADR-002,
- * FR-UPD-07). `value` may only be a Schema-declared constant — the field's
- * `default`, one of its `enum` options, or its `const` — and must never echo
- * back the value that failed validation (NFR-SEC-03). For `rename`, `value`
- * carries the proposed key name instead of a scalar value.
+ * A declarative patch, never anything executable (ADR-002, FR-UPD-07).
+ *
+ * `set-scalar`/`remove`/`rename`/`append` are validator-suggested fixes:
+ * `value` may only be a Schema-declared constant — the field's `default`,
+ * one of its `enum` options, or its `const` — and must never echo back the
+ * value that failed validation (NFR-SEC-03); for `rename`, `value` carries
+ * the proposed key name instead.
+ *
+ * `set` is different: a direct, user-driven write for a non-scalar field
+ * (`tags`/`key-value`/`list`/`object` controls — v0.3.0 #14's form editing),
+ * applied via `MihomoYamlDocument.setIn` rather than `setScalarIn`. There is
+ * no NFR-SEC-03 concern here — the user is choosing this value themselves,
+ * not being shown a system-derived suggestion — so `value` is unrestricted
+ * rather than limited to a Schema constant.
  */
-export interface IssueFix {
-  kind: 'set-scalar' | 'remove' | 'rename' | 'append';
-  path: ConfigPath;
-  value?: JsonPrimitive;
-}
+export type IssueFix =
+  | { kind: 'set-scalar' | 'remove' | 'rename' | 'append'; path: ConfigPath; value?: JsonPrimitive }
+  | { kind: 'set'; path: ConfigPath; value?: unknown };
 
 /**
  * The single issue shape the UI consumes, unifying `YamlIssue` (syntax layer)

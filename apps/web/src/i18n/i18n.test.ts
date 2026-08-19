@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import en from './en.json';
 import zhCN from './zh-CN.json';
-import { getLocale, setLocale, t } from './index.js';
+import { getLocale, setLocale, t, translateModuleAware } from './index.js';
 import type { TranslationKey } from './index.js';
 
 afterEach(() => {
@@ -64,5 +64,37 @@ describe('t() / setLocale() / getLocale()', () => {
   it('falls back to the key itself for a key present in neither locale (defensive: should not happen given the parity test above)', () => {
     const bogusKey = 'this.key.does.not.exist' as TranslationKey;
     expect(t(bogusKey)).toBe(bogusKey);
+  });
+});
+
+describe('translateModuleAware() (v0.3.0 #14)', () => {
+  it('prefers a Schema module’s own i18n entry over the app’s own resources', () => {
+    expect(translateModuleAware('field.mode', { 'field.mode': '模式（来自模块）' })).toBe(
+      '模式（来自模块）',
+    );
+  });
+
+  it('falls back to the app’s own t() when the module has no entry for the key', () => {
+    expect(translateModuleAware('group.unknown', { 'field.mode': 'x' })).toBe(
+      t('group.unknown' as TranslationKey),
+    );
+  });
+
+  it('falls back to the app’s own t() when moduleI18n is undefined', () => {
+    expect(translateModuleAware('group.unknown', undefined)).toBe(
+      t('group.unknown' as TranslationKey),
+    );
+  });
+
+  it('falls back all the way to the raw key when neither has it', () => {
+    expect(translateModuleAware('totally.unregistered.key', undefined)).toBe(
+      'totally.unregistered.key',
+    );
+  });
+
+  it('substitutes a {param} placeholder in a module-sourced string too', () => {
+    expect(translateModuleAware('field.count', { 'field.count': '共 {n} 项' }, { n: 3 })).toBe(
+      '共 3 项',
+    );
   });
 });

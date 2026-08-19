@@ -18,11 +18,40 @@ function parsed(text: string = SAMPLE): WorkerState {
 }
 
 describe('handleWorkerRequest / parse', () => {
-  it('returns no issues for syntactically valid input', () => {
+  it('returns no syntax issues and the freshly parsed value for syntactically valid input', () => {
     const state = createWorkerState();
     const response = handleWorkerRequest(state, { type: 'parse', requestId: 'r1', text: SAMPLE });
 
-    expect(response).toEqual({ type: 'parse', requestId: 'r1', issues: [] });
+    if (response.type !== 'parse') throw new Error('unreachable');
+    // Not `issues: []`: real Schema modules are resolved into every pipeline
+    // call now (v0.3.0 #14), and `rules` belongs to no P0 module's schema —
+    // `schemaStage` correctly flags it `unknown-field` (info, non-blocking).
+    // This test's own job is syntax cleanliness; the dedicated test below
+    // covers the real-module wiring this response now reflects.
+    expect(response.issues.some((issue) => issue.module === 'yaml')).toBe(false);
+    expect(response.value).toEqual({
+      mode: 'rule',
+      port: 7890,
+      hosts: { 'example.com': '1.2.3.4' },
+      rules: ['DOMAIN,example.com,DIRECT'],
+    });
+  });
+
+  it('flags a field no installed P0 module describes as an info-severity unknown-field (FR-VAL-05, v0.3.0 #14)', () => {
+    const state = createWorkerState();
+    const response = handleWorkerRequest(state, { type: 'parse', requestId: 'r1', text: SAMPLE });
+
+    if (response.type !== 'parse') throw new Error('unreachable');
+    expect(response.issues).toContainEqual(
+      expect.objectContaining({
+        severity: 'info',
+        code: 'unknown-field',
+        module: 'schema',
+        blocking: false,
+        path: ['rules', 0],
+      }),
+    );
+    expect(response.issues.every((issue) => issue.blocking === false)).toBe(true);
   });
 
   it('surfaces a blocking syntax issue for invalid input', () => {
@@ -62,11 +91,16 @@ describe('handleWorkerRequest / validate', () => {
     });
   });
 
-  it('re-runs the pipeline against the currently held document', () => {
+  it('re-runs the pipeline against the currently held document, real modules included', () => {
     const state = parsed();
     const response = handleWorkerRequest(state, { type: 'validate', requestId: 'r1' });
 
-    expect(response).toEqual({ type: 'validate', requestId: 'r1', issues: [] });
+    // Same `rules` unknown-field as the parse test above — `validate` re-runs
+    // the identical pipeline against the document `parse` already composed.
+    if (response.type !== 'validate') throw new Error('unreachable');
+    expect(response.issues).toContainEqual(
+      expect.objectContaining({ code: 'unknown-field', module: 'schema', path: ['rules', 0] }),
+    );
   });
 });
 
@@ -182,6 +216,77 @@ describe('handleWorkerRequest / applyPatch', () => {
       code: 'YAML_PATH_NOT_FOUND',
       messageKey: 'worker.error.YAML_PATH_NOT_FOUND',
     });
+  });
+
+  it('set writes a non-scalar value — an array — unlike set-scalar (v0.3.0 #14 form editing)', () => {
+    const state = parsed();
+    const patch: IssueFix = { kind: 'set', path: ['hosts'], value: { 'b.example.com': '5.6.7.8' } };
+
+    const response = handleWorkerRequest(state, { type: 'applyPatch', requestId: 'r1', patch });
+    expect(response).toEqual({ type: 'applyPatch', requestId: 'r1' });
+
+    const serialized = handleWorkerRequest(state, { type: 'serialize', requestId: 'r2' });
+    if (serialized.type !== 'serialize') throw new Error('unreachable');
+    expect(serialized.text).toContain('b.example.com: 5.6.7.8');
+    expect(serialized.text).not.toContain('example.com: 1.2.3.4');
+  });
+
+  it('set without a value is rejected rather than silently ignored', () => {
+    const state = parsed();
+    const patch: IssueFix = { kind: 'set', path: ['hosts'] };
+
+    const response = handleWorkerRequest(state, { type: 'applyPatch', requestId: 'r1', patch });
+
+    expect(response).toEqual({
+      type: 'error',
+      requestId: 'r1',
+      code: 'YAML_INVALID_OPERATION',
+      messageKey: 'worker.error.YAML_INVALID_OPERATION',
+      path: ['hosts'],
+    });
+  });
+});
+
+describe('handleWorkerRequest / value', () => {
+  it('reports NO_DOCUMENT before any successful parse', () => {
+    const state = createWorkerState();
+    const response = handleWorkerRequest(state, { type: 'value', requestId: 'r1' });
+
+    expect(response).toEqual({
+      type: 'error',
+      requestId: 'r1',
+      code: 'NO_DOCUMENT',
+      messageKey: 'worker.error.noDocument',
+    });
+  });
+
+  it('returns the currently held document as plain JS', () => {
+    const state = parsed();
+    const response = handleWorkerRequest(state, { type: 'value', requestId: 'r1' });
+
+    expect(response).toEqual({
+      type: 'value',
+      requestId: 'r1',
+      value: {
+        mode: 'rule',
+        port: 7890,
+        hosts: { 'example.com': '1.2.3.4' },
+        rules: ['DOMAIN,example.com,DIRECT'],
+      },
+    });
+  });
+
+  it('reflects a write made through applyPatch, not a stale snapshot', () => {
+    const state = parsed();
+    handleWorkerRequest(state, {
+      type: 'applyPatch',
+      requestId: 'r1',
+      patch: { kind: 'set-scalar', path: ['port'], value: 7891 },
+    });
+
+    const response = handleWorkerRequest(state, { type: 'value', requestId: 'r2' });
+    if (response.type !== 'value') throw new Error('unreachable');
+    expect(response.value).toMatchObject({ port: 7891 });
   });
 });
 

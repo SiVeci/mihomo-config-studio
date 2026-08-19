@@ -1,3 +1,5 @@
+import type { SchemaModule } from '@mcs/schema-core';
+import { builtinAsStoredBundle, createRegistry } from '@mcs/schema-registry';
 import type { IssueFix, ValidationIssue } from '@mcs/validator';
 import { runPipeline } from '@mcs/validator';
 import type {
@@ -16,6 +18,17 @@ import { diffLines, MihomoYamlDocument, YamlEngineError } from '@mcs/yaml-engine
  * runtime imports above reach the main-thread bundle — see the structural
  * test in `client.test.ts`.
  */
+
+/**
+ * Resolved once per Worker instance (v0.3.0 has no Bundle-install UI, so the
+ * built-in bundle is the only one that can ever be active — see
+ * `builtinAsStoredBundle`'s own doc comment) and fed into every
+ * `runPipeline` call below. Without this, `schemaStage`/`securityStage`
+ * (v0.3.0 #12/#13) never fire outside their own package's tests: the
+ * pipeline needs `PipelineContext.modules` to do anything beyond the syntax
+ * stage.
+ */
+const RESOLVED_MODULES: readonly SchemaModule[] = createRegistry(builtinAsStoredBundle()).modules();
 
 export type { IssueFix, ValidationIssue } from '@mcs/validator';
 export type {
@@ -58,6 +71,11 @@ export interface LocateRequest {
   requestId: string;
   path: ConfigPath;
 }
+/** The document's current value as plain JS, for #14's form renderer — the main thread never parses YAML itself. */
+export interface ValueRequest {
+  type: 'value';
+  requestId: string;
+}
 
 export type WorkerRequest =
   | ParseRequest
@@ -65,12 +83,15 @@ export type WorkerRequest =
   | ValidateRequest
   | DiffRequest
   | SerializeRequest
-  | LocateRequest;
+  | LocateRequest
+  | ValueRequest;
 
 export interface ParseResponse {
   type: 'parse';
   requestId: string;
   issues: ValidationIssue[];
+  /** The freshly parsed document as plain JS — #14's form renderer stays in sync with every text edit without a second round trip. */
+  value: unknown;
 }
 export interface ApplyPatchResponse {
   type: 'applyPatch';
@@ -97,6 +118,11 @@ export interface LocateResponse {
   requestId: string;
   range: TextRange | null;
 }
+export interface ValueResponse {
+  type: 'value';
+  requestId: string;
+  value: unknown;
+}
 /** NFR-SEC-03: never carries configuration values — only a stable code, an i18n key, and a path. */
 export interface WorkerErrorResponse {
   type: 'error';
@@ -113,6 +139,7 @@ export type WorkerResponse =
   | DiffResponse
   | SerializeResponse
   | LocateResponse
+  | ValueResponse
   | WorkerErrorResponse;
 
 /** The Worker's own state: the document produced by the most recent `parse`. */
@@ -143,6 +170,8 @@ export function handleWorkerRequest(state: WorkerState, request: WorkerRequest):
       return handleSerialize(state, request);
     case 'locate':
       return handleLocate(state, request);
+    case 'value':
+      return handleValue(state, request);
   }
 }
 
@@ -152,7 +181,8 @@ function handleParse(state: WorkerState, request: ParseRequest): ParseResponse {
   return {
     type: 'parse',
     requestId: request.requestId,
-    issues: runPipeline({ parse: parseResult }),
+    issues: runPipeline({ parse: parseResult, modules: RESOLVED_MODULES }),
+    value: parseResult.document?.toJS() ?? null,
   };
 }
 
@@ -178,7 +208,7 @@ function handleValidate(
   return {
     type: 'validate',
     requestId: request.requestId,
-    issues: runPipeline({ parse: state.parseResult }),
+    issues: runPipeline({ parse: state.parseResult, modules: RESOLVED_MODULES }),
   };
 }
 
@@ -212,6 +242,15 @@ function handleLocate(
   const document = state.parseResult?.document;
   if (!document) return noDocumentError(request.requestId);
   return { type: 'locate', requestId: request.requestId, range: document.locate(request.path) };
+}
+
+function handleValue(
+  state: WorkerState,
+  request: ValueRequest,
+): ValueResponse | WorkerErrorResponse {
+  const document = state.parseResult?.document;
+  if (!document) return noDocumentError(request.requestId);
+  return { type: 'value', requestId: request.requestId, value: document.toJS() };
 }
 
 function applyIssueFix(document: MihomoYamlDocument, patch: IssueFix): void {
@@ -250,6 +289,16 @@ function applyIssueFix(document: MihomoYamlDocument, patch: IssueFix): void {
     }
     case 'append':
       document.appendIn(patch.path, patch.value);
+      return;
+    case 'set':
+      if (patch.value === undefined) {
+        throw new YamlEngineError(
+          'YAML_INVALID_OPERATION',
+          'A set patch requires a value.',
+          patch.path,
+        );
+      }
+      document.setIn(patch.path, patch.value);
       return;
   }
 }

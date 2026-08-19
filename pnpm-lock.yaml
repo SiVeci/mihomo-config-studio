@@ -78,9 +78,21 @@ importers:
       '@mcs/config-model':
         specifier: workspace:*
         version: link:../../packages/config-model
+      '@mcs/form-renderer':
+        specifier: workspace:*
+        version: link:../../packages/form-renderer
       '@mcs/project-format':
         specifier: workspace:*
         version: link:../../packages/project-format
+      '@mcs/schema-builtin':
+        specifier: workspace:*
+        version: link:../../packages/schema-builtin
+      '@mcs/schema-core':
+        specifier: workspace:*
+        version: link:../../packages/schema-core
+      '@mcs/schema-registry':
+        specifier: workspace:*
+        version: link:../../packages/schema-registry
       '@mcs/storage':
         specifier: workspace:*
         version: link:../../packages/storage

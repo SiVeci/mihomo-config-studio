@@ -31,7 +31,12 @@ function makeClient(issues: ValidationIssue[] = []): YamlEditorWorkerClient & {
   serialize: ReturnType<typeof vi.fn>;
 } {
   return {
-    parse: vi.fn(async (_text: string) => ({ type: 'parse' as const, requestId: 'x', issues })),
+    parse: vi.fn(async (_text: string) => ({
+      type: 'parse' as const,
+      requestId: 'x',
+      issues,
+      value: {},
+    })),
     serialize: vi.fn(async () => ({
       type: 'serialize' as const,
       requestId: 'x',
@@ -142,6 +147,29 @@ describe('YamlEditor / debounced parse (NFR-PERF-03)', () => {
     await advanceDebounce(300);
 
     expect(onIssuesChange).toHaveBeenCalledWith([BLOCKING_ISSUE]);
+  });
+
+  it('reports the parsed value upward via onValueChange (v0.3.0 #14)', async () => {
+    const onValueChange = vi.fn();
+    const client = makeClient();
+    client.parse.mockResolvedValue({
+      type: 'parse',
+      requestId: 'x',
+      issues: [],
+      value: { mode: 'rule' },
+    });
+    render(
+      <YamlEditor
+        text={'mode: rule\n'}
+        onChange={vi.fn()}
+        client={client}
+        onValueChange={onValueChange}
+      />,
+    );
+
+    await advanceDebounce(300);
+
+    expect(onValueChange).toHaveBeenCalledWith({ mode: 'rule' });
   });
 });
 

@@ -61,8 +61,10 @@ describe('v0.2.0 closed loop: import -> edit -> diff -> export, no Schema module
 
     fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
     await screen.findByLabelText(t('project.nameLabel'));
-    // No Schema module exists anywhere in this loop — the structured view
-    // stays in its permanent "not available yet" placeholder throughout.
+    // `YamlEditor`'s own structured-view fieldset (distinct from
+    // `ModuleFormPage`, rendered as its own section below it since v0.3.0
+    // #14) is not wired to any real module and keeps its permanent
+    // "not available yet" placeholder throughout this loop.
     expect(screen.getByText(t('editor.structuredViewPlaceholder'))).toBeDefined();
 
     // 1. Import: paste YAML text (FR-YAML-01).

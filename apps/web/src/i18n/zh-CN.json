@@ -66,5 +66,21 @@
   "export.sensitivity.subscriptionUrl": "订阅地址",
   "export.sensitivity.password": "密码类字段",
   "export.sensitivity.uuid": "UUID",
-  "export.sensitivity.privateKey": "证书私钥"
+  "export.sensitivity.privateKey": "证书私钥",
+  "group.general": "常规",
+  "group.unknown": "未识别字段",
+  "badge.deprecated": "已废弃",
+  "badge.experimental": "实验性",
+  "badge.danger": "需谨慎",
+  "link.officialDocs": "查看官方文档",
+  "form.modeLabel": "显示模式",
+  "form.modeBasicOption": "基础",
+  "form.modeAdvancedOption": "高级",
+  "form.emptyState": "表单尚未就绪",
+  "form.module.general": "常规设置",
+  "form.module.dns": "DNS",
+  "form.module.sniffer": "域名嗅探",
+  "form.module.inbound": "入站与 TUN",
+  "form.module.proxies": "代理节点",
+  "form.module.proxy-providers": "代理订阅"
 }

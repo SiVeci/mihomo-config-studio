@@ -1,0 +1,49 @@
+.module-form-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mcs-spacing-md);
+}
+
+.module-form-page__empty {
+  color: var(--mcs-color-text-muted);
+  font-size: var(--mcs-font-size-body-sm);
+}
+
+.module-form-page__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--mcs-spacing-xs);
+}
+
+.module-form-page__mode-label {
+  font-size: var(--mcs-font-size-caption);
+  color: var(--mcs-color-text-muted);
+}
+
+.module-form-page__mode-select {
+  border: 1px solid var(--mcs-color-hairline);
+  border-radius: var(--mcs-rounded-xs);
+  padding: var(--mcs-spacing-xxs) var(--mcs-spacing-xs);
+}
+
+.module-form-page__module-title {
+  font-family: var(--mcs-font-family-title-sm);
+  font-size: var(--mcs-font-size-title-sm);
+  margin: 0 0 var(--mcs-spacing-xs);
+}
+
+/*
+ * Deprecated/experimental/dangerous field badges (NFR-A11Y): text carries
+ * the meaning (see form-renderer's translate() wiring), this border+tint
+ * treatment is a supplementary visual cue only, never the sole signal.
+ */
+[data-badge] {
+  display: inline-block;
+  margin-inline-start: var(--mcs-spacing-xxs);
+  padding: 0 var(--mcs-spacing-xxs);
+  border: 1px solid var(--mcs-color-text-warning);
+  border-radius: var(--mcs-rounded-xs);
+  background-color: var(--mcs-color-warning-tint);
+  color: var(--mcs-color-text-warning);
+  font-size: var(--mcs-font-size-caption);
+}

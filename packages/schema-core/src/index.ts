@@ -1,7 +1,13 @@
 export { ConditionError, evaluateCondition, resolve } from './condition.js';
 export type { ConditionContext } from './condition.js';
 export { checkFormat, isRiskyPattern } from './formats.js';
-export { buildFormPlan, inferControl } from './form-plan.js';
+export {
+  buildArrayFormPlan,
+  buildFormPlan,
+  computeKnownPaths,
+  inferControl,
+  isArrayEntryModule,
+} from './form-plan.js';
 export { validateModuleShape } from './module.js';
 export type { ModuleShapeIssue } from './module.js';
 export { evaluateRules } from './rules.js';

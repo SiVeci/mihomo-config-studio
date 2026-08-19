@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildFormPlan, inferControl, type PlannedField } from './form-plan.js';
+import {
+  buildArrayFormPlan,
+  buildFormPlan,
+  computeKnownPaths,
+  inferControl,
+  isArrayEntryModule,
+  type PlannedField,
+} from './form-plan.js';
 import { sampleModule } from './testing/sample-module.js';
 import type { JsonSchema, SchemaModule } from './types.js';
 
@@ -444,5 +451,160 @@ describe('discriminated union planning (FR-SCHEMA-02, E4)', () => {
     expect(mystery.control).toBe('unknown');
     expect(mystery.unknownReason).toBe('variant-no-discriminator');
     expect(mystery.value).toEqual({ x: 'hi' });
+  });
+});
+
+// Two modules sharing a document root (`general`/`inbound`'s real shape,
+// v0.3.0 #8/#14) — each declares one property of a shared, flat root object.
+const ALPHA_MODULE: SchemaModule = {
+  manifest: { id: 'alpha', root: [], version: '1.0.0' },
+  schema: { type: 'object', properties: { foo: { type: 'string' } } },
+  ui: {},
+};
+const BETA_MODULE: SchemaModule = {
+  manifest: { id: 'beta', root: [], version: '1.0.0' },
+  schema: { type: 'object', properties: { bar: { type: 'string' } } },
+  ui: {},
+};
+const SHARED_ROOT_DOCUMENT = { foo: 'x', bar: 'y' };
+
+describe('additionalKnownPaths / computeKnownPaths (FR-VAL-05, v0.3.0 #14)', () => {
+  it('without additionalKnownPaths, a module flags a sibling module’s own field as unknown', () => {
+    const plan = buildFormPlan(ALPHA_MODULE, SHARED_ROOT_DOCUMENT, { mode: 'advanced' });
+    expect(plan.unknownFields.map((field) => field.key)).toEqual(['bar']);
+  });
+
+  it('computeKnownPaths unions every given module’s own declared paths', () => {
+    const known = computeKnownPaths([ALPHA_MODULE, BETA_MODULE], SHARED_ROOT_DOCUMENT, {
+      mode: 'advanced',
+    });
+    expect(known.has(JSON.stringify(['foo']))).toBe(true);
+    expect(known.has(JSON.stringify(['bar']))).toBe(true);
+  });
+
+  it('passing computeKnownPaths back in suppresses the sibling’s field from unknownFields, in both directions', () => {
+    const known = computeKnownPaths([ALPHA_MODULE, BETA_MODULE], SHARED_ROOT_DOCUMENT, {
+      mode: 'advanced',
+    });
+
+    const alphaPlan = buildFormPlan(ALPHA_MODULE, SHARED_ROOT_DOCUMENT, {
+      mode: 'advanced',
+      additionalKnownPaths: known,
+    });
+    expect(alphaPlan.unknownFields).toEqual([]);
+    expect(find(alphaPlan.fields, 'foo').unknown).toBe(false);
+
+    const betaPlan = buildFormPlan(BETA_MODULE, SHARED_ROOT_DOCUMENT, {
+      mode: 'advanced',
+      additionalKnownPaths: known,
+    });
+    expect(betaPlan.unknownFields).toEqual([]);
+  });
+
+  it('a genuinely unrecognised field is still flagged unknown even with additionalKnownPaths passed', () => {
+    const known = computeKnownPaths([ALPHA_MODULE, BETA_MODULE], SHARED_ROOT_DOCUMENT, {
+      mode: 'advanced',
+    });
+    const plan = buildFormPlan(
+      ALPHA_MODULE,
+      { ...SHARED_ROOT_DOCUMENT, mystery: 1 },
+      { mode: 'advanced', additionalKnownPaths: known },
+    );
+    expect(plan.unknownFields.map((field) => field.key)).toEqual(['mystery']);
+  });
+});
+
+// A discriminated-union-of-array-elements module (`proxies`'/`proxy-providers`'
+// real shape, v0.3.0 #9-#11): the schema's own root is `oneOf`, no `type`/
+// `properties`, and `manifest.root` addresses an array in the document.
+const ARRAY_ENTRY_MODULE: SchemaModule = {
+  manifest: { id: 'items', root: ['items'], version: '1.0.0' },
+  schema: {
+    $defs: {
+      shared: { type: 'object', properties: { label: { type: 'string' } } },
+      a: {
+        allOf: [
+          { $ref: '#/$defs/shared' },
+          { type: 'object', properties: { kind: { const: 'a' }, onlyA: { type: 'integer' } } },
+        ],
+      },
+      b: {
+        allOf: [
+          { $ref: '#/$defs/shared' },
+          { type: 'object', properties: { kind: { const: 'b' }, onlyB: { type: 'integer' } } },
+        ],
+      },
+    },
+    oneOf: [{ $ref: '#/$defs/a' }, { $ref: '#/$defs/b' }],
+  },
+  ui: {},
+};
+
+describe('isArrayEntryModule (v0.3.0 #14)', () => {
+  it('is true for a module whose root schema is oneOf with no type/properties', () => {
+    expect(isArrayEntryModule(ARRAY_ENTRY_MODULE)).toBe(true);
+  });
+
+  it('is false for an ordinary object-rooted module, including one with its own oneOf field', () => {
+    expect(isArrayEntryModule(sampleModule)).toBe(false);
+    expect(isArrayEntryModule(ALPHA_MODULE)).toBe(false);
+  });
+});
+
+describe('buildArrayFormPlan (FR-SCHEMA-01, v0.3.0 #14)', () => {
+  const DOC = {
+    items: [
+      { kind: 'a', label: 'first', onlyA: 1 },
+      { kind: 'b', label: 'second', onlyB: 2 },
+    ],
+  };
+
+  it('plans one field per array element, addressed by its real absolute path', () => {
+    const fields = buildArrayFormPlan(ARRAY_ENTRY_MODULE, DOC, { mode: 'advanced' });
+    expect(fields).toHaveLength(2);
+    expect(fields[0]?.path).toEqual(['items', 0]);
+    expect(fields[1]?.path).toEqual(['items', 1]);
+  });
+
+  it('each element is a discriminated variant with the matched branch’s own fields as children, correctly addressed', () => {
+    const fields = buildArrayFormPlan(ARRAY_ENTRY_MODULE, DOC, { mode: 'advanced' });
+    const first = fields[0]!;
+    expect(first.control).toBe('variant');
+    expect(first.variant).toMatchObject({ discriminatorKey: 'kind', selected: 'a', matched: true });
+    expect(first.variant?.discriminatorPath).toEqual(['items', 0, 'kind']);
+    const onlyA = first.children?.find((child) => child.key === 'onlyA');
+    expect(onlyA).toMatchObject({ path: ['items', 0, 'onlyA'], value: 1 });
+    const label = first.children?.find((child) => child.key === 'label');
+    expect(label).toMatchObject({ path: ['items', 0, 'label'], value: 'first' });
+
+    const second = fields[1]!;
+    expect(second.variant).toMatchObject({
+      discriminatorKey: 'kind',
+      selected: 'b',
+      matched: true,
+    });
+    const onlyB = second.children?.find((child) => child.key === 'onlyB');
+    expect(onlyB).toMatchObject({ path: ['items', 1, 'onlyB'], value: 2 });
+  });
+
+  it('never deletes an element that does not match any branch — kept, unmatched, its raw value intact', () => {
+    const fields = buildArrayFormPlan(
+      ARRAY_ENTRY_MODULE,
+      { items: [{ kind: 'unrecognised-protocol', label: 'x' }] },
+      { mode: 'advanced' },
+    );
+    expect(fields).toHaveLength(1);
+    expect(fields[0]).toMatchObject({
+      path: ['items', 0],
+      control: 'variant',
+      variant: { matched: false, selected: 'unrecognised-protocol' },
+    });
+  });
+
+  it('returns an empty array when the module’s root is absent or not an array, without throwing', () => {
+    expect(buildArrayFormPlan(ARRAY_ENTRY_MODULE, {}, { mode: 'advanced' })).toEqual([]);
+    expect(
+      buildArrayFormPlan(ARRAY_ENTRY_MODULE, { items: 'not-an-array' }, { mode: 'advanced' }),
+    ).toEqual([]);
   });
 });
