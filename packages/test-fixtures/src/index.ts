@@ -18,3 +18,6 @@ export function listFixtures(relativeDir: string): string[] {
 
 export { generateLargeCorpus } from './generate-large.js';
 export type { LargeCorpusOptions } from './generate-large.js';
+
+export { P0_MODULE_IDS, P0_PROTOCOLS, UPSTREAM_P0_FIELDS, UPSTREAM_SOURCE } from './upstream.js';
+export type { P0ModuleId, P0Protocol, UpstreamFieldRecord } from './upstream.js';
