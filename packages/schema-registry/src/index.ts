@@ -7,6 +7,13 @@ export {
 } from './builtin.js';
 export type { BuiltinBundle } from './builtin.js';
 export { isBundleManifest, validateBundleManifest } from './manifest.js';
+export { createRegistry } from './registry.js';
+export type {
+  CreateRegistryOptions,
+  RegistryIssue,
+  RegistryIssueCode,
+  SchemaRegistry,
+} from './registry.js';
 export type {
   BundleChannel,
   BundleFileEntry,
