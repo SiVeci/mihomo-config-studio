@@ -1,69 +1,52 @@
+import { BUILTIN_MODULE_FILES, GENERAL_MODULE } from '@mcs/schema-builtin';
 import type { SchemaModule } from '@mcs/schema-core';
 
 import type { BundleManifest } from './manifest.js';
 
 /**
- * A deliberately minimal skeleton so the app has something to render fully
- * offline (FR-UPD-01) before any Bundle is ever downloaded. Real module
- * content — the full set of Mihomo sections — lands in v0.3.0.
+ * Real module content lives in `@mcs/schema-builtin`, assembled from the
+ * same on-disk JSON layout `schema-cli pack` will eventually sign and ship
+ * (ADR-020). This file's only job is turning that content into a *signed*
+ * `BundleManifest` — the module source itself is not this package's
+ * concern, and `schema-registry` intentionally does not know how a module
+ * is built, only how to verify and serve one.
  */
 export const BUILTIN_MODULE_PATH = 'modules/general.json';
-
-export const BUILTIN_MODULE: SchemaModule = {
-  manifest: {
-    id: 'general',
-    root: ['general'],
-    version: '0.0.1',
-  },
-  schema: {
-    type: 'object',
-    properties: {
-      mode: { type: 'string', enum: ['rule', 'global', 'direct'], default: 'rule' },
-      'log-level': {
-        type: 'string',
-        enum: ['silent', 'error', 'warning', 'info', 'debug'],
-        default: 'info',
-      },
-    },
-  },
-  ui: {
-    fields: {
-      mode: { label: 'field.mode' },
-      'log-level': { label: 'field.log-level' },
-    },
-  },
-};
+export const BUILTIN_MODULE: SchemaModule = GENERAL_MODULE;
 
 /**
- * The file hash below is `sha256(JSON.stringify(BUILTIN_MODULE))`, and the
- * signature below is a real Ed25519 signature (verifiable with
- * `verifyBundle`) over `canonicalManifestJson` of this manifest. Both were
- * computed once offline with a key pair generated solely to bootstrap this
- * built-in bundle — that private key was discarded immediately after
- * signing and is not, and has never been, stored anywhere. This is a
- * bootstrap trust anchor, not the production signing key described in
- * ADR-010 §2/§3 (GitHub Environment secret, `[current, next]` rotation):
- * `tools/schema-cli` (#10) must re-issue this file against the real key
- * custody workflow before any Bundle-update feature ships to users.
+ * The file hash(es) below are `sha256(JSON.stringify(<module>))` for each
+ * entry in `files`, and the signature is a real Ed25519 signature
+ * (verifiable with `verifyBundle`) over `canonicalManifestJson` of this
+ * manifest. Both were computed once offline with a key pair generated
+ * solely to bootstrap this built-in bundle — that private key was
+ * discarded immediately after signing and is not, and has never been,
+ * stored anywhere. This is a bootstrap trust anchor, not the production
+ * signing key described in ADR-010 §2/§3 (GitHub Environment secret,
+ * `[current, next]` rotation): `tools/schema-cli` must re-issue this file
+ * against the real key custody workflow before any Bundle-update feature
+ * ships to users (v0.5.0). v0.3.0 #6 re-issued this bootstrap signature
+ * because `general`'s real content replaced the placeholder module from
+ * v0.1.0 #8 — every subsequent module slice (#7-#11) must do the same.
  */
 export const BUILTIN_TRUST_ANCHOR_PUBLIC_KEY_HEX =
-  'ca775982bb6802381ab5ea899becdc94c7c96c0b931dd6d4be6f209d618a0337';
+  '84c6f68ca044832402739d1def4a2bfac3810fd005c962668dd413859b0e842c';
 
 export const BUILTIN_MANIFEST: BundleManifest = {
   bundleId: 'builtin',
-  version: '0.0.0',
+  version: '0.3.0',
   channel: 'stable',
   formatVersion: 1,
   requiresApp: '0.1.0',
   files: [
     {
       path: BUILTIN_MODULE_PATH,
-      sha256: 'de0acbf300c4a039bb0fb8e499232e120ded5d2148e1528db7d4159526d522d0',
+      sha256: '772f2ac6136e0e5f2c9cbf6e445ea75360e958f536a9f63b28b972ca5bccb45f',
     },
   ],
   signature:
-    'e3f00ba63bb1bbea1b28bb5b1f4f1a36cb93bce31a8943c61f83fe436f9364ceea90603fb9c00e19dd1459e228aa1f5c04fcae98a76b2318da273c1988388508',
-  signedAt: '2026-08-12T00:00:00Z',
+    '8ac06191e9767487cb7bb2dc7d399fecce438266550a679b9179e89882f301f8a0b4f46d04491dcf00e00182464e389f814ccbcc25118b8046dd5b283561af09',
+  signedAt: '2026-08-19T00:00:00Z',
 };
 
 export interface BuiltinBundle {
@@ -73,5 +56,5 @@ export interface BuiltinBundle {
 
 export const BUILTIN_BUNDLE: BuiltinBundle = {
   manifest: BUILTIN_MANIFEST,
-  modules: { [BUILTIN_MODULE_PATH]: BUILTIN_MODULE },
+  modules: BUILTIN_MODULE_FILES,
 };

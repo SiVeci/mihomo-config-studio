@@ -24,6 +24,7 @@
 | [ADR-017](./ADR-017-text-bearing-color-layer.md)            | 文字承载色层：覆盖 canvas 与 surface-card 两个底色  | Accepted | v0.2.0 骨架     |
 | [ADR-018](./ADR-018-mcsproj-container.md)                   | `.mcsproj` 容器格式：零依赖手写 ZIP，确定性字节输出 | Accepted | v0.2.0 骨架     |
 | [ADR-019](./ADR-019-discriminated-union-control.md)         | 判别式联合的 `variant` 控件                         | Accepted | v0.3.0 先决项 1 |
+| [ADR-020](./ADR-020-builtin-bundle-layout-and-reissue.md)   | 内置 Bundle 的磁盘布局与再签发口径                  | Accepted | v0.3.0 切片 #6  |
 
 ADR-001 至 ADR-005 直接来自 PRD §17，本仓库补全其背景与工程约束。
 ADR-006 起为实施阶段新增的决策。

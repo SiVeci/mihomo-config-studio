@@ -1,0 +1,184 @@
+{
+  "groups": [
+    { "id": "general", "label": "group.general", "order": 0 },
+    { "id": "lan", "label": "group.lan", "order": 10 },
+    { "id": "controller", "label": "group.controller", "order": 20, "advanced": true },
+    { "id": "profile", "label": "group.profile", "order": 30, "advanced": true },
+    { "id": "geo", "label": "group.geo", "order": 40, "advanced": true },
+    { "id": "connection", "label": "group.connection", "order": 50, "advanced": true }
+  ],
+  "fields": {
+    "mode": {
+      "label": "field.mode",
+      "group": "general",
+      "order": 1,
+      "docs": "https://wiki.metacubex.one/config/general/",
+      "safety": "safe"
+    },
+    "log-level": {
+      "label": "field.log-level",
+      "group": "general",
+      "order": 2,
+      "docs": "https://wiki.metacubex.one/config/general/",
+      "safety": "safe"
+    },
+    "ipv6": {
+      "label": "field.ipv6",
+      "group": "general",
+      "order": 3,
+      "docs": "https://wiki.metacubex.one/config/general/",
+      "safety": "safe"
+    },
+    "find-process-mode": {
+      "label": "field.find-process-mode",
+      "help": "help.find-process-mode",
+      "group": "general",
+      "order": 4,
+      "docs": "https://wiki.metacubex.one/config/general/",
+      "safety": "safe"
+    },
+    "allow-lan": {
+      "label": "field.allow-lan",
+      "help": "help.allow-lan",
+      "group": "lan",
+      "order": 1,
+      "docs": "https://wiki.metacubex.one/config/general/",
+      "safety": "caution"
+    },
+    "bind-address": {
+      "label": "field.bind-address",
+      "group": "lan",
+      "order": 2,
+      "docs": "https://wiki.metacubex.one/config/general/",
+      "safety": "caution",
+      "visibleWhen": { "op": "eq", "path": "allow-lan", "value": true },
+      "requiredWhen": { "op": "eq", "path": "allow-lan", "value": true }
+    },
+    "authentication": {
+      "label": "field.authentication",
+      "help": "help.authentication",
+      "group": "lan",
+      "order": 3,
+      "docs": "https://wiki.metacubex.one/config/general/",
+      "safety": "safe"
+    },
+    "skip-auth-prefixes": {
+      "label": "field.skip-auth-prefixes",
+      "group": "lan",
+      "order": 4,
+      "docs": "https://wiki.metacubex.one/config/general/",
+      "safety": "safe"
+    },
+    "lan-allowed-ips": {
+      "label": "field.lan-allowed-ips",
+      "group": "lan",
+      "order": 5,
+      "docs": "https://wiki.metacubex.one/config/general/",
+      "safety": "safe"
+    },
+    "lan-disallowed-ips": {
+      "label": "field.lan-disallowed-ips",
+      "group": "lan",
+      "order": 6,
+      "docs": "https://wiki.metacubex.one/config/general/",
+      "safety": "safe"
+    },
+    "external-controller": {
+      "label": "field.external-controller",
+      "help": "help.external-controller",
+      "group": "controller",
+      "order": 1,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/general/",
+      "safety": "caution"
+    },
+    "external-controller-tls": {
+      "label": "field.external-controller-tls",
+      "group": "controller",
+      "order": 2,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/general/",
+      "safety": "caution"
+    },
+    "secret": {
+      "label": "field.secret",
+      "help": "help.secret",
+      "group": "controller",
+      "order": 3,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/general/",
+      "safety": "caution"
+    },
+    "profile": {
+      "label": "field.profile",
+      "group": "profile",
+      "order": 1,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/general/",
+      "safety": "safe",
+      "fields": {
+        "store-selected": {
+          "label": "field.profile.store-selected",
+          "docs": "https://wiki.metacubex.one/config/general/",
+          "safety": "safe"
+        },
+        "store-fake-ip": {
+          "label": "field.profile.store-fake-ip",
+          "docs": "https://wiki.metacubex.one/config/general/",
+          "safety": "safe"
+        }
+      }
+    },
+    "geox-url": {
+      "label": "field.geox-url",
+      "group": "geo",
+      "order": 1,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/general/",
+      "safety": "safe",
+      "fields": {
+        "geoip": {
+          "label": "field.geox-url.geoip",
+          "docs": "https://wiki.metacubex.one/config/general/",
+          "safety": "safe"
+        },
+        "geosite": {
+          "label": "field.geox-url.geosite",
+          "docs": "https://wiki.metacubex.one/config/general/",
+          "safety": "safe"
+        },
+        "mmdb": {
+          "label": "field.geox-url.mmdb",
+          "docs": "https://wiki.metacubex.one/config/general/",
+          "safety": "safe"
+        }
+      }
+    },
+    "geo-auto-update": {
+      "label": "field.geo-auto-update",
+      "group": "geo",
+      "order": 2,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/general/",
+      "safety": "safe"
+    },
+    "geo-update-interval": {
+      "label": "field.geo-update-interval",
+      "group": "geo",
+      "order": 3,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/general/",
+      "safety": "safe",
+      "visibleWhen": { "op": "eq", "path": "geo-auto-update", "value": true }
+    },
+    "tcp-concurrent": {
+      "label": "field.tcp-concurrent",
+      "help": "help.tcp-concurrent",
+      "group": "connection",
+      "order": 1,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/general/",
+      "safety": "safe"
+    }
+  }
+}

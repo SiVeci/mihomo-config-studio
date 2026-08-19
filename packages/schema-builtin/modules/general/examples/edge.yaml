@@ -1,0 +1,11 @@
+# Boundary values that are schema-valid but sit at the edge of their range:
+# - "geo-update-interval" at its declared minimum (1)
+# - empty arrays where the schema only requires an array of strings
+# - the widest possible LAN prefixes (IPv4 and IPv6 "any" CIDR)
+mode: direct
+bind-address: "*"
+authentication: []
+lan-allowed-ips:
+  - 0.0.0.0/0
+  - "::/0"
+geo-update-interval: 1

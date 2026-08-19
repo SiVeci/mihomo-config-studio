@@ -148,6 +148,19 @@ importers:
         specifier: workspace:*
         version: link:../test-fixtures
 
+  packages/schema-builtin:
+    dependencies:
+      '@mcs/schema-core':
+        specifier: workspace:*
+        version: link:../schema-core
+    devDependencies:
+      '@mcs/test-fixtures':
+        specifier: workspace:*
+        version: link:../test-fixtures
+      '@mcs/yaml-engine':
+        specifier: workspace:*
+        version: link:../yaml-engine
+
   packages/schema-core:
     dependencies:
       '@mcs/yaml-engine':
@@ -156,6 +169,9 @@ importers:
 
   packages/schema-registry:
     dependencies:
+      '@mcs/schema-builtin':
+        specifier: workspace:*
+        version: link:../schema-builtin
       '@mcs/schema-core':
         specifier: workspace:*
         version: link:../schema-core

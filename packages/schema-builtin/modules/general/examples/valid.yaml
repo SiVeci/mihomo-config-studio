@@ -1,0 +1,20 @@
+mode: rule
+log-level: info
+ipv6: true
+find-process-mode: strict
+allow-lan: true
+bind-address: "*"
+authentication:
+  - "username:password"
+external-controller: 0.0.0.0:9093
+secret: "change-me"
+profile:
+  store-selected: true
+  store-fake-ip: true
+geox-url:
+  geoip: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat"
+  geosite: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat"
+  mmdb: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb"
+geo-auto-update: false
+geo-update-interval: 24
+tcp-concurrent: true

@@ -46,7 +46,7 @@ packages/
   yaml-engine/         AST 解析、局部修改、序列化、差异        ✅ M0 已验证
   schema-core/         JSON Schema、UI Schema 和类型          ✅ M0 已验证
   schema-registry/     模块发现、依赖解析和版本选择           ✅ M0 已验证
-  schema-builtin/      随应用发布的默认 Bundle                🚧 规划中（v0.3.0 #6 落地）
+  schema-builtin/      随应用发布的默认 Bundle                ✅ 磁盘 JSON 布局 + general 模块（v0.3.0 #6）
   form-renderer/       Schema 驱动表单与控件映射              ✅ M0 已验证
   validator/           语法、结构、语义、引用和安全检查        ✅ 骨架 + 流水线 + 1MB 导入基准（v0.2.0 #1-2、#16）
   migration/           声明式迁移计划与预览                    🚧 规划中（v0.5.0）

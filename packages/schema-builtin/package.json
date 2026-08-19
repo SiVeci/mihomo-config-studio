@@ -1,0 +1,17 @@
+{
+  "name": "@mcs/schema-builtin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The built-in, offline-capable Schema Bundle compiled into the app (FR-UPD-01, ADR-020).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@mcs/schema-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@mcs/test-fixtures": "workspace:*",
+    "@mcs/yaml-engine": "workspace:*"
+  }
+}

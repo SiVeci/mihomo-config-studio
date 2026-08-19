@@ -7,8 +7,8 @@
   },
   "include": ["src/**/*.ts"],
   "references": [
-    { "path": "../schema-builtin" },
     { "path": "../schema-core" },
-    { "path": "../storage" }
+    { "path": "../test-fixtures" },
+    { "path": "../yaml-engine" }
   ]
 }

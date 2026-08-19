@@ -1,0 +1,5 @@
+# "brand-new-mihomo-flag" is not declared anywhere in config.schema.json —
+# it must survive round-tripping and surface as an unknown field, not be
+# dropped or rejected (FR-YAML-02, FR-VAL-05).
+mode: rule
+brand-new-mihomo-flag: 42

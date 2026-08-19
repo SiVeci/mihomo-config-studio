@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "mode": {
+      "type": "string",
+      "enum": ["rule", "global", "direct"],
+      "default": "rule"
+    },
+    "log-level": {
+      "type": "string",
+      "enum": ["silent", "error", "warning", "info", "debug"],
+      "default": "info"
+    },
+    "ipv6": {
+      "type": "boolean",
+      "default": false
+    },
+    "allow-lan": {
+      "type": "boolean",
+      "default": false
+    },
+    "bind-address": {
+      "type": "string",
+      "default": "*"
+    },
+    "authentication": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "skip-auth-prefixes": {
+      "type": "array",
+      "items": { "type": "string", "format": "ip-cidr" }
+    },
+    "lan-allowed-ips": {
+      "type": "array",
+      "items": { "type": "string", "format": "ip-cidr" }
+    },
+    "lan-disallowed-ips": {
+      "type": "array",
+      "items": { "type": "string", "format": "ip-cidr" }
+    },
+    "external-controller": {
+      "type": "string",
+      "format": "host-port"
+    },
+    "external-controller-tls": {
+      "type": "string",
+      "format": "host-port"
+    },
+    "secret": {
+      "type": "string"
+    },
+    "profile": {
+      "type": "object",
+      "properties": {
+        "store-selected": { "type": "boolean", "default": false },
+        "store-fake-ip": { "type": "boolean", "default": false }
+      }
+    },
+    "geox-url": {
+      "type": "object",
+      "properties": {
+        "geoip": { "type": "string", "format": "uri" },
+        "geosite": { "type": "string", "format": "uri" },
+        "mmdb": { "type": "string", "format": "uri" }
+      }
+    },
+    "geo-auto-update": {
+      "type": "boolean",
+      "default": false
+    },
+    "geo-update-interval": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 24
+    },
+    "find-process-mode": {
+      "type": "string",
+      "enum": ["always", "strict", "off"],
+      "default": "strict"
+    },
+    "tcp-concurrent": {
+      "type": "boolean",
+      "default": false
+    }
+  }
+}

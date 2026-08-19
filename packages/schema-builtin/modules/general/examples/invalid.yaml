@@ -1,0 +1,7 @@
+# Violates config.schema.json in three independent ways:
+# - "mode" is not one of the enum values (rule/global/direct)
+# - "log-level" is not one of the enum values (silent/error/warning/info/debug)
+# - "geo-update-interval" is below its declared minimum (1)
+mode: turbo
+log-level: verbose
+geo-update-interval: -5
