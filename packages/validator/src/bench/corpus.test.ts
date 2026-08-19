@@ -21,7 +21,13 @@ describe('generateLargeCorpus (bench input sanity)', () => {
     const parseResult = MihomoYamlDocument.parse(corpus);
     const issues = runPipeline({ parse: parseResult });
 
-    expect(issues).toEqual([]);
+    // Not `toEqual([])`: the corpus deliberately includes realistic-but-risky
+    // defaults (`allow-lan: true` + wildcard `bind-address`, an
+    // `external-controller` with no `secret`) to be a representative sample
+    // — v0.3.0 #13's securityStage correctly flags those as non-blocking
+    // warnings. What this benchmark-sanity check actually needs is exactly
+    // what its name says: no syntax issues, nothing blocking.
+    expect(issues.some((issue) => issue.module === 'yaml')).toBe(false);
     expect(hasBlockingIssues(issues)).toBe(false);
   });
 

@@ -16,6 +16,7 @@ import {
 } from './pipeline.js';
 import type { PipelineContext, ValidationStage } from './pipeline.js';
 import type { ValidationIssue } from './issue.js';
+import { SECURITY_STAGE_ID, securityStage } from './security.js';
 
 /**
  * `createRegistry` takes a `StoredBundle` (serialised module bytes, the
@@ -179,9 +180,13 @@ describe('runPipeline', () => {
     expect(runPipeline(ctx)).toEqual([]);
   });
 
-  it('defaults to [syntaxStage, schemaStage] in that order', () => {
-    expect(DEFAULT_STAGES).toEqual([syntaxStage, schemaStage]);
-    expect(DEFAULT_STAGES.map((stage) => stage.id)).toEqual([SYNTAX_STAGE_ID, SCHEMA_STAGE_ID]);
+  it('defaults to [syntaxStage, schemaStage, securityStage] in that order', () => {
+    expect(DEFAULT_STAGES).toEqual([syntaxStage, schemaStage, securityStage]);
+    expect(DEFAULT_STAGES.map((stage) => stage.id)).toEqual([
+      SYNTAX_STAGE_ID,
+      SCHEMA_STAGE_ID,
+      SECURITY_STAGE_ID,
+    ]);
   });
 
   it('short-circuits after a blocking syntax issue, skipping every later stage entirely', () => {

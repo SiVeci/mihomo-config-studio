@@ -3,6 +3,7 @@ import type { ConfigPath, ParseResult } from '@mcs/yaml-engine';
 
 import { fromRuleIssue, fromSchemaIssue, fromYamlIssue } from './issue.js';
 import type { ValidationIssue } from './issue.js';
+import { securityStage } from './security.js';
 
 /** The context every stage runs against. Grows as later stages need more (v0.3.0+). */
 export interface PipelineContext {
@@ -23,9 +24,8 @@ export interface PipelineContext {
 
 /**
  * One pluggable step in the validation pipeline. Stages are data, not
- * hardcoded branches: `reference` (v0.4.0) and `security` (v0.3.0) register
- * here later without this file changing shape — the interface is fixed as of
- * v0.2.0.
+ * hardcoded branches: `reference` (v0.4.0) registers here later without this
+ * file changing shape — the interface is fixed as of v0.2.0.
  */
 export interface ValidationStage {
   id: string;
@@ -34,7 +34,6 @@ export interface ValidationStage {
 
 /** The pipeline short-circuits after this stage if it produced a blocking issue. */
 export const SYNTAX_STAGE_ID = 'syntax';
-/** No module is resolved into this stage yet; see `schemaStage`. */
 export const SCHEMA_STAGE_ID = 'schema';
 
 export const syntaxStage: ValidationStage = {
@@ -119,7 +118,7 @@ function serializePath(path: ConfigPath): string {
   return JSON.stringify(path);
 }
 
-export const DEFAULT_STAGES: readonly ValidationStage[] = [syntaxStage, schemaStage];
+export const DEFAULT_STAGES: readonly ValidationStage[] = [syntaxStage, schemaStage, securityStage];
 
 /**
  * Run every stage in order and concatenate their issues, short-circuiting
