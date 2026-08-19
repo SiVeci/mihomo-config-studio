@@ -28,11 +28,12 @@ export const BUILTIN_MODULE: SchemaModule = GENERAL_MODULE;
  * ships to users (v0.5.0). v0.3.0 #6 re-issued this bootstrap signature
  * because `general`'s real content replaced the placeholder module from
  * v0.1.0 #8; #7 added `modules/dns.json` and a `general` `hosts` field;
- * #8 added `modules/sniffer.json` and `modules/inbound.json` — every
- * subsequent module slice (#9-#11) must do the same.
+ * #8 added `modules/sniffer.json` and `modules/inbound.json`; #9 added
+ * `modules/proxies.json` — every subsequent module slice (#10-#11) must do
+ * the same.
  */
 export const BUILTIN_TRUST_ANCHOR_PUBLIC_KEY_HEX =
-  'bc096a49ebd078cd28481cef5ddb141280dd817393739bfc583803ee4f7951ed';
+  '4a133e0071a105b9975a25d2208e85dd8483f6df5e51dc10023c6ae02ff4e49b';
 
 export const BUILTIN_MANIFEST: BundleManifest = {
   bundleId: 'builtin',
@@ -54,12 +55,16 @@ export const BUILTIN_MANIFEST: BundleManifest = {
       sha256: '529d1b156059ee610b1aef6afe3787dabec325662e6ed3bffec29a3977d57672',
     },
     {
+      path: 'modules/proxies.json',
+      sha256: '84c44d6882cecdb4b7e68426c7af39e47a2ce2b15cbe5de257c720722097ea47',
+    },
+    {
       path: 'modules/sniffer.json',
       sha256: '9baf3d27faadc058f96b7569303ba8175a25bf47eccc196d0417fcdc533e692c',
     },
   ],
   signature:
-    '44572b755992b37279221dda75ebd9f50ee3aa5d9c29d5519d9e05051d90287abee95696e77a50a1574b06732d58067cab36d20e32151784ccbcdb60c6688f03',
+    '6cbb54efd7bfa3884ff6a254e831c18719c622aa35e3f7f36b867f767486ee863ddfab161e73a3584985b71d77733a4748036b3011ea208ed0e3e32785b45303',
   signedAt: '2026-08-19T00:00:00Z',
 };
 

@@ -26,6 +26,12 @@ import inboundZhCN from '../modules/inbound/i18n/zh-CN.json';
 import inboundManifest from '../modules/inbound/module.manifest.json';
 import inboundUiSchema from '../modules/inbound/ui.schema.json';
 import inboundRules from '../modules/inbound/validation.rules.json';
+import proxiesConfigSchema from '../modules/proxies/config.schema.json';
+import proxiesEn from '../modules/proxies/i18n/en.json';
+import proxiesZhCN from '../modules/proxies/i18n/zh-CN.json';
+import proxiesManifest from '../modules/proxies/module.manifest.json';
+import proxiesUiSchema from '../modules/proxies/ui.schema.json';
+import proxiesRules from '../modules/proxies/validation.rules.json';
 import snifferConfigSchema from '../modules/sniffer/config.schema.json';
 import snifferEn from '../modules/sniffer/i18n/en.json';
 import snifferZhCN from '../modules/sniffer/i18n/zh-CN.json';
@@ -110,10 +116,39 @@ export const INBOUND_MODULE: SchemaModule = {
   i18n: { 'zh-CN': inboundZhCN, en: inboundEn } as ModuleI18n,
 };
 
+const PROXIES_EXAMPLES: ModuleExample[] = [
+  { name: 'valid', kind: 'valid', path: 'examples/valid.yaml' },
+  { name: 'invalid', kind: 'invalid', path: 'examples/invalid.yaml' },
+  { name: 'edge', kind: 'edge', path: 'examples/edge.yaml' },
+  { name: 'unknown-fields', kind: 'unknown-fields', path: 'examples/unknown-fields.yaml' },
+];
+
+/**
+ * Unlike every other module here, `config.schema.json` describes ONE
+ * `proxies[]` array element (the `oneOf` discriminated union itself, at the
+ * schema's own root) rather than the array — `buildFormPlan` only detects a
+ * union on a *named field* (`planField`'s job), never at the root a module
+ * plans directly, and modelling a fake wrapper key just to fit that would
+ * make this module's schema stop matching what a real element looks like on
+ * disk. `manifest.root: ['proxies']` still records the document path this
+ * module owns; turning "one element's plan" into "N rendered forms with
+ * `proxies.<i>.` prefixed paths" is left to whichever slice actually
+ * iterates the array (#14), same as the `general`/`inbound` shared-root gap.
+ */
+export const PROXIES_MODULE: SchemaModule = {
+  manifest: proxiesManifest as ModuleManifest,
+  schema: proxiesConfigSchema as JsonSchema,
+  ui: proxiesUiSchema as UiSchema,
+  rules: proxiesRules as ValidationRule[],
+  examples: PROXIES_EXAMPLES,
+  i18n: { 'zh-CN': proxiesZhCN, en: proxiesEn } as ModuleI18n,
+};
+
 /** Every module this package currently ships, keyed by the bundle file path `schema-registry`'s `StoredBundle.files` will use. */
 export const BUILTIN_MODULE_FILES: Readonly<Record<string, SchemaModule>> = {
   'modules/general.json': GENERAL_MODULE,
   'modules/dns.json': DNS_MODULE,
   'modules/sniffer.json': SNIFFER_MODULE,
   'modules/inbound.json': INBOUND_MODULE,
+  'modules/proxies.json': PROXIES_MODULE,
 };

@@ -1,0 +1,9 @@
+# Violates config.schema.json in two independent ways:
+# - "port" is not a valid port number (string, out of range)
+# - the ss branch requires "password", which is missing here — so no branch
+#   in the oneOf matches at all
+name: broken
+type: ss
+server: server
+port: not-a-port
+cipher: chacha20-ietf-poly1305

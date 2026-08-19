@@ -1,0 +1,9 @@
+{
+  "id": "proxies",
+  "root": ["proxies"],
+  "version": "1.0.0",
+  "mihomo": {
+    "minVersion": "1.19.29",
+    "maxTestedVersion": "1.19.29"
+  }
+}

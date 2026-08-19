@@ -14,7 +14,13 @@ import { UPSTREAM_P0_FIELDS, type P0ModuleId } from '@mcs/test-fixtures';
 import { MihomoYamlDocument } from '@mcs/yaml-engine';
 import { describe, expect, it } from 'vitest';
 
-import { DNS_MODULE, GENERAL_MODULE, INBOUND_MODULE, SNIFFER_MODULE } from './index.js';
+import {
+  DNS_MODULE,
+  GENERAL_MODULE,
+  INBOUND_MODULE,
+  PROXIES_MODULE,
+  SNIFFER_MODULE,
+} from './index.js';
 
 const MODULES_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', 'modules');
 
@@ -60,6 +66,71 @@ function collectSchemaPaths(schema: JsonSchema, prefix = ''): string[] {
     }
   }
   return paths;
+}
+
+/**
+ * `proxies` has no top-level `.properties` — the discriminated union sits at
+ * the schema's own root (`$defs` + `oneOf`), not on a named field, so
+ * `collectSchemaPaths` (which only ever walks `.properties`) sees nothing.
+ * Walks the same `_shared.<key>` / `<protocol>.<key>` naming
+ * `UPSTREAM_P0_FIELDS.proxies` already uses (frozen in v0.3.0 #3), reading
+ * `$defs` directly: this module's own `$ref` shape is simple and fully known
+ * here (a branch ref, then that def's own `allOf: [sharedRef, ownProperties]`).
+ */
+function collectProxyFieldPaths(schema: JsonSchema): Set<string> {
+  const defs = schema.$defs ?? {};
+  const paths = new Set<string>();
+
+  for (const key of Object.keys(defs.shared?.properties ?? {})) {
+    paths.add(`_shared.${key}`);
+  }
+
+  for (const branchRef of schema.oneOf ?? []) {
+    const refName = branchRef.$ref?.replace('#/$defs/', '');
+    if (!refName) continue;
+    const ownSchema = defs[refName]?.allOf?.find((member) => member.$ref === undefined);
+    for (const key of Object.keys(ownSchema?.properties ?? {})) {
+      // The discriminator is declared per-branch (each branch needs its own
+      // `const`) but is conceptually shared — `UPSTREAM_P0_FIELDS` files it
+      // under `_shared.type`, not `<protocol>.type`.
+      paths.add(key === 'type' ? '_shared.type' : `${refName}.${key}`);
+    }
+  }
+
+  return paths;
+}
+
+/**
+ * `buildFormPlan` only detects a `oneOf`/`anyOf` union when it sits on a
+ * *named field* inside an object (`planField`'s job) — never at a schema's
+ * own root (`planObject` only ever walks `.properties`). A real `proxies[]`
+ * element has no wrapping key of its own (an entry IS `{name, type, server,
+ * ...}` directly), and baking a fake wrapper into `config.schema.json` just
+ * to satisfy today's planner would make this module's stored schema stop
+ * matching what a real element looks like on disk — so the wrapping happens
+ * only here, for this proof, never in the stored module. This is the same
+ * synthetic-harness technique `form-plan.test.ts`'s `variantModule` uses,
+ * pointed at `PROXIES_MODULE`'s real `$defs`/`oneOf` instead of a made-up
+ * one. A real per-item renderer (#14) will need the same wrap-then-reprefix
+ * step to turn "one array element" into "one rendered form".
+ */
+function planOneProxy(value: unknown, schema: JsonSchema = PROXIES_MODULE.schema) {
+  const probeModule: SchemaModule = {
+    manifest: { id: 'proxies-item-probe', root: [], version: '1.0.0' },
+    schema: {
+      type: 'object',
+      properties: { item: { ...(schema.oneOf !== undefined ? { oneOf: schema.oneOf } : {}) } },
+      ...(schema.$defs !== undefined ? { $defs: schema.$defs } : {}),
+    },
+    ui: {
+      fields: {
+        item: {
+          ...(PROXIES_MODULE.ui.fields !== undefined ? { fields: PROXIES_MODULE.ui.fields } : {}),
+        },
+      },
+    },
+  };
+  return buildFormPlan(probeModule, { item: value }, { mode: 'advanced' });
 }
 
 /**
@@ -234,5 +305,188 @@ describe('inbound module specifics', () => {
     expect(INBOUND_MODULE.ui.fields?.port?.safety).toBe('caution');
     expect(INBOUND_MODULE.ui.fields?.['socks-port']?.safety).toBe('caution');
     expect(INBOUND_MODULE.ui.fields?.['mixed-port']?.safety).toBe('caution');
+  });
+});
+
+describe('proxies module (v0.3.0 #9 — discriminated-union skeleton + http/socks5/ss/trojan)', () => {
+  it('has no shape issues (rules/examples/i18n)', () => {
+    expect(validateModuleShape(PROXIES_MODULE)).toEqual([]);
+  });
+
+  it('declares exactly the P0 fields UPSTREAM_P0_FIELDS lists for http/socks5/ss/trojan — no more, no less (the other five protocols are #10)', () => {
+    const declared = collectProxyFieldPaths(PROXIES_MODULE.schema);
+    const scopedUpstream = new Set(
+      UPSTREAM_P0_FIELDS.proxies
+        .map((record) => record.path)
+        .filter((path) => /^(_shared|http|socks5|ss|trojan)\./.test(path)),
+    );
+
+    const declaredNotUpstream = [...declared].filter((path) => !scopedUpstream.has(path));
+    const upstreamNotDeclared = [...scopedUpstream].filter((path) => !declared.has(path));
+
+    expect(declaredNotUpstream).toEqual([]);
+    expect(upstreamNotDeclared).toEqual([]);
+  });
+
+  it('gives every declared field a UI entry with docs + safety metadata', () => {
+    const missing: string[] = [];
+    for (const path of collectProxyFieldPaths(PROXIES_MODULE.schema)) {
+      const bareKey = path.split('.').at(-1) ?? path;
+      const spec = PROXIES_MODULE.ui.fields?.[bareKey];
+      if (!spec?.docs || !spec.safety) missing.push(path);
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it('lists all four example kinds with a path that exists on disk', () => {
+    const kinds = PROXIES_MODULE.examples?.map((example) => example.kind).sort();
+    expect(kinds).toEqual(['edge', 'invalid', 'unknown-fields', 'valid']);
+    for (const example of PROXIES_MODULE.examples ?? []) {
+      expect(() => readExample(PROXIES_MODULE, example.path)).not.toThrow();
+    }
+  });
+
+  it('valid.yaml and edge.yaml have no schema violations', () => {
+    for (const kind of ['valid', 'edge'] as const) {
+      const example = PROXIES_MODULE.examples?.find((candidate) => candidate.kind === kind);
+      if (!example) throw new Error(`no ${kind} example declared`);
+      const value = parseExample(PROXIES_MODULE, example.path);
+      expect(validateValue(value, PROXIES_MODULE.schema), example.path).toEqual([]);
+    }
+  });
+
+  it('invalid.yaml has at least one schema violation', () => {
+    const value = parseExample(PROXIES_MODULE, 'examples/invalid.yaml');
+    expect(validateValue(value, PROXIES_MODULE.schema).length).toBeGreaterThan(0);
+  });
+
+  it('every docs URL is on the official wiki domain and carries no query string (NFR-SEC-03 boundary)', () => {
+    const offenders: string[] = [];
+    for (const [key, spec] of Object.entries(PROXIES_MODULE.ui.fields ?? {})) {
+      if (!spec.docs) continue;
+      const url = new URL(spec.docs);
+      const onOfficialDomain = url.hostname === 'wiki.metacubex.one';
+      const hasNoQuery = url.search === '';
+      if (!onOfficialDomain || !hasNoQuery) offenders.push(key);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('unknown-fields.yaml plans its undeclared field as unknown instead of dropping it', () => {
+    const value = parseExample(PROXIES_MODULE, 'examples/unknown-fields.yaml');
+    const plan = planOneProxy(value);
+    const item = plan.fields.find((field) => field.key === 'item');
+    expect(item?.children?.some((child) => child.unknown)).toBe(true);
+    expect(plan.unknownFields.length).toBeGreaterThan(0);
+  });
+
+  it('plans each of the four real protocols as a variant, discriminated on "type", with that protocol\'s own fields as children', () => {
+    const cases: Array<{ value: Record<string, unknown>; protocol: string; ownField: string }> = [
+      {
+        value: { name: 'http1', type: 'http', server: 's', port: 1, username: 'u', password: 'p' },
+        protocol: 'http',
+        ownField: 'username',
+      },
+      {
+        value: { name: 'socks1', type: 'socks5', server: 's', port: 1, tls: true },
+        protocol: 'socks5',
+        ownField: 'tls',
+      },
+      {
+        value: {
+          name: 'ss1',
+          type: 'ss',
+          server: 's',
+          port: 1,
+          cipher: 'aes-128-gcm',
+          password: 'p',
+        },
+        protocol: 'ss',
+        ownField: 'cipher',
+      },
+      {
+        value: {
+          name: 'trojan1',
+          type: 'trojan',
+          server: 's',
+          port: 1,
+          password: 'p',
+          network: 'grpc',
+        },
+        protocol: 'trojan',
+        ownField: 'network',
+      },
+    ];
+
+    for (const { value, protocol, ownField } of cases) {
+      const plan = planOneProxy(value);
+      const item = plan.fields.find((field) => field.key === 'item');
+      expect(item?.control, protocol).toBe('variant');
+      expect(item?.variant, protocol).toMatchObject({
+        discriminatorKey: 'type',
+        selected: protocol,
+        matched: true,
+      });
+      expect(
+        item?.children?.some((child) => child.key === ownField),
+        protocol,
+      ).toBe(true);
+      // The discriminator itself is represented by `variant`, never duplicated as a child row.
+      expect(
+        item?.children?.some((child) => child.key === 'type'),
+        protocol,
+      ).toBe(false);
+    }
+  });
+
+  it('masks password as a secret control on every protocol that carries one, with no explicit UI override (NFR-SEC-02)', () => {
+    expect(PROXIES_MODULE.ui.fields?.password?.control).toBeUndefined();
+
+    const withPassword = [
+      { name: 'http1', type: 'http', server: 's', port: 1, password: 'hunter2' },
+      { name: 'socks1', type: 'socks5', server: 's', port: 1, password: 'hunter2' },
+      { name: 'ss1', type: 'ss', server: 's', port: 1, cipher: 'aes-128-gcm', password: 'hunter2' },
+      { name: 'trojan1', type: 'trojan', server: 's', port: 1, password: 'hunter2' },
+    ];
+    for (const value of withPassword) {
+      const plan = planOneProxy(value);
+      const item = plan.fields.find((field) => field.key === 'item');
+      const password = item?.children?.find((child) => child.key === 'password');
+      expect(password?.control, String(value.type)).toBe('secret');
+    }
+  });
+
+  it('adding a fifth protocol branch needs no change outside config.schema.json/ui.schema.json — the same probe harness plans it immediately (FR-SCHEMA-06 applied to unions, real-field proof ahead of #10)', () => {
+    const extendedSchema: JsonSchema = {
+      ...PROXIES_MODULE.schema,
+      $defs: {
+        ...PROXIES_MODULE.schema.$defs,
+        vmess: {
+          allOf: [
+            { $ref: '#/$defs/shared' },
+            {
+              type: 'object',
+              properties: { type: { const: 'vmess' }, uuid: { type: 'string' } },
+              required: ['type', 'uuid'],
+            },
+          ],
+        },
+      },
+      oneOf: [...(PROXIES_MODULE.schema.oneOf ?? []), { $ref: '#/$defs/vmess' }],
+    };
+
+    const plan = planOneProxy(
+      { name: 'v1', type: 'vmess', server: 's', port: 1, uuid: 'abc-123-def' },
+      extendedSchema,
+    );
+    const item = plan.fields.find((field) => field.key === 'item');
+    expect(item?.variant).toMatchObject({ selected: 'vmess', matched: true });
+    const uuid = item?.children?.find((child) => child.key === 'uuid');
+    expect(uuid?.value).toBe('abc-123-def');
+    // NFR-SEC-02 holds on the brand-new branch too, for free — `uuid` is in
+    // SENSITIVE_KEY regardless of which branch declares it, and no code
+    // anywhere (not here, not form-renderer, not apps/web) had to change to
+    // get this: only `extendedSchema`'s data changed.
+    expect(uuid?.control).toBe('secret');
   });
 });

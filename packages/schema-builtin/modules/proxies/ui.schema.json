@@ -1,0 +1,139 @@
+{
+  "groups": [
+    { "id": "general", "label": "group.general", "order": 0 },
+    { "id": "auth", "label": "group.auth", "order": 10 },
+    { "id": "tls", "label": "group.tls", "order": 20, "advanced": true },
+    { "id": "ss", "label": "group.ss", "order": 30, "advanced": true },
+    { "id": "trojan", "label": "group.trojan", "order": 40, "advanced": true }
+  ],
+  "fields": {
+    "name": {
+      "label": "field.name",
+      "group": "general",
+      "order": 1,
+      "docs": "https://wiki.metacubex.one/config/proxies/",
+      "safety": "safe"
+    },
+    "type": {
+      "label": "field.type",
+      "help": "help.type",
+      "group": "general",
+      "order": 2,
+      "docs": "https://wiki.metacubex.one/config/proxies/",
+      "safety": "safe"
+    },
+    "server": {
+      "label": "field.server",
+      "group": "general",
+      "order": 3,
+      "docs": "https://wiki.metacubex.one/config/proxies/",
+      "safety": "safe"
+    },
+    "port": {
+      "label": "field.port",
+      "group": "general",
+      "order": 4,
+      "docs": "https://wiki.metacubex.one/config/proxies/",
+      "safety": "safe"
+    },
+    "udp": {
+      "label": "field.udp",
+      "group": "general",
+      "order": 5,
+      "docs": "https://wiki.metacubex.one/config/proxies/",
+      "safety": "safe"
+    },
+    "username": {
+      "label": "field.username",
+      "group": "auth",
+      "order": 1,
+      "docs": "https://wiki.metacubex.one/config/proxies/",
+      "safety": "safe"
+    },
+    "password": {
+      "label": "field.password",
+      "group": "auth",
+      "order": 2,
+      "docs": "https://wiki.metacubex.one/config/proxies/",
+      "safety": "caution"
+    },
+    "tls": {
+      "label": "field.tls",
+      "group": "tls",
+      "order": 1,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/",
+      "safety": "safe"
+    },
+    "sni": {
+      "label": "field.sni",
+      "help": "help.sni",
+      "group": "tls",
+      "order": 2,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/",
+      "safety": "safe",
+      "visibleWhen": { "op": "eq", "path": "tls", "value": true }
+    },
+    "skip-cert-verify": {
+      "label": "field.skip-cert-verify",
+      "help": "help.skip-cert-verify",
+      "group": "tls",
+      "order": 3,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/",
+      "safety": "dangerous",
+      "visibleWhen": { "op": "eq", "path": "tls", "value": true }
+    },
+    "cipher": {
+      "label": "field.cipher",
+      "group": "ss",
+      "order": 1,
+      "docs": "https://wiki.metacubex.one/config/proxies/ss/",
+      "safety": "safe"
+    },
+    "plugin": {
+      "label": "field.plugin",
+      "help": "help.plugin",
+      "group": "ss",
+      "order": 2,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/ss/",
+      "safety": "safe"
+    },
+    "plugin-opts": {
+      "label": "field.plugin-opts",
+      "help": "help.plugin-opts",
+      "group": "ss",
+      "order": 3,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/ss/",
+      "safety": "safe"
+    },
+    "network": {
+      "label": "field.network",
+      "help": "help.network",
+      "group": "trojan",
+      "order": 1,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/trojan/",
+      "safety": "safe"
+    },
+    "ws-opts": {
+      "label": "field.ws-opts",
+      "group": "trojan",
+      "order": 2,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/trojan/",
+      "safety": "safe"
+    },
+    "grpc-opts": {
+      "label": "field.grpc-opts",
+      "group": "trojan",
+      "order": 3,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/trojan/",
+      "safety": "safe"
+    }
+  }
+}

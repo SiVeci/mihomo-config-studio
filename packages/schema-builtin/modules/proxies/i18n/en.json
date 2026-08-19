@@ -1,0 +1,31 @@
+{
+  "group.general": "General",
+  "group.auth": "Authentication",
+  "group.tls": "TLS",
+  "group.ss": "Shadowsocks",
+  "group.trojan": "Trojan",
+
+  "field.name": "Node name",
+  "field.type": "Protocol type",
+  "field.server": "Server address",
+  "field.port": "Port",
+  "field.udp": "Enable UDP relay",
+  "field.username": "Username",
+  "field.password": "Password",
+  "field.tls": "Enable TLS",
+  "field.sni": "SNI (server name)",
+  "field.skip-cert-verify": "Skip certificate verification",
+  "field.cipher": "Cipher",
+  "field.plugin": "Plugin",
+  "field.plugin-opts": "Plugin options",
+  "field.network": "Transport",
+  "field.ws-opts": "WebSocket options",
+  "field.grpc-opts": "gRPC options",
+
+  "help.type": "Picks which proxy protocol this node speaks; the fields below switch automatically with it.",
+  "help.sni": "The domain sent during the TLS handshake; can differ from the server address, e.g. to front through a CDN.",
+  "help.skip-cert-verify": "Skips the server's certificate check, giving up MITM protection — only turn this on briefly for something like self-signed-certificate debugging.",
+  "help.plugin": "Name of the Shadowsocks obfuscation plugin, e.g. obfs, v2ray-plugin, shadow-tls.",
+  "help.plugin-opts": "The plugin's own options; the exact fields vary by plugin, so this is edited as raw key/value pairs.",
+  "help.network": "The transport wrapper layered on top of TLS, e.g. ws (WebSocket) or grpc. Leave empty for plain TCP + TLS."
+}

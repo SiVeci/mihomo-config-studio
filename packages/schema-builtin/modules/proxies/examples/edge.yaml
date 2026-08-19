@@ -1,0 +1,10 @@
+# Boundary values that are schema-valid but sit at the edge of their range:
+# - "port" at the maximum valid port number
+# - every optional http field present at once (tls + skip-cert-verify + sni)
+name: http-edge
+type: http
+server: server
+port: 65535
+tls: true
+sni: custom.example.com
+skip-cert-verify: true

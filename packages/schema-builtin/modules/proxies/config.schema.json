@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "shared": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "server": { "type": "string" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "udp": { "type": "boolean", "default": false }
+      },
+      "required": ["name", "server", "port"]
+    },
+    "http": {
+      "allOf": [
+        { "$ref": "#/$defs/shared" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "http" },
+            "username": { "type": "string" },
+            "password": { "type": "string" },
+            "tls": { "type": "boolean", "default": false },
+            "sni": { "type": "string" },
+            "skip-cert-verify": { "type": "boolean", "default": false }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "socks5": {
+      "allOf": [
+        { "$ref": "#/$defs/shared" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "socks5" },
+            "username": { "type": "string" },
+            "password": { "type": "string" },
+            "tls": { "type": "boolean", "default": false },
+            "skip-cert-verify": { "type": "boolean", "default": false }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "ss": {
+      "allOf": [
+        { "$ref": "#/$defs/shared" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "ss" },
+            "cipher": { "type": "string" },
+            "password": { "type": "string" },
+            "plugin": { "type": "string" },
+            "plugin-opts": { "type": "object" }
+          },
+          "required": ["type", "cipher", "password"]
+        }
+      ]
+    },
+    "trojan": {
+      "allOf": [
+        { "$ref": "#/$defs/shared" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "trojan" },
+            "password": { "type": "string" },
+            "sni": { "type": "string" },
+            "skip-cert-verify": { "type": "boolean", "default": false },
+            "network": { "type": "string" },
+            "ws-opts": { "type": "object" },
+            "grpc-opts": { "type": "object" }
+          },
+          "required": ["type", "password"]
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/http" },
+    { "$ref": "#/$defs/socks5" },
+    { "$ref": "#/$defs/ss" },
+    { "$ref": "#/$defs/trojan" }
+  ]
+}

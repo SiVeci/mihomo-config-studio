@@ -1,0 +1,13 @@
+# "cipher"/"password" are declared; "smux" is a real, documented Mihomo field
+# (stream multiplexing config) that is deliberately out of P0 scope (exotic
+# nested knob, PRD §8.3) — it must surface as unknown, not be silently
+# dropped or rejected.
+name: ss-smux
+type: ss
+server: server
+port: 443
+cipher: chacha20-ietf-poly1305
+password: "password"
+smux:
+  enabled: false
+  protocol: smux
