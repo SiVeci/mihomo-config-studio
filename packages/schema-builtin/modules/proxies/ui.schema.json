@@ -4,7 +4,12 @@
     { "id": "auth", "label": "group.auth", "order": 10 },
     { "id": "tls", "label": "group.tls", "order": 20, "advanced": true },
     { "id": "ss", "label": "group.ss", "order": 30, "advanced": true },
-    { "id": "trojan", "label": "group.trojan", "order": 40, "advanced": true }
+    { "id": "trojan", "label": "group.trojan", "order": 40, "advanced": true },
+    { "id": "vmess", "label": "group.vmess", "order": 50, "advanced": true },
+    { "id": "vless", "label": "group.vless", "order": 60, "advanced": true },
+    { "id": "hysteria2", "label": "group.hysteria2", "order": 70, "advanced": true },
+    { "id": "tuic", "label": "group.tuic", "order": 80, "advanced": true },
+    { "id": "wireguard", "label": "group.wireguard", "order": 90, "advanced": true }
   ],
   "fields": {
     "name": {
@@ -57,6 +62,13 @@
       "docs": "https://wiki.metacubex.one/config/proxies/",
       "safety": "caution"
     },
+    "uuid": {
+      "label": "field.uuid",
+      "group": "auth",
+      "order": 3,
+      "docs": "https://wiki.metacubex.one/config/proxies/",
+      "safety": "caution"
+    },
     "tls": {
       "label": "field.tls",
       "group": "tls",
@@ -72,8 +84,7 @@
       "order": 2,
       "advanced": true,
       "docs": "https://wiki.metacubex.one/config/proxies/",
-      "safety": "safe",
-      "visibleWhen": { "op": "eq", "path": "tls", "value": true }
+      "safety": "safe"
     },
     "skip-cert-verify": {
       "label": "field.skip-cert-verify",
@@ -82,8 +93,7 @@
       "order": 3,
       "advanced": true,
       "docs": "https://wiki.metacubex.one/config/proxies/",
-      "safety": "dangerous",
-      "visibleWhen": { "op": "eq", "path": "tls", "value": true }
+      "safety": "dangerous"
     },
     "cipher": {
       "label": "field.cipher",
@@ -133,6 +143,193 @@
       "order": 3,
       "advanced": true,
       "docs": "https://wiki.metacubex.one/config/proxies/trojan/",
+      "safety": "safe"
+    },
+    "alterId": {
+      "label": "field.alterId",
+      "group": "vmess",
+      "order": 1,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/vmess/",
+      "safety": "safe"
+    },
+    "servername": {
+      "label": "field.servername",
+      "group": "vmess",
+      "order": 2,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/vmess/",
+      "safety": "safe"
+    },
+    "h2-opts": {
+      "label": "field.h2-opts",
+      "group": "vmess",
+      "order": 3,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/vmess/",
+      "safety": "safe"
+    },
+    "flow": {
+      "label": "field.flow",
+      "help": "help.flow",
+      "group": "vless",
+      "order": 1,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/vless/",
+      "safety": "safe"
+    },
+    "client-fingerprint": {
+      "label": "field.client-fingerprint",
+      "group": "vless",
+      "order": 2,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/vless/",
+      "safety": "safe"
+    },
+    "reality-opts": {
+      "label": "field.reality-opts",
+      "help": "help.reality-opts",
+      "group": "vless",
+      "order": 3,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/vless/",
+      "safety": "safe",
+      "fields": {
+        "public-key": {
+          "label": "field.reality-opts.public-key",
+          "docs": "https://wiki.metacubex.one/config/proxies/vless/",
+          "safety": "safe"
+        },
+        "short-id": {
+          "label": "field.reality-opts.short-id",
+          "docs": "https://wiki.metacubex.one/config/proxies/vless/",
+          "safety": "safe"
+        }
+      }
+    },
+    "up": {
+      "label": "field.up",
+      "help": "help.up-down",
+      "group": "hysteria2",
+      "order": 1,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/hysteria2/",
+      "safety": "safe"
+    },
+    "down": {
+      "label": "field.down",
+      "help": "help.up-down",
+      "group": "hysteria2",
+      "order": 2,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/hysteria2/",
+      "safety": "safe"
+    },
+    "obfs": {
+      "label": "field.obfs",
+      "group": "hysteria2",
+      "order": 3,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/hysteria2/",
+      "safety": "safe"
+    },
+    "obfs-password": {
+      "label": "field.obfs-password",
+      "group": "hysteria2",
+      "order": 4,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/hysteria2/",
+      "safety": "caution",
+      "sensitive": true
+    },
+    "alpn": {
+      "label": "field.alpn",
+      "group": "hysteria2",
+      "order": 5,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/hysteria2/",
+      "safety": "safe"
+    },
+    "token": {
+      "label": "field.token",
+      "help": "help.token",
+      "group": "tuic",
+      "order": 1,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/tuic/",
+      "safety": "caution"
+    },
+    "udp-relay-mode": {
+      "label": "field.udp-relay-mode",
+      "group": "tuic",
+      "order": 2,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/tuic/",
+      "safety": "safe"
+    },
+    "disable-sni": {
+      "label": "field.disable-sni",
+      "group": "tuic",
+      "order": 3,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/tuic/",
+      "safety": "safe"
+    },
+    "reduce-rtt": {
+      "label": "field.reduce-rtt",
+      "group": "tuic",
+      "order": 4,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/tuic/",
+      "safety": "safe"
+    },
+    "request-timeout": {
+      "label": "field.request-timeout",
+      "group": "tuic",
+      "order": 5,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/tuic/",
+      "safety": "safe"
+    },
+    "ip": {
+      "label": "field.ip",
+      "group": "wireguard",
+      "order": 1,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/wireguard/",
+      "safety": "safe"
+    },
+    "ipv6": {
+      "label": "field.ipv6",
+      "group": "wireguard",
+      "order": 2,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/wireguard/",
+      "safety": "safe"
+    },
+    "public-key": {
+      "label": "field.public-key",
+      "group": "wireguard",
+      "order": 3,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/wireguard/",
+      "safety": "safe"
+    },
+    "private-key": {
+      "label": "field.private-key",
+      "help": "help.private-key",
+      "group": "wireguard",
+      "order": 4,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/wireguard/",
+      "safety": "caution"
+    },
+    "reserved": {
+      "label": "field.reserved",
+      "group": "wireguard",
+      "order": 5,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/proxies/wireguard/",
       "safety": "safe"
     }
   }

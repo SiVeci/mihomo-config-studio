@@ -1,10 +1,15 @@
-# Boundary values that are schema-valid but sit at the edge of their range:
-# - "port" at the maximum valid port number
-# - every optional http field present at once (tls + skip-cert-verify + sni)
-name: http-edge
-type: http
-server: server
-port: 65535
-tls: true
-sni: custom.example.com
-skip-cert-verify: true
+# Boundary/unusual-but-valid representations:
+# - "private-key" as a multi-line YAML block scalar rather than the usual
+#   single line (upstream's own key split across lines purely to exercise
+#   the round-trip path, not a claim this is how a real key looks — v0.3.0
+#   #10, reused by #19's golden "multi-line secret" sample)
+# - "reserved" in its array form rather than the string form ("U4An")
+name: wg-edge
+type: wireguard
+server: 162.159.192.1
+port: 2480
+public-key: Cr8hWlKvtDt7nrvf+f0brNQQzabAqrjfBvas9pmowjo=
+private-key: |
+  eCtXsJZ27+4PbhDkHnB923
+  tkUn2Gj59wZw5wFA75MnU=
+reserved: [209, 98, 59]

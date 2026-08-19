@@ -77,12 +77,127 @@
           "required": ["type", "password"]
         }
       ]
+    },
+    "vmess": {
+      "allOf": [
+        { "$ref": "#/$defs/shared" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "vmess" },
+            "uuid": { "type": "string" },
+            "alterId": { "type": "integer", "minimum": 0 },
+            "cipher": { "type": "string" },
+            "tls": { "type": "boolean", "default": false },
+            "network": { "type": "string" },
+            "servername": { "type": "string" },
+            "skip-cert-verify": { "type": "boolean", "default": false },
+            "ws-opts": { "type": "object" },
+            "h2-opts": { "type": "object" },
+            "grpc-opts": { "type": "object" }
+          },
+          "required": ["type", "uuid"]
+        }
+      ]
+    },
+    "vless": {
+      "allOf": [
+        { "$ref": "#/$defs/shared" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "vless" },
+            "uuid": { "type": "string" },
+            "network": { "type": "string" },
+            "tls": { "type": "boolean", "default": false },
+            "flow": { "type": "string" },
+            "servername": { "type": "string" },
+            "client-fingerprint": { "type": "string" },
+            "skip-cert-verify": { "type": "boolean", "default": false },
+            "reality-opts": {
+              "type": "object",
+              "properties": {
+                "public-key": { "type": "string" },
+                "short-id": { "type": "string" }
+              }
+            },
+            "ws-opts": { "type": "object" },
+            "grpc-opts": { "type": "object" }
+          },
+          "required": ["type", "uuid"]
+        }
+      ]
+    },
+    "hysteria2": {
+      "allOf": [
+        { "$ref": "#/$defs/shared" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "hysteria2" },
+            "password": { "type": "string" },
+            "up": { "type": "string" },
+            "down": { "type": "string" },
+            "obfs": { "type": "string" },
+            "obfs-password": { "type": "string" },
+            "sni": { "type": "string" },
+            "skip-cert-verify": { "type": "boolean", "default": false },
+            "alpn": { "type": "array", "items": { "type": "string" } }
+          },
+          "required": ["type", "password"]
+        }
+      ]
+    },
+    "tuic": {
+      "allOf": [
+        { "$ref": "#/$defs/shared" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "tuic" },
+            "uuid": { "type": "string" },
+            "password": { "type": "string" },
+            "token": { "type": "string" },
+            "alpn": { "type": "array", "items": { "type": "string" } },
+            "udp-relay-mode": { "type": "string", "enum": ["native", "quic"], "default": "native" },
+            "disable-sni": { "type": "boolean", "default": false },
+            "reduce-rtt": { "type": "boolean", "default": false },
+            "request-timeout": { "type": "integer", "minimum": 0 }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "wireguard": {
+      "allOf": [
+        { "$ref": "#/$defs/shared" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "wireguard" },
+            "ip": { "type": "string" },
+            "ipv6": { "type": "string" },
+            "public-key": { "type": "string" },
+            "private-key": { "type": "string" },
+            "reserved": {
+              "type": ["string", "array"],
+              "items": { "type": "integer" }
+            }
+          },
+          "required": ["type", "public-key", "private-key"]
+        }
+      ]
     }
   },
   "oneOf": [
     { "$ref": "#/$defs/http" },
     { "$ref": "#/$defs/socks5" },
     { "$ref": "#/$defs/ss" },
-    { "$ref": "#/$defs/trojan" }
+    { "$ref": "#/$defs/trojan" },
+    { "$ref": "#/$defs/vmess" },
+    { "$ref": "#/$defs/vless" },
+    { "$ref": "#/$defs/hysteria2" },
+    { "$ref": "#/$defs/tuic" },
+    { "$ref": "#/$defs/wireguard" }
   ]
 }

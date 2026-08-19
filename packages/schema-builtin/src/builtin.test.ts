@@ -89,11 +89,19 @@ function collectProxyFieldPaths(schema: JsonSchema): Set<string> {
     const refName = branchRef.$ref?.replace('#/$defs/', '');
     if (!refName) continue;
     const ownSchema = defs[refName]?.allOf?.find((member) => member.$ref === undefined);
-    for (const key of Object.keys(ownSchema?.properties ?? {})) {
+    for (const [key, propSchema] of Object.entries(ownSchema?.properties ?? {})) {
       // The discriminator is declared per-branch (each branch needs its own
       // `const`) but is conceptually shared — `UPSTREAM_P0_FIELDS` files it
       // under `_shared.type`, not `<protocol>.type`.
-      paths.add(key === 'type' ? '_shared.type' : `${refName}.${key}`);
+      const path = key === 'type' ? '_shared.type' : `${refName}.${key}`;
+      paths.add(path);
+      // `vless.reality-opts` is the one branch field with its own declared
+      // sub-properties (`public-key`/`short-id`) rather than a bare object.
+      if (propSchema.type === 'object' && propSchema.properties) {
+        for (const subKey of Object.keys(propSchema.properties)) {
+          paths.add(`${path}.${subKey}`);
+        }
+      }
     }
   }
 
@@ -308,21 +316,22 @@ describe('inbound module specifics', () => {
   });
 });
 
-describe('proxies module (v0.3.0 #9 — discriminated-union skeleton + http/socks5/ss/trojan)', () => {
+describe('proxies module (v0.3.0 #9-#10 — discriminated-union skeleton + all nine P0 protocols)', () => {
   it('has no shape issues (rules/examples/i18n)', () => {
     expect(validateModuleShape(PROXIES_MODULE)).toEqual([]);
   });
 
-  it('declares exactly the P0 fields UPSTREAM_P0_FIELDS lists for http/socks5/ss/trojan — no more, no less (the other five protocols are #10)', () => {
+  it('declares exactly the P0 fields UPSTREAM_P0_FIELDS lists across all nine protocols — no more, no less', () => {
     const declared = collectProxyFieldPaths(PROXIES_MODULE.schema);
-    const scopedUpstream = new Set(
-      UPSTREAM_P0_FIELDS.proxies
-        .map((record) => record.path)
-        .filter((path) => /^(_shared|http|socks5|ss|trojan)\./.test(path)),
+    // `UPSTREAM_P0_FIELDS.proxies` also carries bare P1/P2 protocol names
+    // (snell, gost-relay, ...) that never get a Schema branch at all — those
+    // are out of scope for a Schema-vs-Schema comparison by construction.
+    const upstream = new Set(
+      UPSTREAM_P0_FIELDS.proxies.map((record) => record.path).filter((path) => path.includes('.')),
     );
 
-    const declaredNotUpstream = [...declared].filter((path) => !scopedUpstream.has(path));
-    const upstreamNotDeclared = [...scopedUpstream].filter((path) => !declared.has(path));
+    const declaredNotUpstream = [...declared].filter((path) => !upstream.has(path));
+    const upstreamNotDeclared = [...upstream].filter((path) => !declared.has(path));
 
     expect(declaredNotUpstream).toEqual([]);
     expect(upstreamNotDeclared).toEqual([]);
@@ -331,8 +340,17 @@ describe('proxies module (v0.3.0 #9 — discriminated-union skeleton + http/sock
   it('gives every declared field a UI entry with docs + safety metadata', () => {
     const missing: string[] = [];
     for (const path of collectProxyFieldPaths(PROXIES_MODULE.schema)) {
-      const bareKey = path.split('.').at(-1) ?? path;
-      const spec = PROXIES_MODULE.ui.fields?.[bareKey];
+      // Paths are `_shared.<key>` / `<protocol>.<key>` / `<protocol>.<key>.<subKey>`
+      // — the UI map itself is flat (shared across protocols by field name),
+      // with one level of nesting only for `reality-opts`'s own sub-fields.
+      const segments = path.split('.').slice(1);
+      let fields = PROXIES_MODULE.ui.fields ?? {};
+      let spec: (typeof fields)[string] | undefined;
+      for (const segment of segments) {
+        spec = fields[segment];
+        if (!spec) break;
+        fields = spec.fields ?? {};
+      }
       if (!spec?.docs || !spec.safety) missing.push(path);
     }
     expect(missing).toEqual([]);
@@ -380,7 +398,7 @@ describe('proxies module (v0.3.0 #9 — discriminated-union skeleton + http/sock
     expect(plan.unknownFields.length).toBeGreaterThan(0);
   });
 
-  it('plans each of the four real protocols as a variant, discriminated on "type", with that protocol\'s own fields as children', () => {
+  it('plans each of the nine real protocols as a variant, discriminated on "type", with that protocol\'s own fields as children', () => {
     const cases: Array<{ value: Record<string, unknown>; protocol: string; ownField: string }> = [
       {
         value: { name: 'http1', type: 'http', server: 's', port: 1, username: 'u', password: 'p' },
@@ -416,6 +434,68 @@ describe('proxies module (v0.3.0 #9 — discriminated-union skeleton + http/sock
         protocol: 'trojan',
         ownField: 'network',
       },
+      {
+        value: {
+          name: 'vmess1',
+          type: 'vmess',
+          server: 's',
+          port: 1,
+          uuid: 'u',
+          alterId: 0,
+          cipher: 'auto',
+        },
+        protocol: 'vmess',
+        ownField: 'alterId',
+      },
+      {
+        value: {
+          name: 'vless1',
+          type: 'vless',
+          server: 's',
+          port: 1,
+          uuid: 'u',
+          flow: 'xtls-rprx-vision',
+        },
+        protocol: 'vless',
+        ownField: 'flow',
+      },
+      {
+        value: {
+          name: 'hy2-1',
+          type: 'hysteria2',
+          server: 's',
+          port: 1,
+          password: 'p',
+          obfs: 'salamander',
+        },
+        protocol: 'hysteria2',
+        ownField: 'obfs',
+      },
+      {
+        value: {
+          name: 'tuic1',
+          type: 'tuic',
+          server: 's',
+          port: 1,
+          uuid: 'u',
+          password: 'p',
+          'udp-relay-mode': 'quic',
+        },
+        protocol: 'tuic',
+        ownField: 'udp-relay-mode',
+      },
+      {
+        value: {
+          name: 'wg1',
+          type: 'wireguard',
+          server: 's',
+          port: 1,
+          'public-key': 'pub',
+          'private-key': 'priv',
+        },
+        protocol: 'wireguard',
+        ownField: 'private-key',
+      },
     ];
 
     for (const { value, protocol, ownField } of cases) {
@@ -439,54 +519,129 @@ describe('proxies module (v0.3.0 #9 — discriminated-union skeleton + http/sock
     }
   });
 
-  it('masks password as a secret control on every protocol that carries one, with no explicit UI override (NFR-SEC-02)', () => {
+  it('masks password/uuid/private-key as secret controls with no explicit UI override, the three sensitive-field families the version doc names (NFR-SEC-02)', () => {
     expect(PROXIES_MODULE.ui.fields?.password?.control).toBeUndefined();
+    expect(PROXIES_MODULE.ui.fields?.uuid?.control).toBeUndefined();
+    expect(PROXIES_MODULE.ui.fields?.['private-key']?.control).toBeUndefined();
 
-    const withPassword = [
-      { name: 'http1', type: 'http', server: 's', port: 1, password: 'hunter2' },
-      { name: 'socks1', type: 'socks5', server: 's', port: 1, password: 'hunter2' },
-      { name: 'ss1', type: 'ss', server: 's', port: 1, cipher: 'aes-128-gcm', password: 'hunter2' },
-      { name: 'trojan1', type: 'trojan', server: 's', port: 1, password: 'hunter2' },
+    const cases: Array<{ value: Record<string, unknown>; sensitiveKey: string }> = [
+      {
+        value: { name: 'http1', type: 'http', server: 's', port: 1, password: 'hunter2' },
+        sensitiveKey: 'password',
+      },
+      {
+        value: { name: 'socks1', type: 'socks5', server: 's', port: 1, password: 'hunter2' },
+        sensitiveKey: 'password',
+      },
+      {
+        value: {
+          name: 'ss1',
+          type: 'ss',
+          server: 's',
+          port: 1,
+          cipher: 'aes-128-gcm',
+          password: 'hunter2',
+        },
+        sensitiveKey: 'password',
+      },
+      {
+        value: { name: 'trojan1', type: 'trojan', server: 's', port: 1, password: 'hunter2' },
+        sensitiveKey: 'password',
+      },
+      // NFR-SEC-02's other two named families: uuid (VMess/VLESS/TUIC), private-key (WireGuard).
+      {
+        value: { name: 'vmess1', type: 'vmess', server: 's', port: 1, uuid: 'abc-123' },
+        sensitiveKey: 'uuid',
+      },
+      {
+        value: { name: 'vless1', type: 'vless', server: 's', port: 1, uuid: 'abc-123' },
+        sensitiveKey: 'uuid',
+      },
+      {
+        value: {
+          name: 'tuic1',
+          type: 'tuic',
+          server: 's',
+          port: 1,
+          uuid: 'abc-123',
+          password: 'hunter2',
+        },
+        sensitiveKey: 'uuid',
+      },
+      {
+        value: {
+          name: 'wg1',
+          type: 'wireguard',
+          server: 's',
+          port: 1,
+          'public-key': 'pub',
+          'private-key': 'priv',
+        },
+        sensitiveKey: 'private-key',
+      },
     ];
-    for (const value of withPassword) {
+    for (const { value, sensitiveKey } of cases) {
       const plan = planOneProxy(value);
       const item = plan.fields.find((field) => field.key === 'item');
-      const password = item?.children?.find((child) => child.key === 'password');
-      expect(password?.control, String(value.type)).toBe('secret');
+      const masked = item?.children?.find((child) => child.key === sensitiveKey);
+      expect(masked?.control, `${String(value.type)}.${sensitiveKey}`).toBe('secret');
     }
   });
 
-  it('adding a fifth protocol branch needs no change outside config.schema.json/ui.schema.json — the same probe harness plans it immediately (FR-SCHEMA-06 applied to unions, real-field proof ahead of #10)', () => {
+  it('evaluates the real validation.rules.json TUIC rule against real content, both ways (upstream: tuicV4 token vs. tuicV5 uuid+password, mutually exclusive)', () => {
+    // token alongside uuid: the rule must fire.
+    const firing = evaluateRules(PROXIES_MODULE.rules ?? [], {
+      type: 'tuic',
+      token: 'TOKEN',
+      uuid: '00000000-0000-0000-0000-000000000001',
+    });
+    expect(firing).toEqual([
+      expect.objectContaining({
+        ruleId: 'tuic-token-conflicts-with-uuid-password',
+        path: ['token'],
+      }),
+    ]);
+
+    // uuid + password, no token (the documented tuicV5 shape): no complaint.
+    const quiet = evaluateRules(PROXIES_MODULE.rules ?? [], {
+      type: 'tuic',
+      uuid: '00000000-0000-0000-0000-000000000001',
+      password: 'PASSWORD_1',
+    });
+    expect(quiet).toEqual([]);
+  });
+
+  it('adding a tenth protocol branch — beyond the full nine-protocol P0 set — still needs no change outside config.schema.json/ui.schema.json (FR-SCHEMA-06 applied to unions, the ADR-002 claim holds one protocol past what #10 shipped)', () => {
     const extendedSchema: JsonSchema = {
       ...PROXIES_MODULE.schema,
       $defs: {
         ...PROXIES_MODULE.schema.$defs,
-        vmess: {
+        ssr: {
           allOf: [
             { $ref: '#/$defs/shared' },
             {
               type: 'object',
-              properties: { type: { const: 'vmess' }, uuid: { type: 'string' } },
-              required: ['type', 'uuid'],
+              properties: { type: { const: 'ssr' }, password: { type: 'string' } },
+              required: ['type', 'password'],
             },
           ],
         },
       },
-      oneOf: [...(PROXIES_MODULE.schema.oneOf ?? []), { $ref: '#/$defs/vmess' }],
+      oneOf: [...(PROXIES_MODULE.schema.oneOf ?? []), { $ref: '#/$defs/ssr' }],
     };
 
     const plan = planOneProxy(
-      { name: 'v1', type: 'vmess', server: 's', port: 1, uuid: 'abc-123-def' },
+      { name: 'ssr1', type: 'ssr', server: 's', port: 1, password: 'hunter2' },
       extendedSchema,
     );
     const item = plan.fields.find((field) => field.key === 'item');
-    expect(item?.variant).toMatchObject({ selected: 'vmess', matched: true });
-    const uuid = item?.children?.find((child) => child.key === 'uuid');
-    expect(uuid?.value).toBe('abc-123-def');
-    // NFR-SEC-02 holds on the brand-new branch too, for free — `uuid` is in
-    // SENSITIVE_KEY regardless of which branch declares it, and no code
-    // anywhere (not here, not form-renderer, not apps/web) had to change to
-    // get this: only `extendedSchema`'s data changed.
-    expect(uuid?.control).toBe('secret');
+    expect(item?.variant).toMatchObject({ selected: 'ssr', matched: true });
+    const password = item?.children?.find((child) => child.key === 'password');
+    expect(password?.value).toBe('hunter2');
+    // NFR-SEC-02 holds on the brand-new branch too, for free — `password` is
+    // in SENSITIVE_KEY regardless of which branch declares it, and no code
+    // anywhere (not here, not form-renderer, not apps/web, not schema-core)
+    // had to change to get this: only `extendedSchema`'s data changed.
+    expect(password?.control).toBe('secret');
   });
 });

@@ -1,1 +1,24 @@
-[]
+[
+  {
+    "id": "tuic-token-conflicts-with-uuid-password",
+    "severity": "warning",
+    "when": {
+      "op": "not",
+      "of": {
+        "op": "and",
+        "of": [
+          { "op": "exists", "path": "token" },
+          {
+            "op": "or",
+            "of": [
+              { "op": "exists", "path": "uuid" },
+              { "op": "exists", "path": "password" }
+            ]
+          }
+        ]
+      }
+    },
+    "messageKey": "rule.tuicTokenConflictsWithUuidPassword",
+    "path": "token"
+  }
+]
