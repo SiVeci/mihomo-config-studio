@@ -12,6 +12,8 @@
     "@mcs/yaml-engine": "workspace:*"
   },
   "devDependencies": {
+    "@mcs/schema-builtin": "workspace:*",
+    "@mcs/schema-registry": "workspace:*",
     "@mcs/test-fixtures": "workspace:*"
   }
 }

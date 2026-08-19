@@ -1,9 +1,15 @@
-import type { JsonSchema } from '@mcs/schema-core';
-import { validateValue } from '@mcs/schema-core';
+import type { JsonSchema, ValidationRule } from '@mcs/schema-core';
+import { evaluateRules, validateValue } from '@mcs/schema-core';
 import { MihomoYamlDocument } from '@mcs/yaml-engine';
 import { describe, expect, it } from 'vitest';
 
-import { fromSchemaIssue, fromYamlIssue, KERNEL_MODULES, type RangeLocator } from './issue.js';
+import {
+  fromRuleIssue,
+  fromSchemaIssue,
+  fromYamlIssue,
+  KERNEL_MODULES,
+  type RangeLocator,
+} from './issue.js';
 import type { ValidationIssue } from './issue.js';
 
 describe('fromYamlIssue (FR-VAL-01)', () => {
@@ -211,9 +217,107 @@ describe('fromSchemaIssue (FR-VAL-01)', () => {
   });
 });
 
+describe('fromRuleIssue (FR-VAL-01, v0.3.0 #12)', () => {
+  // Mirrors dns's real fallback-filter-geoip-code-requires-geoip rule shape
+  // (v0.3.0 #7) rather than inventing an unrelated synthetic one — proves
+  // the adapter against the same rule DSL shipped modules actually use.
+  const rules: ValidationRule[] = [
+    {
+      id: 'geoip-code-requires-geoip',
+      severity: 'warning',
+      when: {
+        op: 'not',
+        of: {
+          op: 'and',
+          of: [
+            { op: 'exists', path: 'geoip-code' },
+            { op: 'eq', path: 'geoip', value: false },
+          ],
+        },
+      },
+      messageKey: 'rule.geoipCodeRequiresGeoip',
+      path: 'geoip-code',
+    },
+  ];
+
+  it('attaches the caller-supplied module id and derives blocking from severity (warning is not blocking)', () => {
+    const [issue] = evaluateRules(rules, { geoip: false, 'geoip-code': 'CN' });
+    const widened = fromRuleIssue(issue!, { module: 'dns' });
+    expect(widened.module).toBe('dns');
+    expect(widened.code).toBe('rule.geoip-code-requires-geoip');
+    expect(widened.blocking).toBe(false);
+  });
+
+  it('carries messageParams through when the rule declares them', () => {
+    const rulesWithParams: ValidationRule[] = [{ ...rules[0]!, messageParams: { field: 'geoip' } }];
+    const [issue] = evaluateRules(rulesWithParams, { geoip: false, 'geoip-code': 'CN' });
+    const widened = fromRuleIssue(issue!, { module: 'dns' });
+    expect(widened.messageParams).toEqual({ field: 'geoip' });
+  });
+
+  it('carries the fix value through alongside the defaulted path', () => {
+    const rulesWithFixValue: ValidationRule[] = [
+      { ...rules[0]!, fix: { kind: 'set-scalar', value: true } },
+    ];
+    const [issue] = evaluateRules(rulesWithFixValue, { geoip: false, 'geoip-code': 'CN' });
+    const widened = fromRuleIssue(issue!, { module: 'dns' });
+    expect(widened.fix).toEqual({ kind: 'set-scalar', path: ['geoip-code'], value: true });
+  });
+
+  it('locates a range via the supplied locator, at the basePath-prefixed document path', () => {
+    const { document } = MihomoYamlDocument.parse('geoip: false\ngeoip-code: CN\n');
+    const [issue] = evaluateRules(rules, document!.toJS(), {
+      basePath: ['dns', 'fallback-filter'],
+    });
+    expect(issue!.path).toEqual(['dns', 'fallback-filter', 'geoip-code']);
+    const widened = fromRuleIssue(issue!, { module: 'dns', locator: document! });
+    // The rule's own path segment is "geoip-code", relative to fallback-filter;
+    // the *document* only has a bare "geoip-code" at its root in this fixture,
+    // so locate() on the full prefixed path correctly finds nothing.
+    expect(Object.hasOwn(widened, 'range')).toBe(false);
+  });
+
+  it('omits range rather than setting it to undefined when no locator is given', () => {
+    const [issue] = evaluateRules(rules, { geoip: false, 'geoip-code': 'CN' });
+    const widened = fromRuleIssue(issue!, { module: 'dns' });
+    expect(Object.hasOwn(widened, 'range')).toBe(false);
+  });
+
+  it("defaults the fix to the issue's own path when the rule's fix omits one", () => {
+    const rulesWithFix: ValidationRule[] = [
+      {
+        ...rules[0]!,
+        fix: { kind: 'remove' },
+      },
+    ];
+    const [issue] = evaluateRules(rulesWithFix, { geoip: false, 'geoip-code': 'CN' });
+    const widened = fromRuleIssue(issue!, { module: 'dns' });
+    expect(widened.fix).toEqual({ kind: 'remove', path: ['geoip-code'] });
+  });
+
+  it("drops the fix entirely when the rule's fix names its own relative path, rather than resolve it against the wrong scope", () => {
+    const rulesWithRelativeFix: ValidationRule[] = [
+      {
+        ...rules[0]!,
+        fix: { kind: 'set-scalar', path: 'geoip', value: true },
+      },
+    ];
+    const [issue] = evaluateRules(rulesWithRelativeFix, { geoip: false, 'geoip-code': 'CN' });
+    const widened = fromRuleIssue(issue!, { module: 'dns' });
+    expect(widened.fix).toBeUndefined();
+  });
+
+  it('never echoes the value that failed validation anywhere in the widened issue (NFR-SEC-03)', () => {
+    const secretValue = 'sk-live-s3cr3t-do-not-leak';
+    const [issue] = evaluateRules(rules, { geoip: false, 'geoip-code': secretValue });
+    const widened = fromRuleIssue(issue!, { module: 'dns' });
+    expect(JSON.stringify(widened)).not.toContain(secretValue);
+  });
+});
+
 describe('KERNEL_MODULES', () => {
   it('freezes the known kernel-stage module ids', () => {
-    expect(KERNEL_MODULES).toEqual(['yaml', 'reference', 'security']);
+    expect(KERNEL_MODULES).toEqual(['yaml', 'schema', 'reference', 'security']);
   });
 });
 

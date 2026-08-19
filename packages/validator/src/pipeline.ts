@@ -1,12 +1,24 @@
-import type { ParseResult } from '@mcs/yaml-engine';
+import { buildFormPlan, evaluateRules, validateValue, type SchemaModule } from '@mcs/schema-core';
+import type { ConfigPath, ParseResult } from '@mcs/yaml-engine';
 
-import { fromYamlIssue } from './issue.js';
+import { fromRuleIssue, fromSchemaIssue, fromYamlIssue } from './issue.js';
 import type { ValidationIssue } from './issue.js';
 
 /** The context every stage runs against. Grows as later stages need more (v0.3.0+). */
 export interface PipelineContext {
   /** The already-computed parse result; the pipeline never re-parses. */
   parse: ParseResult;
+  /**
+   * Modules resolved for this project (v0.3.0 #12), typically
+   * `SchemaRegistry.modules()` — dependency order does not matter here,
+   * `schemaStage` validates every module independently. Omitted or empty:
+   * `schemaStage` produces nothing, preserving v0.2.0's "closed loop with no
+   * Schema module installed" guarantee (`apps/web/src/closed-loop.test.tsx`)
+   * — "unknown field" is only a meaningful finding relative to *some*
+   * installed schema; with none installed there is nothing to compare
+   * against, so nothing is flagged.
+   */
+  modules?: readonly SchemaModule[];
 }
 
 /**
@@ -31,17 +43,81 @@ export const syntaxStage: ValidationStage = {
 };
 
 /**
- * No schema module is wired into the pipeline yet — resolving which modules
- * apply to a project is `schema-registry` work that lands in v0.3.0.
- * Registering the stage now, rather than adding it later, proves the
- * pipeline shape already accommodates a second stage and lets the
- * short-circuit test below exercise it against something real instead of
- * just the syntax stage in isolation.
+ * For every resolved module: run `validateValue` (structural checks) and
+ * `evaluateRules` (cross-field checks, v0.3.0 #4) against that module's own
+ * document subtree, both with `basePath: module.manifest.root` so reported
+ * paths address the whole document, not just the module's scope. Then a
+ * second pass flags every document leaf (`document.leafPaths()`) that no
+ * resolved module's plan recognises as an `info`-severity `unknown-field`
+ * issue (FR-VAL-05) — never `error`, never blocking, no matter how many.
+ *
+ * "Recognises" is computed via `buildFormPlan`, not a bespoke walk: a leaf a
+ * module's plan does *not* mark `unknown` is claimed, even when that module
+ * only reaches the leaf because it shares a document root with another
+ * module (`general`/`inbound`, both `root: []` — v0.3.0 #8's deferred
+ * cross-module gap is a *rendering*-layer concern for `buildFormPlan`
+ * consumers; checked against the *union* of every module's own claims here,
+ * it is not a problem for validation at all: a field either belongs to one
+ * of the installed modules or it does not).
  */
 export const schemaStage: ValidationStage = {
   id: SCHEMA_STAGE_ID,
-  run: () => [],
+  run: (ctx) => {
+    const { document } = ctx.parse;
+    const modules = ctx.modules ?? [];
+    if (!document || modules.length === 0) return [];
+
+    const issues: ValidationIssue[] = [];
+    const knownPaths = new Set<string>();
+    const fullValue = document.toJS();
+
+    for (const module of modules) {
+      // A module's own section can be entirely absent (no module here
+      // declares any top-level `required`) — `undefined`/`null` would
+      // otherwise read as a spurious `schema.type` violation against that
+      // module's (always object-shaped) root schema.
+      const scope = document.getIn(module.manifest.root);
+      if (scope !== undefined && scope !== null) {
+        const locator = document;
+        for (const schemaIssue of validateValue(scope, module.schema, {
+          basePath: module.manifest.root,
+        })) {
+          issues.push(fromSchemaIssue(schemaIssue, { module: module.manifest.id, locator }));
+        }
+        for (const ruleIssue of evaluateRules(module.rules ?? [], scope, {
+          basePath: module.manifest.root,
+        })) {
+          issues.push(fromRuleIssue(ruleIssue, { module: module.manifest.id, locator }));
+        }
+      }
+
+      const plan = buildFormPlan(module, fullValue, { mode: 'advanced' });
+      for (const field of plan.fields) {
+        if (!field.unknown) knownPaths.add(serializePath(field.path));
+      }
+    }
+
+    for (const leaf of document.leafPaths()) {
+      if (knownPaths.has(serializePath(leaf))) continue;
+      const range = document.locate(leaf) ?? undefined;
+      issues.push({
+        severity: 'info',
+        code: 'unknown-field',
+        module: 'schema',
+        messageKey: 'unknown-field',
+        path: leaf,
+        ...(range !== undefined ? { range } : {}),
+        blocking: false,
+      });
+    }
+
+    return issues;
+  },
 };
+
+function serializePath(path: ConfigPath): string {
+  return JSON.stringify(path);
+}
 
 export const DEFAULT_STAGES: readonly ValidationStage[] = [syntaxStage, schemaStage];
 

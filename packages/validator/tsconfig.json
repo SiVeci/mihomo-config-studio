@@ -9,6 +9,8 @@
   "references": [
     { "path": "../yaml-engine" },
     { "path": "../schema-core" },
+    { "path": "../schema-builtin" },
+    { "path": "../schema-registry" },
     { "path": "../test-fixtures" }
   ]
 }

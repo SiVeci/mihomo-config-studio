@@ -194,6 +194,12 @@ importers:
         specifier: workspace:*
         version: link:../yaml-engine
     devDependencies:
+      '@mcs/schema-builtin':
+        specifier: workspace:*
+        version: link:../schema-builtin
+      '@mcs/schema-registry':
+        specifier: workspace:*
+        version: link:../schema-registry
       '@mcs/test-fixtures':
         specifier: workspace:*
         version: link:../test-fixtures

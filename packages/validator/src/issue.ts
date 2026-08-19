@@ -1,4 +1,4 @@
-import type { JsonPrimitive, SchemaIssue } from '@mcs/schema-core';
+import type { JsonPrimitive, RuleIssue, SchemaIssue } from '@mcs/schema-core';
 import type {
   ConfigPath,
   IssueSeverity,
@@ -12,9 +12,11 @@ import type {
  * instead reports its own `ModuleManifest.id` as `module`; `reference` and
  * `security` stages are wired up in v0.3.0/v0.4.0 (see the pipeline in
  * `pipeline.ts`), but the module id is reserved here so producers agree on it
- * from day one.
+ * from day one. `schema` was added in v0.3.0 #12 for `schemaStage`'s own
+ * cross-module findings (an `unknown-field` issue belongs to no single
+ * installed module — that is exactly what makes it unknown).
  */
-export const KERNEL_MODULES = ['yaml', 'reference', 'security'] as const;
+export const KERNEL_MODULES = ['yaml', 'schema', 'reference', 'security'] as const;
 export type KernelModule = (typeof KERNEL_MODULES)[number];
 
 /**
@@ -115,6 +117,59 @@ export function fromSchemaIssue(
     ...(range !== undefined ? { range } : {}),
     ...(fix !== undefined ? { fix } : {}),
     blocking: isBlocking(issue.severity),
+  };
+}
+
+/**
+ * Widen a `RuleIssue` (`@mcs/schema-core`'s `evaluateRules`, v0.3.0 #4) into
+ * a `ValidationIssue` — the adapter `rules.ts`'s own doc comment on
+ * `RuleIssue` names as "a future adapter (v0.3.0 #12)". Same `range`
+ * rationale as `fromSchemaIssue`: `schema-core` never sees the source
+ * document, so `locator.locate(issue.path)` happens here.
+ */
+export function fromRuleIssue(
+  issue: RuleIssue,
+  options: SchemaIssueAdapterOptions,
+): ValidationIssue {
+  const range = options.locator?.locate(issue.path) ?? undefined;
+  const fix = deriveRuleFix(issue);
+  return {
+    severity: issue.severity,
+    code: issue.code,
+    module: options.module,
+    messageKey: issue.messageKey,
+    ...(issue.messageParams !== undefined ? { messageParams: issue.messageParams } : {}),
+    path: issue.path,
+    ...(range !== undefined ? { range } : {}),
+    ...(fix !== undefined ? { fix } : {}),
+    blocking: isBlocking(issue.severity),
+  };
+}
+
+/**
+ * `RuleFix.path` is a relative *string* (`rules.ts`'s own dot-path scheme),
+ * addressed the same way `rule.path`/`when`'s own conditions are: relative
+ * to the module root for a plain rule, but relative to the matched *element*
+ * for a wildcard rule — and by the time a flat `RuleIssue` reaches this
+ * adapter, which of those two applied (and where the element landed in the
+ * document) is no longer recoverable from the issue alone. Only the
+ * documented, unambiguous case is resolved here: `fix.path` omitted,
+ * defaulting to the issue's own already-resolved location. When `fix.path`
+ * *is* set, this drops the fix rather than guess at a document path that
+ * could be wrong — an offered one-click fix that writes to the wrong place
+ * is worse than no offered fix; the issue itself is still reported either
+ * way. No shipped `validation.rules.json` sets `fix` yet (v0.3.0 #6-#11), so
+ * this narrower case is what real content actually exercises; resolving the
+ * general case needs `evaluateRules` to carry more context than `RuleIssue`
+ * currently does, which is out of this slice's scope.
+ */
+function deriveRuleFix(issue: RuleIssue): IssueFix | undefined {
+  const fix = issue.fix;
+  if (!fix || fix.path !== undefined) return undefined;
+  return {
+    kind: fix.kind,
+    path: issue.path,
+    ...(fix.value !== undefined ? { value: fix.value } : {}),
   };
 }
 
