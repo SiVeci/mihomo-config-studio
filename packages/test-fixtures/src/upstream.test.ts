@@ -66,7 +66,16 @@ describe("field names are traceable to the vendored text (catches this file's ow
       for (const record of records) {
         // Whole-protocol P1/P2 markers (e.g. `snell`) name a `type` value,
         // not a YAML key, so the "<key>:" shape does not apply to them.
-        if (!record.presentUpstream || record.note?.includes('P1/P2')) continue;
+        // `Meta-Docs`-noted fields (e.g. proxy-providers' `exclude-filter`)
+        // were verified against the official docs source, not this vendored
+        // sample — D-004 — so a grep of this one file is the wrong check.
+        if (
+          !record.presentUpstream ||
+          record.note?.includes('P1/P2') ||
+          record.note?.includes('Meta-Docs')
+        ) {
+          continue;
+        }
 
         const key = leafKey(record.path);
         if (!raw.includes(`${key}:`)) {

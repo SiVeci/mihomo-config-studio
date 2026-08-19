@@ -32,6 +32,12 @@ import proxiesZhCN from '../modules/proxies/i18n/zh-CN.json';
 import proxiesManifest from '../modules/proxies/module.manifest.json';
 import proxiesUiSchema from '../modules/proxies/ui.schema.json';
 import proxiesRules from '../modules/proxies/validation.rules.json';
+import proxyProvidersConfigSchema from '../modules/proxy-providers/config.schema.json';
+import proxyProvidersEn from '../modules/proxy-providers/i18n/en.json';
+import proxyProvidersZhCN from '../modules/proxy-providers/i18n/zh-CN.json';
+import proxyProvidersManifest from '../modules/proxy-providers/module.manifest.json';
+import proxyProvidersUiSchema from '../modules/proxy-providers/ui.schema.json';
+import proxyProvidersRules from '../modules/proxy-providers/validation.rules.json';
 import snifferConfigSchema from '../modules/sniffer/config.schema.json';
 import snifferEn from '../modules/sniffer/i18n/en.json';
 import snifferZhCN from '../modules/sniffer/i18n/zh-CN.json';
@@ -144,6 +150,32 @@ export const PROXIES_MODULE: SchemaModule = {
   i18n: { 'zh-CN': proxiesZhCN, en: proxiesEn } as ModuleI18n,
 };
 
+const PROXY_PROVIDERS_EXAMPLES: ModuleExample[] = [
+  { name: 'valid', kind: 'valid', path: 'examples/valid.yaml' },
+  { name: 'invalid', kind: 'invalid', path: 'examples/invalid.yaml' },
+  { name: 'edge', kind: 'edge', path: 'examples/edge.yaml' },
+  { name: 'unknown-fields', kind: 'unknown-fields', path: 'examples/unknown-fields.yaml' },
+];
+
+/**
+ * Same structural situation as `PROXIES_MODULE`: `proxy-providers:` is a real
+ * document map (keyed by arbitrary provider name, e.g. `provider1:`), not an
+ * object this module's own schema could declare `properties` for — so
+ * `config.schema.json` describes ONE provider entry's discriminated union
+ * (`type: http | file | inline`) at its own root. `manifest.root:
+ * ['proxy-providers']` still records the path this module owns; turning
+ * "one entry's plan" into "N rendered forms keyed by provider name" is left
+ * to #14, same as `PROXIES_MODULE`.
+ */
+export const PROXY_PROVIDERS_MODULE: SchemaModule = {
+  manifest: proxyProvidersManifest as ModuleManifest,
+  schema: proxyProvidersConfigSchema as JsonSchema,
+  ui: proxyProvidersUiSchema as UiSchema,
+  rules: proxyProvidersRules as ValidationRule[],
+  examples: PROXY_PROVIDERS_EXAMPLES,
+  i18n: { 'zh-CN': proxyProvidersZhCN, en: proxyProvidersEn } as ModuleI18n,
+};
+
 /** Every module this package currently ships, keyed by the bundle file path `schema-registry`'s `StoredBundle.files` will use. */
 export const BUILTIN_MODULE_FILES: Readonly<Record<string, SchemaModule>> = {
   'modules/general.json': GENERAL_MODULE,
@@ -151,4 +183,5 @@ export const BUILTIN_MODULE_FILES: Readonly<Record<string, SchemaModule>> = {
   'modules/sniffer.json': SNIFFER_MODULE,
   'modules/inbound.json': INBOUND_MODULE,
   'modules/proxies.json': PROXIES_MODULE,
+  'modules/proxy-providers.json': PROXY_PROVIDERS_MODULE,
 };

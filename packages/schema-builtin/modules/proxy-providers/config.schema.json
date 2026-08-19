@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "shared": {
+      "type": "object",
+      "properties": {
+        "health-check": {
+          "type": "object",
+          "properties": {
+            "enable": { "type": "boolean", "default": false },
+            "interval": { "type": "integer", "minimum": 1 },
+            "url": { "type": "string", "format": "uri" },
+            "lazy": { "type": "boolean", "default": true }
+          }
+        },
+        "override": {
+          "type": "object",
+          "properties": {
+            "skip-cert-verify": { "type": "boolean", "default": false },
+            "udp": { "type": "boolean" }
+          }
+        },
+        "filter": { "type": "string" },
+        "exclude-filter": { "type": "string" }
+      }
+    },
+    "http": {
+      "allOf": [
+        { "$ref": "#/$defs/shared" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "http" },
+            "url": { "type": "string", "format": "uri" },
+            "interval": { "type": "integer", "minimum": 1 },
+            "path": { "type": "string" },
+            "proxy": { "type": "string" },
+            "header": { "type": "object" }
+          },
+          "required": ["type", "url"]
+        }
+      ]
+    },
+    "file": {
+      "allOf": [
+        { "$ref": "#/$defs/shared" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "file" },
+            "path": { "type": "string" }
+          },
+          "required": ["type", "path"]
+        }
+      ]
+    },
+    "inline": {
+      "allOf": [
+        { "$ref": "#/$defs/shared" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "inline" },
+            "payload": { "type": "array", "items": { "type": "object" } }
+          },
+          "required": ["type", "payload"]
+        }
+      ]
+    }
+  },
+  "oneOf": [{ "$ref": "#/$defs/http" }, { "$ref": "#/$defs/file" }, { "$ref": "#/$defs/inline" }]
+}

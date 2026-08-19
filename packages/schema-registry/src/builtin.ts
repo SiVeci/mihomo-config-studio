@@ -30,10 +30,13 @@ export const BUILTIN_MODULE: SchemaModule = GENERAL_MODULE;
  * v0.1.0 #8; #7 added `modules/dns.json` and a `general` `hosts` field;
  * #8 added `modules/sniffer.json` and `modules/inbound.json`; #9 added
  * `modules/proxies.json` (four protocols); #10 grew it to all nine P0
- * protocols — every subsequent module slice (#11) must do the same.
+ * protocols; #11 fixed a latent `proxies` masking gap (`obfs-password` was
+ * `sensitive: true` without `control: 'secret'` — `sensitive` alone does not
+ * drive control selection, see #11's plan notes) and added
+ * `modules/proxy-providers.json`, the sixth and last P0 module.
  */
 export const BUILTIN_TRUST_ANCHOR_PUBLIC_KEY_HEX =
-  'd8b6c8c4e8f41f1037b47d412ef11ca783bd5a5b6e7c86eb984d6faf00d525c4';
+  'd4fac965d4b3d83b8bfaa4efc207f6769fdb6dc18e7630d1940ad01c199e97e7';
 
 export const BUILTIN_MANIFEST: BundleManifest = {
   bundleId: 'builtin',
@@ -56,7 +59,11 @@ export const BUILTIN_MANIFEST: BundleManifest = {
     },
     {
       path: 'modules/proxies.json',
-      sha256: '54ab86c30b1d9da7f35e2511c0f024bae486fbf2bab13f057ec6a1f7895a36c8',
+      sha256: 'e1e00f95cf6c020e229e7787b1cf141a4075da11806ced491affb50e60022680',
+    },
+    {
+      path: 'modules/proxy-providers.json',
+      sha256: 'db9e2654dff40688ccf6ae9148fed1e6a237e3a36f0903c0e0ac9f9c3240ba5b',
     },
     {
       path: 'modules/sniffer.json',
@@ -64,7 +71,7 @@ export const BUILTIN_MANIFEST: BundleManifest = {
     },
   ],
   signature:
-    'a63b4ce1071ad7a5875a96fc70bd0afd7edd46ce4b5f19abda1f2bab1c97c7551a19ed504e610c134fde642832120ed7da0bffb68563eebfdbad9f528f525700',
+    'b769b7dbdd689708d71fcf98e038716a7f56dd8c5578dd0fe63b76eef6cbb8ef3e50f787c1c1e1e4321c12038565c3da721f32f3853e7f82a862480c863fde0d',
   signedAt: '2026-08-19T00:00:00Z',
 };
 

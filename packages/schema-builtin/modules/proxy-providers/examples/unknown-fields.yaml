@@ -1,0 +1,6 @@
+# "url" is declared; "size-limit" is a real, documented Mihomo field (caps
+# the downloaded subscription file's size) that is deliberately out of P0
+# scope — it must surface as unknown, not be silently dropped.
+type: http
+url: "https://example.com/subscribe"
+size-limit: 10240

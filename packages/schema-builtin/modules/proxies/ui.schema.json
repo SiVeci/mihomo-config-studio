@@ -240,7 +240,8 @@
       "advanced": true,
       "docs": "https://wiki.metacubex.one/config/proxies/hysteria2/",
       "safety": "caution",
-      "sensitive": true
+      "sensitive": true,
+      "control": "secret"
     },
     "alpn": {
       "label": "field.alpn",

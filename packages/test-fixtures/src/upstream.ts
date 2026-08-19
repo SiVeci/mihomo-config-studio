@@ -379,43 +379,71 @@ const PROXIES_FIELDS: UpstreamFieldRecord[] = [
 
 /**
  * proxy-providers (PRD §8.3 P0: HTTP/File/Inline、健康检查、过滤、覆写).
- * `filter`/`exclude-filter` are demonstrated on a proxy-*group*'s `use:`
- * (line 1711 of the vendored sample: `filter: "HK|TW"`), never directly on
- * a `proxy-providers` entry — despite being documented Mihomo
- * provider-level fields elsewhere. See D-004 in `upstream-divergences.md`.
+ * Same discriminated-union shape as `proxies` (v0.3.0 #9's `_shared.<key>` /
+ * `<branch>.<key>` naming) — `type` picks http/file/inline, each with its
+ * own required field; `health-check`/`override`/`filter`/`exclude-filter`
+ * apply uniformly regardless of source, so they live under `_shared`.
+ *
+ * `filter`/`exclude-filter` were `presentUpstream: false` as of #3 — the
+ * vendored sample only demonstrates `filter` on a proxy-*group*'s `use:`
+ * (line 1711: `filter: "HK|TW"`), never directly on a `proxy-providers`
+ * entry. D-004 flagged this for separate verification before #11 built the
+ * module. That verification (v0.3.0 #11, 2026-08-20) is done: the official
+ * Meta-Docs source (github.com/MetaCubeX/Meta-Docs,
+ * docs/config/proxy-providers/index.md) documents `filter`, `exclude-filter`,
+ * and `exclude-type` as top-level `proxy-providers` fields, with a worked
+ * example (`filter: "(?i)港|hk|hongkong|hong kong"`). D-004 is closed with
+ * this result; see `docs/upstream-divergences.md`. `exclude-type` is real
+ * but outside this version's explicit P0 field range (plan #11 "实现要点"
+ * never names it) — reachable via the unknown-field tree, not modelled.
  */
 const PROXY_PROVIDERS_FIELDS: UpstreamFieldRecord[] = [
-  { path: 'type', presentUpstream: true, note: 'http | file | inline' },
+  { path: '_shared.type', presentUpstream: true, note: 'http | file | inline' },
   {
-    path: 'url',
+    path: 'http.url',
     presentUpstream: true,
     note: 'NFR-SEC-02: subscription URL, must be `sensitive: true`',
   },
-  { path: 'interval', presentUpstream: true },
-  { path: 'path', presentUpstream: true },
-  { path: 'proxy', presentUpstream: true, note: 'dialer used to fetch the provider itself' },
-  { path: 'header', presentUpstream: true },
-  { path: 'payload', presentUpstream: true, note: 'inline provider only (type: inline)' },
-  { path: 'health-check', presentUpstream: true },
-  { path: 'health-check.enable', presentUpstream: true },
-  { path: 'health-check.interval', presentUpstream: true },
+  { path: 'http.interval', presentUpstream: true },
   {
-    path: 'health-check.url',
+    path: 'http.path',
     presentUpstream: true,
-    note: 'probe URL, NOT sensitive — same-named `url` field one level up (the subscription address) is; see project-format ADR-018 heuristic-vs-Schema note',
+    note: 'optional local cache location for the http type',
   },
-  { path: 'override', presentUpstream: true },
-  { path: 'override.skip-cert-verify', presentUpstream: true },
-  { path: 'override.udp', presentUpstream: true },
+  { path: 'http.proxy', presentUpstream: true, note: 'dialer used to fetch the provider itself' },
+  { path: 'http.header', presentUpstream: true },
+  { path: 'file.path', presentUpstream: true, note: 'required source file for the file type' },
+  { path: 'inline.payload', presentUpstream: true, note: 'inline provider only (type: inline)' },
+  { path: '_shared.health-check', presentUpstream: true },
+  { path: '_shared.health-check.enable', presentUpstream: true },
+  { path: '_shared.health-check.interval', presentUpstream: true },
   {
-    path: 'filter',
-    presentUpstream: false,
-    note: 'PRD §8.3 lists "过滤" as P0, but this sample only demonstrates `filter` on a proxy-group\'s `use:` (line 1711), never on a proxy-providers entry directly — needs separate verification against upstream source/docs when #11 implements it; see D-004',
+    path: '_shared.health-check.lazy',
+    presentUpstream: true,
+    note: 'commented out in the sample (`# lazy: true`) but a documented health-check option',
   },
   {
-    path: 'exclude-filter',
-    presentUpstream: false,
-    note: 'see the `filter` entry above; same open question',
+    path: '_shared.health-check.url',
+    presentUpstream: true,
+    note: 'probe URL, NOT sensitive — same-named `url` field on the http branch (the subscription address) is; see project-format ADR-018 heuristic-vs-Schema note',
+  },
+  { path: '_shared.override', presentUpstream: true },
+  { path: '_shared.override.skip-cert-verify', presentUpstream: true },
+  { path: '_shared.override.udp', presentUpstream: true },
+  {
+    path: '_shared.filter',
+    presentUpstream: true,
+    note: 'verified via Meta-Docs (see module doc comment above), not the vendored sample — D-004 closed 2026-08-20',
+  },
+  {
+    path: '_shared.exclude-filter',
+    presentUpstream: true,
+    note: 'verified via Meta-Docs (see module doc comment above), not the vendored sample — D-004 closed 2026-08-20',
+  },
+  {
+    path: 'exclude-type',
+    presentUpstream: true,
+    note: "real, documented alongside filter/exclude-filter (Meta-Docs), but not in plan #11's explicit P0 field range — deliberately unmodelled, reaches the user through the unknown-field tree",
   },
 ];
 

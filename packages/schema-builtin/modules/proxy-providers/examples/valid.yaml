@@ -1,0 +1,12 @@
+type: http
+url: "https://example.com/subscribe?token=abc123"
+interval: 3600
+path: ./provider1.yaml
+health-check:
+  enable: true
+  interval: 600
+  url: https://cp.cloudflare.com/generate_204
+override:
+  skip-cert-verify: false
+  udp: true
+filter: "(?i)hk|hongkong"

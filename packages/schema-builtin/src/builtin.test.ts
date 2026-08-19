@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
   buildFormPlan,
   evaluateRules,
+  isRiskyPattern,
   validateModuleShape,
   validateValue,
   type JsonSchema,
@@ -19,6 +20,7 @@ import {
   GENERAL_MODULE,
   INBOUND_MODULE,
   PROXIES_MODULE,
+  PROXY_PROVIDERS_MODULE,
   SNIFFER_MODULE,
 } from './index.js';
 
@@ -69,20 +71,34 @@ function collectSchemaPaths(schema: JsonSchema, prefix = ''): string[] {
 }
 
 /**
- * `proxies` has no top-level `.properties` — the discriminated union sits at
- * the schema's own root (`$defs` + `oneOf`), not on a named field, so
- * `collectSchemaPaths` (which only ever walks `.properties`) sees nothing.
- * Walks the same `_shared.<key>` / `<protocol>.<key>` naming
- * `UPSTREAM_P0_FIELDS.proxies` already uses (frozen in v0.3.0 #3), reading
- * `$defs` directly: this module's own `$ref` shape is simple and fully known
- * here (a branch ref, then that def's own `allOf: [sharedRef, ownProperties]`).
+ * `proxies` and `proxy-providers` both have no top-level `.properties` — the
+ * discriminated union sits at the schema's own root (`$defs` + `oneOf`), not
+ * on a named field, so `collectSchemaPaths` (which only ever walks
+ * `.properties`) sees nothing. Walks the same `_shared.<key>` /
+ * `<branch>.<key>` naming `UPSTREAM_P0_FIELDS` already uses for both modules
+ * (frozen in v0.3.0 #3), reading `$defs` directly: this shape is simple and
+ * fully known here (a branch ref, then that def's own
+ * `allOf: [sharedRef, ownProperties]`).
  */
-function collectProxyFieldPaths(schema: JsonSchema): Set<string> {
+function addWithNestedProperties(paths: Set<string>, path: string, propSchema: JsonSchema): void {
+  paths.add(path);
+  // `vless.reality-opts` and `proxy-providers`' `_shared.health-check`/
+  // `_shared.override` are the fields with their own declared sub-properties
+  // (rather than a bare object) — one level of nesting only, in both the
+  // shared section and a branch's own properties.
+  if (propSchema.type === 'object' && propSchema.properties) {
+    for (const [subKey, subSchema] of Object.entries(propSchema.properties)) {
+      addWithNestedProperties(paths, `${path}.${subKey}`, subSchema);
+    }
+  }
+}
+
+function collectUnionFieldPaths(schema: JsonSchema): Set<string> {
   const defs = schema.$defs ?? {};
   const paths = new Set<string>();
 
-  for (const key of Object.keys(defs.shared?.properties ?? {})) {
-    paths.add(`_shared.${key}`);
+  for (const [key, propSchema] of Object.entries(defs.shared?.properties ?? {})) {
+    addWithNestedProperties(paths, `_shared.${key}`, propSchema);
   }
 
   for (const branchRef of schema.oneOf ?? []) {
@@ -92,16 +108,9 @@ function collectProxyFieldPaths(schema: JsonSchema): Set<string> {
     for (const [key, propSchema] of Object.entries(ownSchema?.properties ?? {})) {
       // The discriminator is declared per-branch (each branch needs its own
       // `const`) but is conceptually shared — `UPSTREAM_P0_FIELDS` files it
-      // under `_shared.type`, not `<protocol>.type`.
+      // under `_shared.type`, not `<branch>.type`.
       const path = key === 'type' ? '_shared.type' : `${refName}.${key}`;
-      paths.add(path);
-      // `vless.reality-opts` is the one branch field with its own declared
-      // sub-properties (`public-key`/`short-id`) rather than a bare object.
-      if (propSchema.type === 'object' && propSchema.properties) {
-        for (const subKey of Object.keys(propSchema.properties)) {
-          paths.add(`${path}.${subKey}`);
-        }
-      }
+      addWithNestedProperties(paths, path, propSchema);
     }
   }
 
@@ -112,19 +121,24 @@ function collectProxyFieldPaths(schema: JsonSchema): Set<string> {
  * `buildFormPlan` only detects a `oneOf`/`anyOf` union when it sits on a
  * *named field* inside an object (`planField`'s job) — never at a schema's
  * own root (`planObject` only ever walks `.properties`). A real `proxies[]`
- * element has no wrapping key of its own (an entry IS `{name, type, server,
- * ...}` directly), and baking a fake wrapper into `config.schema.json` just
- * to satisfy today's planner would make this module's stored schema stop
- * matching what a real element looks like on disk — so the wrapping happens
+ * element (or a real `proxy-providers` map entry) has no wrapping key of its
+ * own (an entry IS `{name, type, server, ...}` or `{type, url, ...}`
+ * directly), and baking a fake wrapper into `config.schema.json` just to
+ * satisfy today's planner would make the module's stored schema stop
+ * matching what a real entry looks like on disk — so the wrapping happens
  * only here, for this proof, never in the stored module. This is the same
  * synthetic-harness technique `form-plan.test.ts`'s `variantModule` uses,
- * pointed at `PROXIES_MODULE`'s real `$defs`/`oneOf` instead of a made-up
- * one. A real per-item renderer (#14) will need the same wrap-then-reprefix
- * step to turn "one array element" into "one rendered form".
+ * pointed at the module's real `$defs`/`oneOf` instead of a made-up one. A
+ * real per-item renderer (#14) will need the same wrap-then-reprefix step to
+ * turn "one array/map entry" into "one rendered form".
  */
-function planOneProxy(value: unknown, schema: JsonSchema = PROXIES_MODULE.schema) {
+function planOneUnionItem(
+  module: SchemaModule,
+  value: unknown,
+  schema: JsonSchema = module.schema,
+) {
   const probeModule: SchemaModule = {
-    manifest: { id: 'proxies-item-probe', root: [], version: '1.0.0' },
+    manifest: { id: `${module.manifest.id}-item-probe`, root: [], version: '1.0.0' },
     schema: {
       type: 'object',
       properties: { item: { ...(schema.oneOf !== undefined ? { oneOf: schema.oneOf } : {}) } },
@@ -133,7 +147,7 @@ function planOneProxy(value: unknown, schema: JsonSchema = PROXIES_MODULE.schema
     ui: {
       fields: {
         item: {
-          ...(PROXIES_MODULE.ui.fields !== undefined ? { fields: PROXIES_MODULE.ui.fields } : {}),
+          ...(module.ui.fields !== undefined ? { fields: module.ui.fields } : {}),
         },
       },
     },
@@ -322,7 +336,7 @@ describe('proxies module (v0.3.0 #9-#10 — discriminated-union skeleton + all n
   });
 
   it('declares exactly the P0 fields UPSTREAM_P0_FIELDS lists across all nine protocols — no more, no less', () => {
-    const declared = collectProxyFieldPaths(PROXIES_MODULE.schema);
+    const declared = collectUnionFieldPaths(PROXIES_MODULE.schema);
     // `UPSTREAM_P0_FIELDS.proxies` also carries bare P1/P2 protocol names
     // (snell, gost-relay, ...) that never get a Schema branch at all — those
     // are out of scope for a Schema-vs-Schema comparison by construction.
@@ -339,7 +353,7 @@ describe('proxies module (v0.3.0 #9-#10 — discriminated-union skeleton + all n
 
   it('gives every declared field a UI entry with docs + safety metadata', () => {
     const missing: string[] = [];
-    for (const path of collectProxyFieldPaths(PROXIES_MODULE.schema)) {
+    for (const path of collectUnionFieldPaths(PROXIES_MODULE.schema)) {
       // Paths are `_shared.<key>` / `<protocol>.<key>` / `<protocol>.<key>.<subKey>`
       // — the UI map itself is flat (shared across protocols by field name),
       // with one level of nesting only for `reality-opts`'s own sub-fields.
@@ -392,7 +406,7 @@ describe('proxies module (v0.3.0 #9-#10 — discriminated-union skeleton + all n
 
   it('unknown-fields.yaml plans its undeclared field as unknown instead of dropping it', () => {
     const value = parseExample(PROXIES_MODULE, 'examples/unknown-fields.yaml');
-    const plan = planOneProxy(value);
+    const plan = planOneUnionItem(PROXIES_MODULE, value);
     const item = plan.fields.find((field) => field.key === 'item');
     expect(item?.children?.some((child) => child.unknown)).toBe(true);
     expect(plan.unknownFields.length).toBeGreaterThan(0);
@@ -499,7 +513,7 @@ describe('proxies module (v0.3.0 #9-#10 — discriminated-union skeleton + all n
     ];
 
     for (const { value, protocol, ownField } of cases) {
-      const plan = planOneProxy(value);
+      const plan = planOneUnionItem(PROXIES_MODULE, value);
       const item = plan.fields.find((field) => field.key === 'item');
       expect(item?.control, protocol).toBe('variant');
       expect(item?.variant, protocol).toMatchObject({
@@ -581,7 +595,7 @@ describe('proxies module (v0.3.0 #9-#10 — discriminated-union skeleton + all n
       },
     ];
     for (const { value, sensitiveKey } of cases) {
-      const plan = planOneProxy(value);
+      const plan = planOneUnionItem(PROXIES_MODULE, value);
       const item = plan.fields.find((field) => field.key === 'item');
       const masked = item?.children?.find((child) => child.key === sensitiveKey);
       expect(masked?.control, `${String(value.type)}.${sensitiveKey}`).toBe('secret');
@@ -630,7 +644,8 @@ describe('proxies module (v0.3.0 #9-#10 — discriminated-union skeleton + all n
       oneOf: [...(PROXIES_MODULE.schema.oneOf ?? []), { $ref: '#/$defs/ssr' }],
     };
 
-    const plan = planOneProxy(
+    const plan = planOneUnionItem(
+      PROXIES_MODULE,
       { name: 'ssr1', type: 'ssr', server: 's', port: 1, password: 'hunter2' },
       extendedSchema,
     );
@@ -643,5 +658,159 @@ describe('proxies module (v0.3.0 #9-#10 — discriminated-union skeleton + all n
     // anywhere (not here, not form-renderer, not apps/web, not schema-core)
     // had to change to get this: only `extendedSchema`'s data changed.
     expect(password?.control).toBe('secret');
+  });
+});
+
+describe('proxy-providers module (v0.3.0 #11 — discriminated union: http/file/inline)', () => {
+  it('has no shape issues (rules/examples/i18n)', () => {
+    expect(validateModuleShape(PROXY_PROVIDERS_MODULE)).toEqual([]);
+  });
+
+  it('declares exactly the P0 fields UPSTREAM_P0_FIELDS lists — no more, no less', () => {
+    const declared = collectUnionFieldPaths(PROXY_PROVIDERS_MODULE.schema);
+    const upstream = new Set(
+      UPSTREAM_P0_FIELDS['proxy-providers']
+        .map((record) => record.path)
+        .filter((path) => path.includes('.')),
+    );
+
+    const declaredNotUpstream = [...declared].filter((path) => !upstream.has(path));
+    const upstreamNotDeclared = [...upstream].filter((path) => !declared.has(path));
+
+    expect(declaredNotUpstream).toEqual([]);
+    expect(upstreamNotDeclared).toEqual([]);
+  });
+
+  it('gives every declared field a UI entry with docs + safety metadata', () => {
+    const missing: string[] = [];
+    for (const path of collectUnionFieldPaths(PROXY_PROVIDERS_MODULE.schema)) {
+      const segments = path.split('.').slice(1);
+      let fields = PROXY_PROVIDERS_MODULE.ui.fields ?? {};
+      let spec: (typeof fields)[string] | undefined;
+      for (const segment of segments) {
+        spec = fields[segment];
+        if (!spec) break;
+        fields = spec.fields ?? {};
+      }
+      if (!spec?.docs || !spec.safety) missing.push(path);
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it('lists all four example kinds with a path that exists on disk', () => {
+    const kinds = PROXY_PROVIDERS_MODULE.examples?.map((example) => example.kind).sort();
+    expect(kinds).toEqual(['edge', 'invalid', 'unknown-fields', 'valid']);
+    for (const example of PROXY_PROVIDERS_MODULE.examples ?? []) {
+      expect(() => readExample(PROXY_PROVIDERS_MODULE, example.path)).not.toThrow();
+    }
+  });
+
+  it('valid.yaml and edge.yaml have no schema violations', () => {
+    for (const kind of ['valid', 'edge'] as const) {
+      const example = PROXY_PROVIDERS_MODULE.examples?.find((candidate) => candidate.kind === kind);
+      if (!example) throw new Error(`no ${kind} example declared`);
+      const value = parseExample(PROXY_PROVIDERS_MODULE, example.path);
+      expect(validateValue(value, PROXY_PROVIDERS_MODULE.schema), example.path).toEqual([]);
+    }
+  });
+
+  it('invalid.yaml has at least one schema violation', () => {
+    const value = parseExample(PROXY_PROVIDERS_MODULE, 'examples/invalid.yaml');
+    expect(validateValue(value, PROXY_PROVIDERS_MODULE.schema).length).toBeGreaterThan(0);
+  });
+
+  it('every docs URL is on the official wiki domain and carries no query string (NFR-SEC-03 boundary)', () => {
+    const offenders: string[] = [];
+    for (const [key, spec] of Object.entries(PROXY_PROVIDERS_MODULE.ui.fields ?? {})) {
+      if (!spec.docs) continue;
+      const url = new URL(spec.docs);
+      const onOfficialDomain = url.hostname === 'wiki.metacubex.one';
+      const hasNoQuery = url.search === '';
+      if (!onOfficialDomain || !hasNoQuery) offenders.push(key);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('unknown-fields.yaml plans its undeclared field as unknown instead of dropping it', () => {
+    const value = parseExample(PROXY_PROVIDERS_MODULE, 'examples/unknown-fields.yaml');
+    const plan = planOneUnionItem(PROXY_PROVIDERS_MODULE, value);
+    const item = plan.fields.find((field) => field.key === 'item');
+    expect(item?.children?.some((child) => child.unknown)).toBe(true);
+    expect(plan.unknownFields.length).toBeGreaterThan(0);
+  });
+
+  it('plans each of the three source types as a variant, discriminated on "type", with that type\'s own required field as a child', () => {
+    const cases: Array<{ value: Record<string, unknown>; type: string; ownField: string }> = [
+      { value: { type: 'http', url: 'https://example.com/sub' }, type: 'http', ownField: 'url' },
+      { value: { type: 'file', path: './local.yaml' }, type: 'file', ownField: 'path' },
+      {
+        value: { type: 'inline', payload: [{ name: 'n', type: 'ss', server: 's', port: 1 }] },
+        type: 'inline',
+        ownField: 'payload',
+      },
+    ];
+
+    for (const { value, type, ownField } of cases) {
+      const plan = planOneUnionItem(PROXY_PROVIDERS_MODULE, value);
+      const item = plan.fields.find((field) => field.key === 'item');
+      expect(item?.control, type).toBe('variant');
+      expect(item?.variant, type).toMatchObject({
+        discriminatorKey: 'type',
+        selected: type,
+        matched: true,
+      });
+      expect(
+        item?.children?.some((child) => child.key === ownField),
+        type,
+      ).toBe(true);
+    }
+  });
+
+  it('masks the subscription "url" as a secret control but leaves "health-check.url" — same name, different field — fully visible (NFR-SEC-02, plan-mandated distinction)', () => {
+    const plan = planOneUnionItem(PROXY_PROVIDERS_MODULE, {
+      type: 'http',
+      url: 'https://example.com/subscribe?token=abc123',
+      'health-check': { enable: true, url: 'https://cp.cloudflare.com/generate_204' },
+    });
+    const item = plan.fields.find((field) => field.key === 'item');
+
+    const subscriptionUrl = item?.children?.find((child) => child.key === 'url');
+    expect(subscriptionUrl?.control).toBe('secret');
+    expect(subscriptionUrl?.sensitive).toBe(true);
+
+    const healthCheck = item?.children?.find((child) => child.key === 'health-check');
+    const probeUrl = healthCheck?.children?.find((child) => child.key === 'url');
+    expect(probeUrl?.control).not.toBe('secret');
+    expect(probeUrl?.sensitive).toBe(false);
+    expect(probeUrl?.value).toBe('https://cp.cloudflare.com/generate_204');
+  });
+
+  it('never evaluates "filter"/"exclude-filter" as a regex during validation — a classic catastrophic-backtracking pattern is just an opaque string (NFR-SEC-05)', () => {
+    // Regression fence, not just a correctness check: this specific pattern
+    // is designed to hang a naive engine if anything upstream of this test
+    // ever does `new RegExp(field.value)` on it. The schema declares `filter`
+    // as a bare `type: string` — no `format`/`pattern` keyword — so
+    // `validateValue`'s own interpreter never constructs a RegExp from it.
+    // `isRiskyPattern()` (already shipped, `@mcs/schema-core`) is the correct
+    // place for a *warning* about a shape like this — a future security stage
+    // (#13) calls it explicitly; it is not, and must not become, part of the
+    // schema-validation walk itself.
+    const catastrophic = '(a+)+$';
+    expect(isRiskyPattern(catastrophic)).toBe(true);
+
+    const start = performance.now();
+    const issues = validateValue(
+      {
+        type: 'http',
+        url: 'https://example.com/sub',
+        filter: catastrophic,
+        'exclude-filter': catastrophic,
+      },
+      PROXY_PROVIDERS_MODULE.schema,
+    );
+    const elapsedMs = performance.now() - start;
+
+    expect(issues).toEqual([]);
+    expect(elapsedMs).toBeLessThan(50);
   });
 });
