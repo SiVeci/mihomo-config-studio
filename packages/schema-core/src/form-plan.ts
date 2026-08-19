@@ -155,15 +155,33 @@ export function buildFormPlan(
 
 /**
  * Union, across every given module, of every path that module's own plan
- * actually declares (never the `unknown`-flagged fallback rows). Feed the
- * result back in as `additionalKnownPaths` when planning any one of those
- * modules on its own, so two modules sharing a document root — `general`/
- * `inbound`, both `root: []` (v0.3.0 #8) — never flag each other's declared
- * fields as unknown (v0.3.0 #14). A module's own fields are always safe to
- * include here too: a schema-declared property never reaches the "extra
- * key" path this set suppresses, so passing the whole registry-wide result
- * back into every module's own `buildFormPlan` call is always correct, not
- * just for the modules that actually share a root.
+ * actually declares (never the `unknown`-flagged fallback rows), *plus*
+ * every module's own `manifest.root` itself. Feed the result back in as
+ * `additionalKnownPaths` when planning any one of those modules on its own,
+ * so two modules sharing a document root — `general`/`inbound`, both
+ * `root: []` (v0.3.0 #8) — never flag each other's declared fields as
+ * unknown (v0.3.0 #14). A module's own fields are always safe to include
+ * here too: a schema-declared property never reaches the "extra key" path
+ * this set suppresses, so passing the whole registry-wide result back into
+ * every module's own `buildFormPlan` call is always correct, not just for
+ * the modules that actually share a root.
+ *
+ * The added `manifest.root` entries fix a real gap `buildFormPlan`'s own
+ * walk cannot close by itself (found while building v0.3.0 #16, not
+ * introduced by it — this function has been live since #14): a module whose
+ * root scope is a *record* the walk cannot see inside contributes nothing
+ * to `plan.fields` at all — `dns`'s own root (`['dns']`) is never itself one
+ * of `dns`'s *own* planned field paths (those are `['dns', 'enable']` and
+ * so on), and an array-entry module's scope (`proxies`'s `['proxies']`)
+ * isn't a record `planObject` can walk into to begin with (confirmed via
+ * `GENERAL_MODULE`/`DNS_MODULE`/`SNIFFER_MODULE`/`PROXIES_MODULE` together:
+ * `general`'s own plan — `root: []`, so its scope is the whole document —
+ * flagged `dns`, `sniffer`, and `proxies` all as `unknown` before this fix,
+ * for any document that actually has those sections, which in practice is
+ * every real Mihomo config). Adding each module's bare root directly closes
+ * this without needing `buildFormPlan` itself to understand array/opaque
+ * scopes — nothing else could ever legitimately claim another module's own
+ * root path as one of its own fields.
  */
 export function computeKnownPaths(
   modules: readonly SchemaModule[],
@@ -176,6 +194,7 @@ export function computeKnownPaths(
     for (const field of plan.fields) {
       if (!field.unknown) known.add(serializePath(field.path));
     }
+    if (module.manifest.root.length > 0) known.add(serializePath(module.manifest.root));
   }
   return known;
 }
@@ -254,6 +273,44 @@ function reprefixField(field: PlannedField, newPrefix: ConfigPath): PlannedField
     reprefixed.children = field.children.map((child) => reprefixField(child, newPrefix));
   }
   return reprefixed;
+}
+
+/**
+ * Every `unknown`-flagged field across every given module, object- and
+ * array-shaped alike (v0.3.0 #16's `UnknownFieldTree` — one combined list,
+ * not one per module). `buildFormPlan` already flattens and filters this for
+ * a single object module (`FormPlan.unknownFields`); `buildArrayFormPlan`
+ * has no equivalent of its own, since it returns one field per array element
+ * rather than a `FormPlan`, so this walks each element's own children with
+ * the same `flatten` helper `buildFormPlan` uses internally.
+ *
+ * Computes and applies `additionalKnownPaths` itself (ignoring any passed in
+ * `options`) — two modules sharing a document root (`general`/`inbound`,
+ * both `root: []`, v0.3.0 #8) must not flag each other's declared fields as
+ * unknown here either, the exact same false positive `ModuleFormPage`'s own
+ * rendering already had to suppress (v0.3.0 #14). Skipped for array-entry
+ * modules: their `manifest.root` is never shared with anything, and
+ * `additionalKnownPaths` entries — absolute document paths — could never
+ * match anything inside `buildArrayFormPlan`'s synthetic per-element `item`
+ * namespace regardless.
+ */
+export function collectUnknownFields(
+  modules: readonly SchemaModule[],
+  documentValue: unknown,
+  options: FormPlanOptions = {},
+): PlannedField[] {
+  const additionalKnownPaths = computeKnownPaths(modules, documentValue, options);
+  const unknown: PlannedField[] = [];
+  for (const module of modules) {
+    if (isArrayEntryModule(module)) {
+      const items = buildArrayFormPlan(module, documentValue, options);
+      unknown.push(...flatten(items).filter((field) => field.unknown));
+    } else {
+      const plan = buildFormPlan(module, documentValue, { ...options, additionalKnownPaths });
+      unknown.push(...plan.unknownFields);
+    }
+  }
+  return unknown;
 }
 
 interface PlanArgs {

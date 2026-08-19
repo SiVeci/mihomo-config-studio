@@ -5,11 +5,11 @@ import {
   type SchemaModule,
 } from '@mcs/schema-core';
 import { SchemaArrayForm, SchemaForm } from '@mcs/form-renderer';
-import { useMemo, type ReactNode } from 'react';
+import { forwardRef, useImperativeHandle, useMemo, useRef, type ReactNode } from 'react';
 
 import { getLocale, t, translateModuleAware } from '../i18n/index.js';
 import type { TranslationKey } from '../i18n/index.js';
-import type { ConfigPath } from '../worker/protocol.js';
+import { toPointer, type ConfigPath } from '../worker/protocol.js';
 import './ModuleFormPage.css';
 
 export interface ModuleFormPageProps {
@@ -21,6 +21,11 @@ export interface ModuleFormPageProps {
   readonly onModeChange: (mode: FormMode) => void;
   /** Reports a field edit by absolute path, ready for the Worker's `applyPatch`. */
   readonly onFieldChange: (path: ConfigPath, value: unknown) => void;
+}
+
+/** Imperative surface for #16's IssuePanel/UnknownFieldTree: jump straight to a rendered form field. */
+export interface ModuleFormPageHandle {
+  jumpToField: (path: ConfigPath) => void;
 }
 
 /**
@@ -35,78 +40,101 @@ export interface ModuleFormPageProps {
  * *every* module's own `buildFormPlan` call, not just the modules that
  * actually share a root — see its own doc comment (v0.3.0 #14).
  */
-export function ModuleFormPage({
-  modules,
-  value,
-  mode,
-  onModeChange,
-  onFieldChange,
-}: ModuleFormPageProps): ReactNode {
-  const knownPaths = useMemo(
-    () => computeKnownPaths(modules, value, { mode: 'advanced' }),
-    [modules, value],
-  );
+export const ModuleFormPage = forwardRef<ModuleFormPageHandle, ModuleFormPageProps>(
+  function ModuleFormPage({ modules, value, mode, onModeChange, onFieldChange }, ref): ReactNode {
+    const rootRef = useRef<HTMLElement>(null);
+    const knownPaths = useMemo(
+      () => computeKnownPaths(modules, value, { mode: 'advanced' }),
+      [modules, value],
+    );
 
-  // `value === null` covers both "the Worker hasn't reported a parsed
-  // document yet" and "the current document has a blocking syntax error"
-  // (`protocol.ts`'s `handleParse` sends `value: null` for either) — in
-  // both cases there is no document to plan fields against yet, so this
-  // renders the same placeholder rather than flashing schema-default values
-  // that may not reflect the real file at all.
-  if (modules.length === 0 || value === null) {
-    return <p className="module-form-page__empty">{t('form.emptyState')}</p>;
-  }
+    useImperativeHandle(ref, () => ({
+      jumpToField: (path) => {
+        const pointer = toPointer(path);
+        const field = rootRef.current?.querySelector(`[data-field="${pointer}"]`);
+        if (!(field instanceof HTMLElement)) return;
+        field.scrollIntoView({ block: 'center' });
+        // The field's own row is a `<div>`/container, not itself focusable
+        // (see `form-renderer`'s `FieldRow`) — focus its first real control
+        // instead. A genuinely inert field (an `unknown` control, which
+        // renders a plain read-only `<output>` with nothing focusable
+        // inside — confirmed live: without this, `.focus()` on the plain
+        // `<div>` container is a silent no-op, `document.activeElement`
+        // never moves, and the "jump" only ever scrolls) gets a temporary
+        // `tabindex="-1"` so the row itself can still take focus
+        // programmatically, without joining the natural tab order.
+        const control = field.querySelector('input, select, textarea, button, [tabindex]');
+        if (control instanceof HTMLElement) {
+          control.focus();
+        } else {
+          field.setAttribute('tabindex', '-1');
+          field.focus();
+        }
+      },
+    }));
 
-  return (
-    <section className="module-form-page">
-      <div className="module-form-page__toolbar">
-        <label className="module-form-page__mode-label" htmlFor="module-form-mode">
-          {t('form.modeLabel')}
-        </label>
-        <select
-          id="module-form-mode"
-          className="module-form-page__mode-select"
-          value={mode}
-          onChange={(event) => onModeChange(event.target.value as FormMode)}
-        >
-          <option value="basic">{t('form.modeBasicOption')}</option>
-          <option value="advanced">{t('form.modeAdvancedOption')}</option>
-        </select>
-      </div>
+    // `value === null` covers both "the Worker hasn't reported a parsed
+    // document yet" and "the current document has a blocking syntax error"
+    // (`protocol.ts`'s `handleParse` sends `value: null` for either) — in
+    // both cases there is no document to plan fields against yet, so this
+    // renders the same placeholder rather than flashing schema-default values
+    // that may not reflect the real file at all.
+    if (modules.length === 0 || value === null) {
+      return <p className="module-form-page__empty">{t('form.emptyState')}</p>;
+    }
 
-      {modules.map((module) => {
-        const locale = getLocale();
-        const translate = (key: string): string => translateModuleAware(key, module.i18n?.[locale]);
-        const titleKey = `form.module.${module.manifest.id}` as TranslationKey;
-
-        return (
-          <section
-            key={module.manifest.id}
-            className="module-form-page__module"
-            data-module-section={module.manifest.id}
+    return (
+      <section className="module-form-page" ref={rootRef}>
+        <div className="module-form-page__toolbar">
+          <label className="module-form-page__mode-label" htmlFor="module-form-mode">
+            {t('form.modeLabel')}
+          </label>
+          <select
+            id="module-form-mode"
+            className="module-form-page__mode-select"
+            value={mode}
+            onChange={(event) => onModeChange(event.target.value as FormMode)}
           >
-            <h2 className="module-form-page__module-title">{t(titleKey)}</h2>
-            {isArrayEntryModule(module) ? (
-              <SchemaArrayForm
-                module={module}
-                value={value}
-                mode={mode}
-                onChange={onFieldChange}
-                t={translate}
-              />
-            ) : (
-              <SchemaForm
-                module={module}
-                value={value}
-                mode={mode}
-                onChange={onFieldChange}
-                additionalKnownPaths={knownPaths}
-                t={translate}
-              />
-            )}
-          </section>
-        );
-      })}
-    </section>
-  );
-}
+            <option value="basic">{t('form.modeBasicOption')}</option>
+            <option value="advanced">{t('form.modeAdvancedOption')}</option>
+          </select>
+        </div>
+
+        {modules.map((module) => {
+          const locale = getLocale();
+          const translate = (key: string): string =>
+            translateModuleAware(key, module.i18n?.[locale]);
+          const titleKey = `form.module.${module.manifest.id}` as TranslationKey;
+
+          return (
+            <section
+              key={module.manifest.id}
+              className="module-form-page__module"
+              data-module-section={module.manifest.id}
+            >
+              <h2 className="module-form-page__module-title">{t(titleKey)}</h2>
+              {isArrayEntryModule(module) ? (
+                <SchemaArrayForm
+                  module={module}
+                  value={value}
+                  mode={mode}
+                  onChange={onFieldChange}
+                  t={translate}
+                />
+              ) : (
+                <SchemaForm
+                  module={module}
+                  value={value}
+                  mode={mode}
+                  onChange={onFieldChange}
+                  additionalKnownPaths={knownPaths}
+                  t={translate}
+                />
+              )}
+            </section>
+          );
+        })}
+      </section>
+    );
+  },
+);

@@ -44,6 +44,29 @@ const PATH_ONLY_ISSUE: ValidationIssue = {
   path: ['proxies', 0, 'name'],
 };
 
+const RANGE_AND_PATH_ISSUE: ValidationIssue = {
+  severity: 'warning',
+  code: 'schema.both',
+  module: 'general',
+  messageKey: 'schema.both',
+  blocking: false,
+  range: RANGE_A,
+  path: ['dns', 'nameserver'],
+};
+
+/**
+ * `getByRole('button', { name: string, exact: false })` does not reliably
+ * substring-match an `aria-label` containing this project's mixed CJK/Latin
+ * button labels in this environment (confirmed via a throwaway scratch test:
+ * the exact same string, matched with a `RegExp` instead, finds the element
+ * every time) — a `RegExp` sidesteps whatever `exact: false` string matching
+ * is doing differently here. `text` never contains regex metacharacters (the
+ * i18n strings this is used with are plain CJK/Latin words), so no escaping.
+ */
+function byButtonName(text: string): RegExp {
+  return new RegExp(text);
+}
+
 function fakeClient(range: TextRange | null = null): IssuePanelWorkerClient & {
   locate: ReturnType<typeof vi.fn>;
 } {
@@ -54,7 +77,9 @@ function fakeClient(range: TextRange | null = null): IssuePanelWorkerClient & {
 
 describe('IssuePanel / empty state', () => {
   it('shows an empty-state message when there are no issues', () => {
-    render(<IssuePanel issues={[]} client={fakeClient()} onJump={vi.fn()} />);
+    render(
+      <IssuePanel issues={[]} client={fakeClient()} onJump={vi.fn()} onJumpToField={vi.fn()} />,
+    );
 
     expect(screen.getByText(t('issues.emptyState'))).toBeDefined();
   });
@@ -67,6 +92,7 @@ describe('IssuePanel / grouping and non-color severity marks', () => {
         issues={[SYNTAX_ISSUE, SIZE_LIMIT_ISSUE, PATH_ONLY_ISSUE]}
         client={fakeClient()}
         onJump={vi.fn()}
+        onJumpToField={vi.fn()}
       />,
     );
 
@@ -80,7 +106,9 @@ describe('IssuePanel / grouping and non-color severity marks', () => {
       { ...SYNTAX_ISSUE, severity: 'warning' },
       { ...SYNTAX_ISSUE, severity: 'info' },
     ];
-    render(<IssuePanel issues={issues} client={fakeClient()} onJump={vi.fn()} />);
+    render(
+      <IssuePanel issues={issues} client={fakeClient()} onJump={vi.fn()} onJumpToField={vi.fn()} />,
+    );
 
     expect(screen.getAllByText('✕').length).toBeGreaterThan(0);
     expect(screen.getAllByText('▲').length).toBeGreaterThan(0);
@@ -88,7 +116,14 @@ describe('IssuePanel / grouping and non-color severity marks', () => {
   });
 
   it('does not render an empty group for a severity with no issues', () => {
-    render(<IssuePanel issues={[SYNTAX_ISSUE]} client={fakeClient()} onJump={vi.fn()} />);
+    render(
+      <IssuePanel
+        issues={[SYNTAX_ISSUE]}
+        client={fakeClient()}
+        onJump={vi.fn()}
+        onJumpToField={vi.fn()}
+      />,
+    );
 
     expect(screen.queryByText(t('issues.severityWarning'), { exact: false })).toBeNull();
     expect(screen.queryByText(t('issues.severityInfo'), { exact: false })).toBeNull();
@@ -102,6 +137,7 @@ describe('IssuePanel / module filter', () => {
         issues={[SYNTAX_ISSUE, SIZE_LIMIT_ISSUE]}
         client={fakeClient()}
         onJump={vi.fn()}
+        onJumpToField={vi.fn()}
       />,
     );
 
@@ -114,6 +150,7 @@ describe('IssuePanel / module filter', () => {
         issues={[SYNTAX_ISSUE, PATH_ONLY_ISSUE]}
         client={fakeClient()}
         onJump={vi.fn()}
+        onJumpToField={vi.fn()}
       />,
     );
 
@@ -131,6 +168,7 @@ describe('IssuePanel / module filter', () => {
         issues={[SYNTAX_ISSUE, PATH_ONLY_ISSUE]}
         client={fakeClient()}
         onJump={vi.fn()}
+        onJumpToField={vi.fn()}
       />,
     );
     const select = screen.getByLabelText(t('issues.moduleFilterLabel'));
@@ -145,7 +183,14 @@ describe('IssuePanel / module filter', () => {
 
 describe('IssuePanel / message rendering (ADR-016 first real i18n-key consumer)', () => {
   it('renders a known messageKey with its interpolated params', () => {
-    render(<IssuePanel issues={[SIZE_LIMIT_ISSUE]} client={fakeClient()} onJump={vi.fn()} />);
+    render(
+      <IssuePanel
+        issues={[SIZE_LIMIT_ISSUE]}
+        client={fakeClient()}
+        onJump={vi.fn()}
+        onJumpToField={vi.fn()}
+      />,
+    );
 
     expect(
       screen.getByText(t('yaml.limit.size', { bytes: 9_000_000, maxBytes: 8_000_000 })),
@@ -166,7 +211,14 @@ describe('IssuePanel / message rendering (ADR-016 first real i18n-key consumer)'
       blocking: true,
       range: RANGE_A,
     };
-    render(<IssuePanel issues={[withPathParam]} client={fakeClient()} onJump={vi.fn()} />);
+    render(
+      <IssuePanel
+        issues={[withPathParam]}
+        client={fakeClient()}
+        onJump={vi.fn()}
+        onJumpToField={vi.fn()}
+      />,
+    );
 
     expect(screen.getByText(`yaml.custom.${JSON.stringify(['proxies', 0, 'name'])}`)).toBeDefined();
   });
@@ -180,7 +232,14 @@ describe('IssuePanel / message rendering (ADR-016 first real i18n-key consumer)'
       blocking: true,
       range: RANGE_A,
     };
-    render(<IssuePanel issues={[unknown]} client={fakeClient()} onJump={vi.fn()} />);
+    render(
+      <IssuePanel
+        issues={[unknown]}
+        client={fakeClient()}
+        onJump={vi.fn()}
+        onJumpToField={vi.fn()}
+      />,
+    );
 
     expect(screen.getByText('yaml.syntax.SOME_FUTURE_CODE')).toBeDefined();
   });
@@ -190,7 +249,14 @@ describe('IssuePanel / jump (FR-VAL-02)', () => {
   it('jumps directly using issue.range without calling client.locate', async () => {
     const client = fakeClient();
     const onJump = vi.fn();
-    render(<IssuePanel issues={[SYNTAX_ISSUE]} client={client} onJump={onJump} />);
+    render(
+      <IssuePanel
+        issues={[SYNTAX_ISSUE]}
+        client={client}
+        onJump={onJump}
+        onJumpToField={vi.fn()}
+      />,
+    );
 
     fireEvent.click(screen.getByRole('button'));
 
@@ -205,9 +271,18 @@ describe('IssuePanel / jump (FR-VAL-02)', () => {
     };
     const client = fakeClient(resolvedRange);
     const onJump = vi.fn();
-    render(<IssuePanel issues={[PATH_ONLY_ISSUE]} client={client} onJump={onJump} />);
+    render(
+      <IssuePanel
+        issues={[PATH_ONLY_ISSUE]}
+        client={client}
+        onJump={onJump}
+        onJumpToField={vi.fn()}
+      />,
+    );
 
-    fireEvent.click(screen.getByRole('button'));
+    fireEvent.click(
+      screen.getByRole('button', { name: byButtonName(t('issues.jumpToLineLabel')) }),
+    );
 
     expect(client.locate).toHaveBeenCalledWith(['proxies', 0, 'name']);
     await waitFor(() => expect(onJump).toHaveBeenCalledWith(resolvedRange));
@@ -216,20 +291,102 @@ describe('IssuePanel / jump (FR-VAL-02)', () => {
   it('does not call onJump when locate resolves to a null range', async () => {
     const client = fakeClient(null);
     const onJump = vi.fn();
-    render(<IssuePanel issues={[PATH_ONLY_ISSUE]} client={client} onJump={onJump} />);
+    render(
+      <IssuePanel
+        issues={[PATH_ONLY_ISSUE]}
+        client={client}
+        onJump={onJump}
+        onJumpToField={vi.fn()}
+      />,
+    );
 
-    fireEvent.click(screen.getByRole('button'));
+    fireEvent.click(
+      screen.getByRole('button', { name: byButtonName(t('issues.jumpToLineLabel')) }),
+    );
 
     await waitFor(() => expect(client.locate).toHaveBeenCalled());
     expect(onJump).not.toHaveBeenCalled();
   });
 
   it('renders an issue with neither range nor path as non-interactive, not a dead button', () => {
-    render(<IssuePanel issues={[SIZE_LIMIT_ISSUE]} client={fakeClient()} onJump={vi.fn()} />);
+    render(
+      <IssuePanel
+        issues={[SIZE_LIMIT_ISSUE]}
+        client={fakeClient()}
+        onJump={vi.fn()}
+        onJumpToField={vi.fn()}
+      />,
+    );
 
     expect(screen.queryByRole('button')).toBeNull();
     expect(
       screen.getByText(t('yaml.limit.size', { bytes: 9_000_000, maxBytes: 8_000_000 })),
     ).toBeDefined();
+  });
+});
+
+describe('IssuePanel / jump to form field (FR-VAL-02, v0.3.0 #16)', () => {
+  it('an issue with only a path offers a form-field jump button that calls onJumpToField directly, not client.locate', () => {
+    const client = fakeClient();
+    const onJumpToField = vi.fn();
+    render(
+      <IssuePanel
+        issues={[PATH_ONLY_ISSUE]}
+        client={client}
+        onJump={vi.fn()}
+        onJumpToField={onJumpToField}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: byButtonName(t('issues.jumpToFieldLabel')) }),
+    );
+
+    expect(onJumpToField).toHaveBeenCalledWith(['proxies', 0, 'name']);
+    expect(client.locate).not.toHaveBeenCalled();
+  });
+
+  it('an issue with only a range offers no form-field jump button — path is what jump-to-field needs, not range', () => {
+    render(
+      <IssuePanel
+        issues={[SYNTAX_ISSUE]}
+        client={fakeClient()}
+        onJump={vi.fn()}
+        onJumpToField={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole('button', { name: byButtonName(t('issues.jumpToFieldLabel')) }),
+    ).toBeNull();
+  });
+
+  it('an issue with both range and path offers both entry points, independently — neither is a fallback for the other', () => {
+    const client = fakeClient();
+    const onJump = vi.fn();
+    const onJumpToField = vi.fn();
+    render(
+      <IssuePanel
+        issues={[RANGE_AND_PATH_ISSUE]}
+        client={client}
+        onJump={onJump}
+        onJumpToField={onJumpToField}
+      />,
+    );
+
+    const lineButton = screen.getByRole('button', {
+      name: byButtonName(t('issues.jumpToLineLabel')),
+    });
+    const fieldButton = screen.getByRole('button', {
+      name: byButtonName(t('issues.jumpToFieldLabel')),
+    });
+
+    fireEvent.click(lineButton);
+    expect(onJump).toHaveBeenCalledWith(RANGE_A);
+    expect(client.locate).not.toHaveBeenCalled();
+    expect(onJumpToField).not.toHaveBeenCalled();
+
+    fireEvent.click(fieldButton);
+    expect(onJumpToField).toHaveBeenCalledWith(['dns', 'nameserver']);
   });
 });

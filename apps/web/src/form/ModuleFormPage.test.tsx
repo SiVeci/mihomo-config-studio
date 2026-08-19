@@ -1,14 +1,21 @@
 // @vitest-environment jsdom
-import { GENERAL_MODULE, INBOUND_MODULE, PROXIES_MODULE } from '@mcs/schema-builtin';
+import { DNS_MODULE, GENERAL_MODULE, INBOUND_MODULE, PROXIES_MODULE } from '@mcs/schema-builtin';
 import type { ConfigPath } from '@mcs/yaml-engine';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { createRef } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { setLocale, t } from '../i18n/index.js';
 import { ModuleFormPage } from './ModuleFormPage.js';
+import type { ModuleFormPageHandle } from './ModuleFormPage.js';
 
 const GENERAL_MODE_LABEL = GENERAL_MODULE.i18n?.['zh-CN']?.['field.mode'];
 if (!GENERAL_MODE_LABEL) throw new Error('GENERAL_MODULE has no zh-CN field.mode label');
+
+// jsdom does not implement `scrollIntoView` at all (real browsers do) — a
+// test-environment gap `jumpToField` below runs into, not something
+// production code needs to guard against.
+Element.prototype.scrollIntoView = vi.fn();
 
 afterEach(() => {
   cleanup();
@@ -91,6 +98,20 @@ describe('ModuleFormPage (FR-SCHEMA-01, PRD §7.4, v0.3.0 #14)', () => {
     ).not.toBe('true');
   });
 
+  it('general does not flag a sibling module’s own root key — proxies — as an unknown field of its own (regression: real bug shipped in #14, found while building #16)', () => {
+    // `general`'s root is `[]` (the whole document), so its own "extra key"
+    // walk previously saw `proxies` (a real top-level Mihomo section, owned
+    // by the separately-rooted PROXIES_MODULE) with nowhere recorded that
+    // marked `['proxies']` itself as claimed — `computeKnownPaths` only ever
+    // recorded a module's own *declared child* paths, never its own bare
+    // `manifest.root`. `dns`/`sniffer` have the identical shape (`root:
+    // ['dns']`/`['sniffer']`) and were equally affected; `proxies` is the
+    // one already present in this file's real fixture document.
+    renderPage();
+    const generalSection = document.querySelector('[data-module-section="general"]')!;
+    expect(generalSection.querySelector('[data-field="/proxies"]')).toBeNull();
+  });
+
   it('renders proxies as an array form, one entry per element, correctly addressed', () => {
     renderPage();
     const proxiesSection = document.querySelector('[data-module-section="proxies"]')!;
@@ -132,5 +153,67 @@ describe('ModuleFormPage (FR-SCHEMA-01, PRD §7.4, v0.3.0 #14)', () => {
       '[data-field="/proxies/1/password"] input',
     ) as HTMLInputElement | null;
     expect(passwordInput?.type).toBe('password');
+  });
+});
+
+describe('ModuleFormPage.jumpToField (FR-VAL-02, v0.3.0 #16)', () => {
+  it('scrolls to and focuses a real field’s own control', () => {
+    const ref = createRef<ModuleFormPageHandle>();
+    const onModeChange = vi.fn();
+    const onFieldChange = vi.fn<(path: ConfigPath, value: unknown) => void>();
+    render(
+      <ModuleFormPage
+        ref={ref}
+        modules={[GENERAL_MODULE, INBOUND_MODULE, PROXIES_MODULE]}
+        value={DOCUMENT}
+        mode="advanced"
+        onModeChange={onModeChange}
+        onFieldChange={onFieldChange}
+      />,
+    );
+
+    ref.current!.jumpToField(['mode']);
+
+    const modeControl = document.getElementById('/mode');
+    expect(document.activeElement).toBe(modeControl);
+  });
+
+  it('focuses the field’s own row (via a temporary tabindex) when it has no focusable control — an unknown field, rendered read-only (regression: real bug, .focus() on a plain <div> is a silent no-op, caught manually in a real browser)', () => {
+    const ref = createRef<ModuleFormPageHandle>();
+    render(
+      <ModuleFormPage
+        ref={ref}
+        modules={[DNS_MODULE]}
+        value={{ dns: { enable: true, 'totally-made-up-field': 'hello' } }}
+        mode="advanced"
+        onModeChange={vi.fn()}
+        onFieldChange={vi.fn()}
+      />,
+    );
+
+    ref.current!.jumpToField(['dns', 'totally-made-up-field']);
+
+    const row = document.querySelector('[data-field="/dns/totally-made-up-field"]');
+    expect(row?.getAttribute('data-control')).toBe('unknown');
+    expect(document.activeElement).toBe(row);
+    expect(row?.getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('is a no-op, not a crash, when the path does not match any rendered field', () => {
+    const ref = createRef<ModuleFormPageHandle>();
+    render(
+      <ModuleFormPage
+        ref={ref}
+        modules={[GENERAL_MODULE]}
+        value={DOCUMENT}
+        mode="advanced"
+        onModeChange={vi.fn()}
+        onFieldChange={vi.fn()}
+      />,
+    );
+    const previouslyFocused = document.activeElement;
+
+    expect(() => ref.current!.jumpToField(['does', 'not', 'exist'])).not.toThrow();
+    expect(document.activeElement).toBe(previouslyFocused);
   });
 });

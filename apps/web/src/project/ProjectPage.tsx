@@ -1,8 +1,8 @@
-import type { FormMode, SchemaModule } from '@mcs/schema-core';
+import { collectUnknownFields, type FormMode, type SchemaModule } from '@mcs/schema-core';
 import { builtinAsStoredBundle, createRegistry } from '@mcs/schema-registry';
 import { AutoSaver } from '@mcs/storage';
 import type { StorageAdapter } from '@mcs/storage';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { DiffPanel } from '../diff/DiffPanel.js';
 import type { DiffPanelWorkerClient } from '../diff/DiffPanel.js';
@@ -11,6 +11,8 @@ import type { YamlEditorHandle, YamlEditorWorkerClient } from '../editor/YamlEdi
 import { ExportDialog } from '../export/ExportDialog.js';
 import type { DownloadFile } from '../export/ExportDialog.js';
 import { ModuleFormPage } from '../form/ModuleFormPage.js';
+import type { ModuleFormPageHandle } from '../form/ModuleFormPage.js';
+import { UnknownFieldTree } from '../form/UnknownFieldTree.js';
 import { ImportPanel } from '../import/ImportPanel.js';
 import type { ImportWorkerClient } from '../import/ImportPanel.js';
 import { t } from '../i18n/index.js';
@@ -108,6 +110,17 @@ export function ProjectPage({
   const [modules] = useState<readonly SchemaModule[]>(() =>
     createRegistry(builtinAsStoredBundle()).modules(),
   );
+  // `null` (not yet parsed) is not "an empty document" — `collectUnknownFields`
+  // would otherwise plan every module against `null` and, same as
+  // `ModuleFormPage`, transiently report schema-default values as if they
+  // were unknown-field findings about a document that has not loaded yet.
+  const unknownFields = useMemo(
+    () =>
+      documentValue === null
+        ? []
+        : collectUnknownFields(modules, documentValue, { mode: 'advanced' }),
+    [modules, documentValue],
+  );
 
   const projectsRef = useRef(projects);
   projectsRef.current = projects;
@@ -116,6 +129,7 @@ export function ProjectPage({
   const manifestAutoSaverRef = useRef<AutoSaver | null>(null);
   const configAutoSaverRef = useRef<AutoSaver | null>(null);
   const editorRef = useRef<YamlEditorHandle>(null);
+  const moduleFormRef = useRef<ModuleFormPageHandle>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -338,6 +352,10 @@ export function ProjectPage({
     editorRef.current?.jumpToRange(range);
   }
 
+  function handleJumpToField(path: ConfigPath): void {
+    moduleFormRef.current?.jumpToField(path);
+  }
+
   /**
    * A `ModuleFormPage` field edit — distinct from `handleFieldChange` above,
    * which is project *metadata* (name/description/targetProfile), not
@@ -418,7 +436,15 @@ export function ProjectPage({
       }
       aside={
         selected ? (
-          <IssuePanel issues={issues} client={client} onJump={handleJumpToIssue} />
+          <>
+            <IssuePanel
+              issues={issues}
+              client={client}
+              onJump={handleJumpToIssue}
+              onJumpToField={handleJumpToField}
+            />
+            <UnknownFieldTree fields={unknownFields} client={client} onJump={handleJumpToIssue} />
+          </>
         ) : undefined
       }
     >
@@ -434,6 +460,7 @@ export function ProjectPage({
             onValueChange={setDocumentValue}
           />
           <ModuleFormPage
+            ref={moduleFormRef}
             modules={modules}
             value={documentValue}
             mode={formMode}

@@ -4,6 +4,7 @@ export { checkFormat, isRiskyPattern } from './formats.js';
 export {
   buildArrayFormPlan,
   buildFormPlan,
+  collectUnknownFields,
   computeKnownPaths,
   inferControl,
   isArrayEntryModule,

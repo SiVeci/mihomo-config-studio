@@ -21,6 +21,14 @@ export interface IssuePanelProps {
   readonly client: IssuePanelWorkerClient;
   /** Called once a range has been resolved (directly, or via `client.locate`) — typically wired to `YamlEditorHandle.jumpToRange`. */
   readonly onJump: (range: TextRange) => void;
+  /**
+   * Jumps straight to the form field an issue's `path` addresses — a
+   * separate entry point from `onJump`, not a fallback for it (v0.3.0 #16).
+   * An issue with both `range` and `path` offers both, independently: which
+   * one a user wants depends on whether they are looking at the raw YAML or
+   * the structured form, and this panel cannot guess that for them.
+   */
+  readonly onJumpToField: (path: ConfigPath) => void;
 }
 
 const SEVERITY_ORDER: readonly IssueSeverity[] = ['error', 'warning', 'info'];
@@ -72,7 +80,7 @@ function translateIssueMessage(issue: ValidationIssue): string {
  * `ProjectPage`) rather than parsing independently — a second independent
  * parse of the same text would risk the two panels disagreeing.
  */
-export function IssuePanel({ issues, client, onJump }: IssuePanelProps): ReactNode {
+export function IssuePanel({ issues, client, onJump, onJumpToField }: IssuePanelProps): ReactNode {
   const [moduleFilter, setModuleFilter] = useState('all');
 
   const modules = [...new Set(issues.map((issue) => issue.module))].sort();
@@ -83,17 +91,14 @@ export function IssuePanel({ issues, client, onJump }: IssuePanelProps): ReactNo
     items: filtered.filter((issue) => issue.severity === severity),
   })).filter((group) => group.items.length > 0);
 
-  async function handleJump(issue: ValidationIssue): Promise<void> {
+  // The YAML-line jump: direct when `range` is already on the issue,
+  // otherwise resolved indirectly through the Worker. Independent of
+  // `onJumpToField` below — an issue can offer either, both, or neither.
+  async function handleJumpToLine(issue: ValidationIssue): Promise<void> {
     if (issue.range) {
       onJump(issue.range);
       return;
     }
-    // "跳转到表单字段" (jumping straight to a form field) is v0.3.0 scope; this
-    // is still a YAML-line jump, just located indirectly via the Worker
-    // instead of a range already sitting on the issue. The `!` is safe: this
-    // function only ever runs from the `jumpable` button below, which is
-    // only rendered when `issue.range ?? issue.path` is truthy — having
-    // fallen through the `issue.range` branch above, `issue.path` is it.
     const response = await client.locate(issue.path!);
     if (response.range) onJump(response.range);
   }
@@ -134,32 +139,41 @@ export function IssuePanel({ issues, client, onJump }: IssuePanelProps): ReactNo
             </h3>
             <ul className="issue-panel__list">
               {items.map((issue, index) => {
-                const jumpable = Boolean(issue.range ?? issue.path);
+                const canJumpToLine = Boolean(issue.range ?? issue.path);
+                const canJumpToField = Boolean(issue.path);
                 const label = `${t(SEVERITY_LABEL_KEY[severity])}: ${translateIssueMessage(issue)}`;
                 return (
-                  <li key={index}>
-                    {jumpable ? (
+                  <li
+                    key={index}
+                    className={`issue-panel__item issue-panel__item--${severity}${
+                      canJumpToLine || canJumpToField ? '' : ' issue-panel__item--static'
+                    }`}
+                  >
+                    <span aria-hidden="true" className="issue-panel__mark">
+                      {SEVERITY_MARK[severity]}
+                    </span>
+                    <span className="issue-panel__message" aria-label={label}>
+                      {translateIssueMessage(issue)}
+                    </span>
+                    {canJumpToLine && (
                       <button
                         type="button"
-                        className={`issue-panel__item issue-panel__item--${severity}`}
-                        aria-label={label}
-                        onClick={() => void handleJump(issue)}
+                        className="issue-panel__jump-button"
+                        aria-label={`${label} — ${t('issues.jumpToLineLabel')}`}
+                        onClick={() => void handleJumpToLine(issue)}
                       >
-                        <span aria-hidden="true" className="issue-panel__mark">
-                          {SEVERITY_MARK[severity]}
-                        </span>
-                        {translateIssueMessage(issue)}
+                        {t('issues.jumpToLineLabel')}
                       </button>
-                    ) : (
-                      <span
-                        className={`issue-panel__item issue-panel__item--${severity} issue-panel__item--static`}
-                        aria-label={label}
+                    )}
+                    {canJumpToField && (
+                      <button
+                        type="button"
+                        className="issue-panel__jump-button"
+                        aria-label={`${label} — ${t('issues.jumpToFieldLabel')}`}
+                        onClick={() => onJumpToField(issue.path!)}
                       >
-                        <span aria-hidden="true" className="issue-panel__mark">
-                          {SEVERITY_MARK[severity]}
-                        </span>
-                        {translateIssueMessage(issue)}
-                      </span>
+                        {t('issues.jumpToFieldLabel')}
+                      </button>
                     )}
                   </li>
                 );

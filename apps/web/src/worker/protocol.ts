@@ -42,6 +42,7 @@ export type {
   TextRange,
 } from '@mcs/yaml-engine';
 export { hasBlockingIssues, VALIDATION_DEBOUNCE_MS } from '@mcs/validator';
+export { toPointer } from '@mcs/yaml-engine';
 
 export interface ParseRequest {
   type: 'parse';

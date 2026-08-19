@@ -441,7 +441,9 @@ describe('ProjectPage / issue panel wiring (FR-VAL-02 UI wiring)', () => {
     await screen.findByText('yaml.syntax.y');
 
     fireEvent.click(
-      screen.getByRole('button', { name: `${t('issues.severityWarning')}: yaml.syntax.y` }),
+      screen.getByRole('button', {
+        name: `${t('issues.severityWarning')}: yaml.syntax.y — ${t('issues.jumpToLineLabel')}`,
+      }),
     );
 
     const editorTextarea = screen.getByLabelText<HTMLTextAreaElement>(t('editor.title'));

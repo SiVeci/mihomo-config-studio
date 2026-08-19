@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildArrayFormPlan,
   buildFormPlan,
+  collectUnknownFields,
   computeKnownPaths,
   inferControl,
   isArrayEntryModule,
@@ -606,5 +607,43 @@ describe('buildArrayFormPlan (FR-SCHEMA-01, v0.3.0 #14)', () => {
     expect(
       buildArrayFormPlan(ARRAY_ENTRY_MODULE, { items: 'not-an-array' }, { mode: 'advanced' }),
     ).toEqual([]);
+  });
+});
+
+describe('collectUnknownFields (FR-VAL-05 UI side, v0.3.0 #16)', () => {
+  it('collects an unknown field from an ordinary object module', () => {
+    const unknown = collectUnknownFields(
+      [sampleModule],
+      { sample: { mode: 'rule', 'brand-new-flag': 42 } },
+      { mode: 'advanced' },
+    );
+    expect(unknown.map((field) => field.path)).toEqual([['sample', 'brand-new-flag']]);
+  });
+
+  it('collects an unknown field nested inside an array-entry module’s own element', () => {
+    const unknown = collectUnknownFields(
+      [ARRAY_ENTRY_MODULE],
+      { items: [{ kind: 'a', label: 'x', onlyA: 1, 'mystery-field': true }] },
+      { mode: 'advanced' },
+    );
+    expect(unknown.map((field) => field.path)).toEqual([['items', 0, 'mystery-field']]);
+  });
+
+  it('combines unknown fields across several modules into one list, in module order', () => {
+    const unknown = collectUnknownFields(
+      [ALPHA_MODULE, ARRAY_ENTRY_MODULE],
+      { foo: 'x', extra: 1, items: [{ kind: 'b', label: 'y', onlyB: 2, weird: true }] },
+      { mode: 'advanced' },
+    );
+    expect(unknown.map((field) => field.path)).toEqual([['extra'], ['items', 0, 'weird']]);
+  });
+
+  it('returns an empty array when nothing is unknown anywhere', () => {
+    const unknown = collectUnknownFields(
+      [sampleModule, ARRAY_ENTRY_MODULE],
+      { sample: { mode: 'rule' }, items: [{ kind: 'a', label: 'x', onlyA: 1 }] },
+      { mode: 'advanced' },
+    );
+    expect(unknown).toEqual([]);
   });
 });

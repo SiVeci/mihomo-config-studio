@@ -61,19 +61,18 @@
 
 .issue-panel__item {
   display: flex;
-  align-items: flex-start;
+  align-items: baseline;
+  flex-wrap: wrap;
   gap: var(--mcs-spacing-xxs);
   width: 100%;
   text-align: left;
-  border: none;
   border-radius: var(--mcs-rounded-xs);
   padding: var(--mcs-spacing-xxs) var(--mcs-spacing-xs);
   font-size: var(--mcs-font-size-body-sm);
-  cursor: pointer;
 }
 
 .issue-panel__item--static {
-  cursor: default;
+  opacity: 0.85;
 }
 
 .issue-panel__item--error {
@@ -94,4 +93,19 @@
 .issue-panel__mark {
   flex: 0 0 auto;
   font-weight: 700;
+}
+
+.issue-panel__message {
+  flex: 1 1 auto;
+}
+
+.issue-panel__jump-button {
+  flex: 0 0 auto;
+  border: 1px solid currentColor;
+  border-radius: var(--mcs-rounded-xs);
+  background: transparent;
+  color: inherit;
+  font-size: var(--mcs-font-size-caption);
+  padding: 0 var(--mcs-spacing-xxs);
+  cursor: pointer;
 }

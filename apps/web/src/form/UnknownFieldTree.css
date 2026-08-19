@@ -1,0 +1,35 @@
+.unknown-field-tree {
+  border: 1px solid var(--mcs-color-hairline);
+  border-radius: var(--mcs-rounded-xs);
+  padding: var(--mcs-spacing-xs);
+}
+
+.unknown-field-tree__summary {
+  cursor: pointer;
+  font-size: var(--mcs-font-size-body-sm);
+  color: var(--mcs-color-text-muted);
+}
+
+.unknown-field-tree__list {
+  list-style: none;
+  margin: var(--mcs-spacing-xs) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--mcs-spacing-xs);
+}
+
+.unknown-field-tree__item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--mcs-spacing-xs);
+  flex-wrap: wrap;
+}
+
+.unknown-field-tree__path {
+  font-family: monospace;
+}
+
+.unknown-field-tree__value {
+  color: var(--mcs-color-text-muted);
+}
