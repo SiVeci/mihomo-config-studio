@@ -1,0 +1,6 @@
+# Violates config.schema.json in two independent ways:
+# - "mixed-port" is out of the valid port range (max 65535)
+# - "tun.stack" is not one of the enum values (system/gvisor/mixed)
+mixed-port: 70000
+tun:
+  stack: turbo

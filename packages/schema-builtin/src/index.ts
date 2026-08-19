@@ -20,6 +20,18 @@ import generalZhCN from '../modules/general/i18n/zh-CN.json';
 import generalManifest from '../modules/general/module.manifest.json';
 import generalUiSchema from '../modules/general/ui.schema.json';
 import generalRules from '../modules/general/validation.rules.json';
+import inboundConfigSchema from '../modules/inbound/config.schema.json';
+import inboundEn from '../modules/inbound/i18n/en.json';
+import inboundZhCN from '../modules/inbound/i18n/zh-CN.json';
+import inboundManifest from '../modules/inbound/module.manifest.json';
+import inboundUiSchema from '../modules/inbound/ui.schema.json';
+import inboundRules from '../modules/inbound/validation.rules.json';
+import snifferConfigSchema from '../modules/sniffer/config.schema.json';
+import snifferEn from '../modules/sniffer/i18n/en.json';
+import snifferZhCN from '../modules/sniffer/i18n/zh-CN.json';
+import snifferManifest from '../modules/sniffer/module.manifest.json';
+import snifferUiSchema from '../modules/sniffer/ui.schema.json';
+import snifferRules from '../modules/sniffer/validation.rules.json';
 
 /**
  * Every module lives on disk as the same seven-file set `schema-cli pack`
@@ -66,8 +78,42 @@ export const DNS_MODULE: SchemaModule = {
   i18n: { 'zh-CN': dnsZhCN, en: dnsEn } as ModuleI18n,
 };
 
+const SNIFFER_EXAMPLES: ModuleExample[] = [
+  { name: 'valid', kind: 'valid', path: 'examples/valid.yaml' },
+  { name: 'invalid', kind: 'invalid', path: 'examples/invalid.yaml' },
+  { name: 'edge', kind: 'edge', path: 'examples/edge.yaml' },
+  { name: 'unknown-fields', kind: 'unknown-fields', path: 'examples/unknown-fields.yaml' },
+];
+
+export const SNIFFER_MODULE: SchemaModule = {
+  manifest: snifferManifest as ModuleManifest,
+  schema: snifferConfigSchema as JsonSchema,
+  ui: snifferUiSchema as UiSchema,
+  rules: snifferRules as ValidationRule[],
+  examples: SNIFFER_EXAMPLES,
+  i18n: { 'zh-CN': snifferZhCN, en: snifferEn } as ModuleI18n,
+};
+
+const INBOUND_EXAMPLES: ModuleExample[] = [
+  { name: 'valid', kind: 'valid', path: 'examples/valid.yaml' },
+  { name: 'invalid', kind: 'invalid', path: 'examples/invalid.yaml' },
+  { name: 'edge', kind: 'edge', path: 'examples/edge.yaml' },
+  { name: 'unknown-fields', kind: 'unknown-fields', path: 'examples/unknown-fields.yaml' },
+];
+
+export const INBOUND_MODULE: SchemaModule = {
+  manifest: inboundManifest as ModuleManifest,
+  schema: inboundConfigSchema as JsonSchema,
+  ui: inboundUiSchema as UiSchema,
+  rules: inboundRules as ValidationRule[],
+  examples: INBOUND_EXAMPLES,
+  i18n: { 'zh-CN': inboundZhCN, en: inboundEn } as ModuleI18n,
+};
+
 /** Every module this package currently ships, keyed by the bundle file path `schema-registry`'s `StoredBundle.files` will use. */
 export const BUILTIN_MODULE_FILES: Readonly<Record<string, SchemaModule>> = {
   'modules/general.json': GENERAL_MODULE,
   'modules/dns.json': DNS_MODULE,
+  'modules/sniffer.json': SNIFFER_MODULE,
+  'modules/inbound.json': INBOUND_MODULE,
 };

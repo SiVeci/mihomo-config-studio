@@ -71,8 +71,12 @@ const P1P2_PROTOCOL_NOTE =
  * GEO、连接选项). Structural note for #6: these fields are scattered at the
  * *document root* (no wrapping `general:` key upstream) — the same root
  * `inbound`'s port fields and `tun:` live at (see `inbound` below). Two
- * modules sharing the document root is a real design question for #6/#8,
- * not resolved by this inventory.
+ * modules sharing the document root means `buildFormPlan`'s per-module
+ * "unknown fields" pass will, once both exist (#8), see each other's
+ * territory as unrecognized — deliberately left unresolved until #14, which
+ * is where a real multi-module document is actually rendered and the right
+ * shape for the fix (a `buildFormPlan` option? something else?) becomes
+ * decidable instead of guessed at.
  *
  * `hosts` also lives here (v0.3.0 #7), despite PRD's §8.3 table grouping it
  * under DNS conceptually: it is a document-root key (line 119 of the

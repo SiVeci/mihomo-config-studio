@@ -14,7 +14,7 @@ import { UPSTREAM_P0_FIELDS, type P0ModuleId } from '@mcs/test-fixtures';
 import { MihomoYamlDocument } from '@mcs/yaml-engine';
 import { describe, expect, it } from 'vitest';
 
-import { DNS_MODULE, GENERAL_MODULE } from './index.js';
+import { DNS_MODULE, GENERAL_MODULE, INBOUND_MODULE, SNIFFER_MODULE } from './index.js';
 
 const MODULES_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', 'modules');
 
@@ -72,9 +72,11 @@ function collectSchemaPaths(schema: JsonSchema, prefix = ''): string[] {
 const MODULES: ReadonlyArray<{ id: P0ModuleId; module: SchemaModule }> = [
   { id: 'general', module: GENERAL_MODULE },
   { id: 'dns', module: DNS_MODULE },
+  { id: 'sniffer', module: SNIFFER_MODULE },
+  { id: 'inbound', module: INBOUND_MODULE },
 ];
 
-describe.each(MODULES)('$id module (v0.3.0 #6/#7)', ({ id, module }) => {
+describe.each(MODULES)('$id module (v0.3.0 #6-#8)', ({ id, module }) => {
   it('has no shape issues (rules/examples/i18n)', () => {
     expect(validateModuleShape(module)).toEqual([]);
   });
@@ -196,5 +198,41 @@ describe('dns module specifics', () => {
       'fallback-filter': { geoip: true, 'geoip-code': 'CN' },
     });
     expect(quiet).toEqual([]);
+  });
+});
+
+describe('inbound module specifics', () => {
+  it('hides TUN fields on ios but keeps them visible on desktop/android (real-field re-verification of the platform-restriction mechanism, v0.3.0 #8)', () => {
+    const value = { tun: { enable: true, stack: 'mixed' } };
+
+    const onIos = buildFormPlan(INBOUND_MODULE, value, { mode: 'advanced', platform: 'ios' });
+    const stackOnIos = onIos.fields
+      .find((field) => field.key === 'tun')
+      ?.children?.find((child) => child.key === 'stack');
+    expect(stackOnIos?.visible).toBe(false);
+    // Hidden, not dropped: the value survives.
+    expect(stackOnIos?.value).toBe('mixed');
+
+    const onLinux = buildFormPlan(INBOUND_MODULE, value, { mode: 'advanced', platform: 'linux' });
+    const stackOnLinux = onLinux.fields
+      .find((field) => field.key === 'tun')
+      ?.children?.find((child) => child.key === 'stack');
+    expect(stackOnLinux?.visible).toBe(true);
+  });
+
+  it('hides tun sub-fields until tun.enable is true, without dropping their values', () => {
+    const value = { tun: { enable: false, stack: 'mixed' } };
+    const plan = buildFormPlan(INBOUND_MODULE, value, { mode: 'advanced', platform: 'linux' });
+    const stack = plan.fields
+      .find((field) => field.key === 'tun')
+      ?.children?.find((child) => child.key === 'stack');
+    expect(stack?.visible).toBe(false);
+    expect(stack?.value).toBe('mixed');
+  });
+
+  it('marks the listening-port fields caution, the same risk category as allow-lan (metadata groundwork for #13 FR-VAL-04)', () => {
+    expect(INBOUND_MODULE.ui.fields?.port?.safety).toBe('caution');
+    expect(INBOUND_MODULE.ui.fields?.['socks-port']?.safety).toBe('caution');
+    expect(INBOUND_MODULE.ui.fields?.['mixed-port']?.safety).toBe('caution');
   });
 });

@@ -1,0 +1,59 @@
+{
+  "groups": [
+    { "id": "general", "label": "group.general", "order": 0 },
+    { "id": "sniff", "label": "group.sniff", "order": 10, "advanced": true }
+  ],
+  "fields": {
+    "enable": {
+      "label": "field.enable",
+      "help": "help.enable",
+      "group": "general",
+      "order": 1,
+      "docs": "https://wiki.metacubex.one/config/sniffer/",
+      "safety": "safe"
+    },
+    "override-destination": {
+      "label": "field.override-destination",
+      "help": "help.override-destination",
+      "group": "general",
+      "order": 2,
+      "docs": "https://wiki.metacubex.one/config/sniffer/",
+      "safety": "safe"
+    },
+    "sniff": {
+      "label": "field.sniff",
+      "group": "sniff",
+      "order": 1,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/sniffer/",
+      "safety": "safe",
+      "fields": {
+        "HTTP": {
+          "label": "field.sniff.HTTP",
+          "docs": "https://wiki.metacubex.one/config/sniffer/",
+          "safety": "safe",
+          "fields": {
+            "ports": {
+              "label": "field.sniff.HTTP.ports",
+              "help": "help.sniff.HTTP.ports",
+              "docs": "https://wiki.metacubex.one/config/sniffer/",
+              "safety": "safe"
+            }
+          }
+        },
+        "TLS": {
+          "label": "field.sniff.TLS",
+          "help": "help.sniff.TLS",
+          "docs": "https://wiki.metacubex.one/config/sniffer/",
+          "safety": "safe"
+        },
+        "QUIC": {
+          "label": "field.sniff.QUIC",
+          "help": "help.sniff.QUIC",
+          "docs": "https://wiki.metacubex.one/config/sniffer/",
+          "safety": "safe"
+        }
+      }
+    }
+  }
+}

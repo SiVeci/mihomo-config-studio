@@ -1,0 +1,7 @@
+# Boundary values that are schema-valid but sit at the edge of their range:
+# - "port" at the minimum valid port number
+# - "tun.dns-hijack" as an empty array
+port: 1
+tun:
+  enable: true
+  dns-hijack: []

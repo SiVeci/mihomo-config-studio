@@ -1,0 +1,7 @@
+# "enable" is declared; "force-domain" is a real, documented Mihomo field
+# (forces sniffing on specific domains) that PRD §8.3 deliberately keeps out
+# of P0 scope (advanced force/skip conditions) — it must surface as unknown,
+# not be silently dropped.
+enable: true
+force-domain:
+  - "+.v2ex.com"

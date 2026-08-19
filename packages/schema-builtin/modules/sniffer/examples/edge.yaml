@@ -1,0 +1,10 @@
+# Boundary values that are schema-valid but sit at the edge of their range:
+# - "sniff.HTTP.ports" as an empty array (sniff HTTP but pin no explicit port)
+# - TLS/QUIC present as empty objects (enables sniffing at upstream's own
+#   default of port 443, per config.yaml's own comment)
+enable: true
+sniff:
+  HTTP:
+    ports: []
+  TLS: {}
+  QUIC: {}

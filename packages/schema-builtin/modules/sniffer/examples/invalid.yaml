@@ -1,0 +1,7 @@
+# Violates config.schema.json in two independent ways:
+# - "enable" is not a boolean
+# - "sniff.HTTP.ports" is not an array
+enable: not-a-boolean
+sniff:
+  HTTP:
+    ports: 80

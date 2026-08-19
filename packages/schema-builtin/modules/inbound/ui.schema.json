@@ -1,0 +1,72 @@
+{
+  "groups": [
+    { "id": "ports", "label": "group.ports", "order": 0 },
+    { "id": "tun", "label": "group.tun", "order": 10, "advanced": true }
+  ],
+  "fields": {
+    "port": {
+      "label": "field.port",
+      "help": "help.port",
+      "group": "ports",
+      "order": 1,
+      "docs": "https://wiki.metacubex.one/config/inbound/mixin/",
+      "safety": "caution"
+    },
+    "socks-port": {
+      "label": "field.socks-port",
+      "help": "help.socks-port",
+      "group": "ports",
+      "order": 2,
+      "docs": "https://wiki.metacubex.one/config/inbound/mixin/",
+      "safety": "caution"
+    },
+    "mixed-port": {
+      "label": "field.mixed-port",
+      "help": "help.mixed-port",
+      "group": "ports",
+      "order": 3,
+      "docs": "https://wiki.metacubex.one/config/inbound/mixin/",
+      "safety": "caution"
+    },
+    "tun": {
+      "label": "field.tun",
+      "group": "tun",
+      "order": 1,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/inbound/tun/",
+      "safety": "safe",
+      "fields": {
+        "enable": {
+          "label": "field.tun.enable",
+          "help": "help.tun.enable",
+          "docs": "https://wiki.metacubex.one/config/inbound/tun/",
+          "safety": "caution",
+          "platforms": ["linux", "windows", "darwin", "android"]
+        },
+        "stack": {
+          "label": "field.tun.stack",
+          "docs": "https://wiki.metacubex.one/config/inbound/tun/",
+          "safety": "safe",
+          "platforms": ["linux", "windows", "darwin", "android"],
+          "visibleWhen": { "op": "eq", "path": "enable", "value": true }
+        },
+        "dns-hijack": {
+          "label": "field.tun.dns-hijack",
+          "help": "help.tun.dns-hijack",
+          "docs": "https://wiki.metacubex.one/config/inbound/tun/",
+          "safety": "safe",
+          "platforms": ["linux", "windows", "darwin", "android"],
+          "visibleWhen": { "op": "eq", "path": "enable", "value": true }
+        },
+        "auto-redirect": {
+          "label": "field.tun.auto-redirect",
+          "help": "help.tun.auto-redirect",
+          "docs": "https://wiki.metacubex.one/config/inbound/tun/",
+          "safety": "caution",
+          "platforms": ["linux", "windows", "darwin", "android"],
+          "visibleWhen": { "op": "eq", "path": "enable", "value": true }
+        }
+      }
+    }
+  }
+}

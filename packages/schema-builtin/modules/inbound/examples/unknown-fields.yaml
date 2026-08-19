@@ -1,0 +1,5 @@
+# "mixed-port" is declared; "redir-port" is a real, documented Mihomo field
+# (transparent-proxy port for Linux/macOS) that is deliberately out of P0
+# scope — it must surface as unknown, not be silently dropped.
+mixed-port: 10801
+redir-port: 7892

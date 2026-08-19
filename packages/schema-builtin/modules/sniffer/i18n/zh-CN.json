@@ -1,0 +1,18 @@
+{
+  "group.general": "常规",
+  "group.sniff": "嗅探规则",
+
+  "field.enable": "启用域名嗅探",
+  "field.override-destination": "用嗅探结果覆盖目标地址",
+  "field.sniff": "按协议配置嗅探端口",
+  "field.sniff.HTTP": "HTTP",
+  "field.sniff.HTTP.ports": "HTTP 嗅探端口",
+  "field.sniff.TLS": "TLS",
+  "field.sniff.QUIC": "QUIC",
+
+  "help.enable": "对 Tun / Redir / TProxy 等无法直接获知目标域名的流量，通过嗅探获取真实域名用于规则匹配。",
+  "help.override-destination": "是否用嗅探到的域名覆盖实际访问的目标地址，全局默认值；可被下方各协议自己的设置覆盖。",
+  "help.sniff.HTTP.ports": "需要嗅探 HTTP 的端口列表；留空则使用 Mihomo 内置默认端口。",
+  "help.sniff.TLS": "留空（不写子字段）即启用 TLS 嗅探，默认嗅探 443 端口。",
+  "help.sniff.QUIC": "留空（不写子字段）即启用 QUIC 嗅探，默认嗅探 443 端口。"
+}

@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "socks-port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "mixed-port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "tun": {
+      "type": "object",
+      "properties": {
+        "enable": { "type": "boolean", "default": false },
+        "stack": {
+          "type": "string",
+          "enum": ["system", "gvisor", "mixed"],
+          "default": "system"
+        },
+        "dns-hijack": {
+          "type": "array",
+          "items": { "type": "string", "format": "host-port" }
+        },
+        "auto-redirect": { "type": "boolean", "default": false }
+      }
+    }
+  }
+}

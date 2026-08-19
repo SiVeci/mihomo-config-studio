@@ -1,0 +1,20 @@
+{
+  "group.ports": "Inbound ports",
+  "group.tun": "TUN",
+
+  "field.port": "HTTP(S) proxy port",
+  "field.socks-port": "SOCKS5 proxy port",
+  "field.mixed-port": "Mixed HTTP(S) + SOCKS5 port",
+  "field.tun": "TUN virtual network adapter",
+  "field.tun.enable": "Enable TUN",
+  "field.tun.stack": "Network stack",
+  "field.tun.dns-hijack": "Hijacked DNS addresses",
+  "field.tun.auto-redirect": "Auto-configure iptables redirection",
+
+  "help.port": "Opens a dedicated HTTP(S) proxy inbound; can run alongside the mixed port with no conflict.",
+  "help.socks-port": "Opens a dedicated SOCKS5 proxy inbound; can run alongside the mixed port with no conflict.",
+  "help.mixed-port": "Serves both HTTP(S) and SOCKS5 on the same port — typically used instead of the two dedicated ports above.",
+  "help.tun.enable": "Once enabled, Mihomo creates a virtual network adapter and takes over system traffic, so individual apps don't need their own proxy setup; this is a system-level networking change.",
+  "help.tun.dns-hijack": "DNS requests matching these addresses are redirected to Mihomo's own built-in DNS server.",
+  "help.tun.auto-redirect": "Automatically configures iptables to redirect TCP connections into TUN, reducing manual routing setup; Linux only, and it modifies the system firewall rules."
+}

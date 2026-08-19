@@ -1,0 +1,7 @@
+mixed-port: 10801
+tun:
+  enable: false
+  stack: system
+  dns-hijack:
+    - 0.0.0.0:53
+  auto-redirect: false

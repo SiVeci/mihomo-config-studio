@@ -1,0 +1,18 @@
+{
+  "group.general": "General",
+  "group.sniff": "Sniffing rules",
+
+  "field.enable": "Enable domain sniffing",
+  "field.override-destination": "Override the destination with the sniffed domain",
+  "field.sniff": "Per-protocol sniffing ports",
+  "field.sniff.HTTP": "HTTP",
+  "field.sniff.HTTP.ports": "HTTP sniffing ports",
+  "field.sniff.TLS": "TLS",
+  "field.sniff.QUIC": "QUIC",
+
+  "help.enable": "For traffic whose real domain can't be read directly (Tun / Redir / TProxy, ...), sniff it out and use it for rule matching.",
+  "help.override-destination": "Whether the sniffed domain replaces the actual destination address, as a global default; each protocol below can override it.",
+  "help.sniff.HTTP.ports": "Ports to sniff for HTTP on; leave empty to use Mihomo's own built-in default ports.",
+  "help.sniff.TLS": "Leave with no sub-fields to enable TLS sniffing, defaulting to port 443.",
+  "help.sniff.QUIC": "Leave with no sub-fields to enable QUIC sniffing, defaulting to port 443."
+}
