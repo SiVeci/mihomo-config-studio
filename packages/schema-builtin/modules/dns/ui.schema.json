@@ -1,0 +1,107 @@
+{
+  "groups": [
+    { "id": "general", "label": "group.general", "order": 0 },
+    { "id": "fake-ip", "label": "group.fake-ip", "order": 10 },
+    { "id": "servers", "label": "group.servers", "order": 20, "advanced": true }
+  ],
+  "fields": {
+    "enable": {
+      "label": "field.enable",
+      "help": "help.enable",
+      "group": "general",
+      "order": 1,
+      "docs": "https://wiki.metacubex.one/config/dns/",
+      "safety": "safe"
+    },
+    "listen": {
+      "label": "field.listen",
+      "group": "general",
+      "order": 2,
+      "docs": "https://wiki.metacubex.one/config/dns/",
+      "safety": "safe"
+    },
+    "enhanced-mode": {
+      "label": "field.enhanced-mode",
+      "help": "help.enhanced-mode",
+      "group": "general",
+      "order": 3,
+      "docs": "https://wiki.metacubex.one/config/dns/",
+      "safety": "safe"
+    },
+    "fake-ip-range": {
+      "label": "field.fake-ip-range",
+      "group": "fake-ip",
+      "order": 1,
+      "docs": "https://wiki.metacubex.one/config/dns/",
+      "safety": "safe",
+      "visibleWhen": { "op": "eq", "path": "enhanced-mode", "value": "fake-ip" }
+    },
+    "fake-ip-filter": {
+      "label": "field.fake-ip-filter",
+      "help": "help.fake-ip-filter",
+      "group": "fake-ip",
+      "order": 2,
+      "docs": "https://wiki.metacubex.one/config/dns/",
+      "safety": "safe",
+      "visibleWhen": { "op": "eq", "path": "enhanced-mode", "value": "fake-ip" }
+    },
+    "nameserver": {
+      "label": "field.nameserver",
+      "help": "help.nameserver",
+      "group": "servers",
+      "order": 1,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/dns/",
+      "safety": "safe"
+    },
+    "fallback": {
+      "label": "field.fallback",
+      "help": "help.fallback",
+      "group": "servers",
+      "order": 2,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/dns/",
+      "safety": "safe"
+    },
+    "fallback-filter": {
+      "label": "field.fallback-filter",
+      "group": "servers",
+      "order": 3,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/dns/",
+      "safety": "safe",
+      "fields": {
+        "geoip": {
+          "label": "field.fallback-filter.geoip",
+          "docs": "https://wiki.metacubex.one/config/dns/",
+          "safety": "safe"
+        },
+        "geoip-code": {
+          "label": "field.fallback-filter.geoip-code",
+          "docs": "https://wiki.metacubex.one/config/dns/",
+          "safety": "safe",
+          "visibleWhen": { "op": "eq", "path": "geoip", "value": true }
+        },
+        "ipcidr": {
+          "label": "field.fallback-filter.ipcidr",
+          "docs": "https://wiki.metacubex.one/config/dns/",
+          "safety": "safe"
+        },
+        "domain": {
+          "label": "field.fallback-filter.domain",
+          "docs": "https://wiki.metacubex.one/config/dns/",
+          "safety": "safe"
+        }
+      }
+    },
+    "nameserver-policy": {
+      "label": "field.nameserver-policy",
+      "help": "help.nameserver-policy",
+      "group": "servers",
+      "order": 4,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/dns/",
+      "safety": "safe"
+    }
+  }
+}

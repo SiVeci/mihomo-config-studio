@@ -1,0 +1,5 @@
+# Violates config.schema.json in two independent ways:
+# - "enhanced-mode" is not one of the enum values (fake-ip/redir-host)
+# - "fake-ip-range" is not a valid IP-CIDR
+enhanced-mode: turbo
+fake-ip-range: not-a-cidr

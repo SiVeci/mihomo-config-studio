@@ -1,0 +1,28 @@
+{
+  "group.general": "General",
+  "group.fake-ip": "Fake-IP",
+  "group.servers": "DNS servers",
+
+  "field.enable": "Enable the DNS server",
+  "field.listen": "Listen address",
+  "field.enhanced-mode": "Enhanced mode",
+  "field.fake-ip-range": "Fake-IP pool",
+  "field.fake-ip-filter": "Domains exempt from Fake-IP",
+  "field.nameserver": "Primary DNS servers",
+  "field.fallback": "Fallback DNS servers",
+  "field.fallback-filter": "Fallback trigger conditions",
+  "field.fallback-filter.geoip": "Trigger by GeoIP",
+  "field.fallback-filter.geoip-code": "GeoIP region code",
+  "field.fallback-filter.ipcidr": "Trigger by IP range",
+  "field.fallback-filter.domain": "Trigger by domain",
+  "field.nameserver-policy": "Per-domain DNS servers",
+
+  "help.enable": "When disabled, the system DNS is used instead — the built-in DNS server does not run.",
+  "help.enhanced-mode": "fake-ip returns a fictitious IP and requires TUN/transparent proxying; redir-host returns the real resolution directly.",
+  "help.fake-ip-filter": "Domains matching here get their real IP instead of a Fake-IP — typically internal domains or anything that needs a genuine address.",
+  "help.nameserver": "Resolves every domain not covered by nameserver-policy/fallback; supports UDP/TCP/DoT/DoH/DoQ.",
+  "help.fallback": "Used once the primary DNS servers' result is judged untrustworthy (see the trigger conditions).",
+  "help.nameserver-policy": "Assigns dedicated DNS servers to specific domains or domain categories — keys are domain/GeoSite rules, values are one or more server addresses.",
+
+  "rule.fallbackFilterGeoipCodeRequiresGeoip": "GeoIP triggering is off (geoip: false), so the GeoIP region code has no effect."
+}

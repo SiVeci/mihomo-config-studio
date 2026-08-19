@@ -5,7 +5,8 @@
     { "id": "controller", "label": "group.controller", "order": 20, "advanced": true },
     { "id": "profile", "label": "group.profile", "order": 30, "advanced": true },
     { "id": "geo", "label": "group.geo", "order": 40, "advanced": true },
-    { "id": "connection", "label": "group.connection", "order": 50, "advanced": true }
+    { "id": "connection", "label": "group.connection", "order": 50, "advanced": true },
+    { "id": "hosts", "label": "group.hosts", "order": 60, "advanced": true }
   ],
   "fields": {
     "mode": {
@@ -175,6 +176,15 @@
       "label": "field.tcp-concurrent",
       "help": "help.tcp-concurrent",
       "group": "connection",
+      "order": 1,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/general/",
+      "safety": "safe"
+    },
+    "hosts": {
+      "label": "field.hosts",
+      "help": "help.hosts",
+      "group": "hosts",
       "order": 1,
       "advanced": true,
       "docs": "https://wiki.metacubex.one/config/general/",

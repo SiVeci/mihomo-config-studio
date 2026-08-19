@@ -8,6 +8,12 @@ import type {
   ValidationRule,
 } from '@mcs/schema-core';
 
+import dnsConfigSchema from '../modules/dns/config.schema.json';
+import dnsEn from '../modules/dns/i18n/en.json';
+import dnsZhCN from '../modules/dns/i18n/zh-CN.json';
+import dnsManifest from '../modules/dns/module.manifest.json';
+import dnsUiSchema from '../modules/dns/ui.schema.json';
+import dnsRules from '../modules/dns/validation.rules.json';
 import generalConfigSchema from '../modules/general/config.schema.json';
 import generalEn from '../modules/general/i18n/en.json';
 import generalZhCN from '../modules/general/i18n/zh-CN.json';
@@ -44,7 +50,24 @@ export const GENERAL_MODULE: SchemaModule = {
   i18n: { 'zh-CN': generalZhCN, en: generalEn } as ModuleI18n,
 };
 
+const DNS_EXAMPLES: ModuleExample[] = [
+  { name: 'valid', kind: 'valid', path: 'examples/valid.yaml' },
+  { name: 'invalid', kind: 'invalid', path: 'examples/invalid.yaml' },
+  { name: 'edge', kind: 'edge', path: 'examples/edge.yaml' },
+  { name: 'unknown-fields', kind: 'unknown-fields', path: 'examples/unknown-fields.yaml' },
+];
+
+export const DNS_MODULE: SchemaModule = {
+  manifest: dnsManifest as ModuleManifest,
+  schema: dnsConfigSchema as JsonSchema,
+  ui: dnsUiSchema as UiSchema,
+  rules: dnsRules as ValidationRule[],
+  examples: DNS_EXAMPLES,
+  i18n: { 'zh-CN': dnsZhCN, en: dnsEn } as ModuleI18n,
+};
+
 /** Every module this package currently ships, keyed by the bundle file path `schema-registry`'s `StoredBundle.files` will use. */
 export const BUILTIN_MODULE_FILES: Readonly<Record<string, SchemaModule>> = {
   'modules/general.json': GENERAL_MODULE,
+  'modules/dns.json': DNS_MODULE,
 };

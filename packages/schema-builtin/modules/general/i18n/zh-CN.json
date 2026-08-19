@@ -5,6 +5,7 @@
   "group.profile": "运行时持久化",
   "group.geo": "地理数据库",
   "group.connection": "连接选项",
+  "group.hosts": "本地域名解析",
 
   "field.mode": "运行模式",
   "field.log-level": "日志级别",
@@ -29,11 +30,13 @@
   "field.geo-auto-update": "自动更新地理数据库",
   "field.geo-update-interval": "地理数据库更新间隔（小时）",
   "field.tcp-concurrent": "TCP 并发连接",
+  "field.hosts": "本地域名解析表",
 
   "help.find-process-mode": "always 强制匹配所有进程；strict 由内核判断是否开启；off 不匹配进程，推荐路由器场景使用。",
   "help.allow-lan": "开启后局域网内其他设备可以连接本机代理端口，请确认网络环境可信。",
   "help.external-controller": "RESTful API 监听地址，用于配合外部面板管理内核。",
   "help.secret": "外部控制器的访问密钥，留空表示任何人都可以访问控制 API，强烈建议设置。",
   "help.authentication": "格式为 \"用户名:密码\"，用于 HTTP/SOCKS 入站的身份验证。",
-  "help.tcp-concurrent": "开启后 TCP 并发连接所有解析出的 IP，使用最快握手成功的连接。"
+  "help.tcp-concurrent": "开启后 TCP 并发连接所有解析出的 IP，使用最快握手成功的连接。",
+  "help.hosts": "类似于 /etc/hosts，为域名指定固定解析结果；值可以是单个 IP、IP 列表，或特殊值 \"lan\"（表示加入本机所有网卡地址）。"
 }

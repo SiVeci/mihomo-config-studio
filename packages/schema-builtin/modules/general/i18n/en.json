@@ -5,6 +5,7 @@
   "group.profile": "Runtime persistence",
   "group.geo": "Geo databases",
   "group.connection": "Connection options",
+  "group.hosts": "Local hostname resolution",
 
   "field.mode": "Mode",
   "field.log-level": "Log level",
@@ -29,11 +30,13 @@
   "field.geo-auto-update": "Auto-update geo databases",
   "field.geo-update-interval": "Geo database update interval (hours)",
   "field.tcp-concurrent": "TCP concurrent connections",
+  "field.hosts": "Local hostname resolution table",
 
   "help.find-process-mode": "always forces matching on every process; strict lets the core decide; off never matches processes, recommended on routers.",
   "help.allow-lan": "When enabled, other devices on the LAN can reach this machine's proxy ports — make sure the network is trusted.",
   "help.external-controller": "RESTful API listen address, used by external dashboards to manage the core.",
   "help.secret": "Access key for the external controller. Leaving it empty lets anyone reach the control API — setting it is strongly recommended.",
   "help.authentication": "Format is \"username:password\", used for HTTP/SOCKS inbound authentication.",
-  "help.tcp-concurrent": "When enabled, TCP dials every resolved IP concurrently and keeps whichever connection completes its handshake first."
+  "help.tcp-concurrent": "When enabled, TCP dials every resolved IP concurrently and keeps whichever connection completes its handshake first.",
+  "help.hosts": "Similar to /etc/hosts: pins a fixed resolution for a domain. A value can be a single IP, a list of IPs, or the special value \"lan\" (every local network interface's address)."
 }

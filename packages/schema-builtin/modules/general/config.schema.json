@@ -83,6 +83,10 @@
     "tcp-concurrent": {
       "type": "boolean",
       "default": false
+    },
+    "hosts": {
+      "type": "object",
+      "additionalProperties": true
     }
   }
 }

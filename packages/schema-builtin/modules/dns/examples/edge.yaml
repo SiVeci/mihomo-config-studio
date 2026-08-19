@@ -1,0 +1,11 @@
+# Boundary values that are schema-valid but sit at the edge of their range:
+# - "listen" with an empty host (":53" — wildcard-bind shorthand)
+# - empty arrays where the schema only requires an array of strings
+# - fallback-filter with its boolean toggle off and every list empty
+enable: true
+listen: ":53"
+fake-ip-filter: []
+fallback-filter:
+  geoip: false
+  ipcidr: []
+  domain: []

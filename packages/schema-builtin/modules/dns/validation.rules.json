@@ -1,0 +1,18 @@
+[
+  {
+    "id": "fallback-filter-geoip-code-requires-geoip",
+    "severity": "warning",
+    "when": {
+      "op": "not",
+      "of": {
+        "op": "and",
+        "of": [
+          { "op": "exists", "path": "fallback-filter.geoip-code" },
+          { "op": "eq", "path": "fallback-filter.geoip", "value": false }
+        ]
+      }
+    },
+    "messageKey": "rule.fallbackFilterGeoipCodeRequiresGeoip",
+    "path": "fallback-filter.geoip-code"
+  }
+]

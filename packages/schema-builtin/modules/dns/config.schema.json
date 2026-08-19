@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "enable": {
+      "type": "boolean",
+      "default": false
+    },
+    "listen": {
+      "type": "string",
+      "format": "host-port"
+    },
+    "enhanced-mode": {
+      "type": "string",
+      "enum": ["fake-ip", "redir-host"],
+      "default": "fake-ip"
+    },
+    "fake-ip-range": {
+      "type": "string",
+      "format": "ip-cidr"
+    },
+    "fake-ip-filter": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "nameserver": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "fallback": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "fallback-filter": {
+      "type": "object",
+      "properties": {
+        "geoip": { "type": "boolean", "default": true },
+        "geoip-code": { "type": "string", "default": "CN" },
+        "ipcidr": {
+          "type": "array",
+          "items": { "type": "string", "format": "ip-cidr" }
+        },
+        "domain": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "nameserver-policy": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

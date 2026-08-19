@@ -1,0 +1,5 @@
+# "enable" is declared; "use-hosts" is not — Mihomo has never documented
+# this key under dns:, so the planner must surface it as unknown rather
+# than silently dropping it.
+enable: true
+use-hosts: true

@@ -1,0 +1,28 @@
+{
+  "group.general": "常规",
+  "group.fake-ip": "Fake-IP",
+  "group.servers": "DNS 服务器",
+
+  "field.enable": "启用 DNS 服务器",
+  "field.listen": "监听地址",
+  "field.enhanced-mode": "增强模式",
+  "field.fake-ip-range": "Fake-IP 地址池",
+  "field.fake-ip-filter": "跳过 Fake-IP 的域名",
+  "field.nameserver": "主 DNS 服务器",
+  "field.fallback": "备用 DNS 服务器",
+  "field.fallback-filter": "备用服务器触发条件",
+  "field.fallback-filter.geoip": "按 GeoIP 触发",
+  "field.fallback-filter.geoip-code": "GeoIP 地区代码",
+  "field.fallback-filter.ipcidr": "按 IP 段触发",
+  "field.fallback-filter.domain": "按域名触发",
+  "field.nameserver-policy": "按域名指定 DNS 服务器",
+
+  "help.enable": "关闭后将使用系统 DNS，不启用内置 DNS 服务器。",
+  "help.enhanced-mode": "fake-ip：返回虚构 IP，需配合 TUN/透明代理使用；redir-host：直接返回真实解析结果。",
+  "help.fake-ip-filter": "匹配到这些域名时返回真实 IP 而非 Fake-IP，常用于内网域名、需要真实 IP 的场景。",
+  "help.nameserver": "用于解析除 nameserver-policy/fallback 指定域名外的所有域名，支持 UDP/TCP/DoT/DoH/DoQ。",
+  "help.fallback": "当主 DNS 服务器解析结果被判定为不可信（见触发条件）时使用的备用服务器。",
+  "help.nameserver-policy": "为特定域名或域名分类指定专用 DNS 服务器，键为域名/GeoSite 规则，值为服务器地址或地址列表。",
+
+  "rule.fallbackFilterGeoipCodeRequiresGeoip": "已关闭按 GeoIP 触发（geoip: false），GeoIP 地区代码不会生效。"
+}

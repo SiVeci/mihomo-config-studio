@@ -73,6 +73,16 @@ const P1P2_PROTOCOL_NOTE =
  * `inbound`'s port fields and `tun:` live at (see `inbound` below). Two
  * modules sharing the document root is a real design question for #6/#8,
  * not resolved by this inventory.
+ *
+ * `hosts` also lives here (v0.3.0 #7), despite PRD's §8.3 table grouping it
+ * under DNS conceptually: it is a document-root key (line 119 of the
+ * vendored sample), not nested under `dns:`, so only a module whose own
+ * `manifest.root` is `[]` can reach it. `general` already is that module
+ * (see above); `dns` is not (its root is `['dns']`, matching where all its
+ * *other* fields genuinely live) — giving `dns` a second, document-root
+ * scope just to reach one field would recreate the exact sharing problem
+ * this note already flags, for no benefit. Structural ownership follows
+ * where a field actually lives in the document, not PRD's topic grouping.
  */
 const GENERAL_FIELDS: UpstreamFieldRecord[] = [
   { path: 'mode', presentUpstream: true },
@@ -111,13 +121,24 @@ const GENERAL_FIELDS: UpstreamFieldRecord[] = [
     presentUpstream: true,
     note: 'commented out in the sample but a documented connection option',
   },
+  {
+    path: 'hosts',
+    presentUpstream: true,
+    note: 'document-root key; PRD groups it under DNS conceptually but only a document-root module can reach it — see the module note above',
+  },
 ];
 
 /**
  * dns (PRD §8.3 P0: enable、listen、enhanced-mode、fake-ip、nameserver、
- * fallback、policy、hosts). Structural note: `hosts` is a *document-root*
- * key upstream (line 119), not nested under `dns:` — despite PRD grouping
- * it with DNS conceptually.
+ * fallback、policy、hosts; v0.3.0 #7 implementation notes add
+ * "fallback（含 fallback-filter）" explicitly). `hosts` moved to `general`
+ * (see its module note) — it is a document-root key `dns`'s own root
+ * (`['dns']`) cannot reach, not nested under `dns:` despite PRD grouping it
+ * with DNS conceptually. `fallback-filter.geosite` is upstream-documented
+ * as deprecated in favour of `nameserver-policy` (line 352 of the vendored
+ * sample) and is deliberately excluded — a deprecated field is not "P0
+ * commonly used", and reviving it here would point users at a path
+ * upstream itself says not to use.
  */
 const DNS_FIELDS: UpstreamFieldRecord[] = [
   { path: 'dns.enable', presentUpstream: true },
@@ -131,12 +152,32 @@ const DNS_FIELDS: UpstreamFieldRecord[] = [
     presentUpstream: true,
     note: 'commented out in the sample (only demonstrated as a comment block) but a core, documented field',
   },
-  { path: 'dns.nameserver-policy', presentUpstream: true },
   {
-    path: 'hosts',
+    path: 'dns.fallback-filter',
     presentUpstream: true,
-    note: 'document-root key, not `dns.hosts` — see module note above',
+    note: 'commented out in the sample; gates which fallback-filter sub-fields apply',
   },
+  {
+    path: 'dns.fallback-filter.geoip',
+    presentUpstream: true,
+    note: 'commented out in the sample',
+  },
+  {
+    path: 'dns.fallback-filter.geoip-code',
+    presentUpstream: true,
+    note: 'commented out in the sample',
+  },
+  {
+    path: 'dns.fallback-filter.ipcidr',
+    presentUpstream: true,
+    note: 'commented out in the sample',
+  },
+  {
+    path: 'dns.fallback-filter.domain',
+    presentUpstream: true,
+    note: 'commented out in the sample',
+  },
+  { path: 'dns.nameserver-policy', presentUpstream: true },
 ];
 
 /**
