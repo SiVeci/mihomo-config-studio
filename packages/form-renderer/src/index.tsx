@@ -74,7 +74,7 @@ export function SchemaForm(props: SchemaFormProps): JSX.Element {
  * a container instead, so they get a labelled group rather than a dangling
  * label (NFR-A11Y / WCAG 2.2 AA).
  */
-const CONTAINER_CONTROLS = new Set(['object', 'key-value']);
+const CONTAINER_CONTROLS = new Set(['object', 'key-value', 'variant']);
 
 interface FieldRowProps {
   field: PlannedField;

@@ -219,6 +219,59 @@ function ContainerControl(): JSX.Element {
   return <span data-control="container" />;
 }
 
+/**
+ * A discriminated union's branch picker. Options come entirely from
+ * `field.variant.options`, which the planner derived from the schema's own
+ * `const`/`enum` branches — nothing here reads a protocol name, so the same
+ * component renders a synthetic two-branch union and `proxies` alike
+ * (FR-SCHEMA-06). Picking a branch reports one `(discriminatorPath, value)`
+ * change; the matched branch's own fields render separately, through the
+ * same nested-children mechanism `object` uses (E4: this control never
+ * issues a delete).
+ */
+function VariantControl({ field, id, onChange, disabled }: ControlProps): JSX.Element {
+  const variant = field.variant;
+  const options = variant?.options ?? [];
+  const selected = variant?.selected;
+  const selectedValue = selected === undefined ? '' : String(selected);
+  const matched = variant?.matched ?? true;
+
+  return (
+    <span>
+      <select
+        id={id}
+        data-control="variant"
+        value={selectedValue}
+        disabled={(disabled ?? false) || field.readOnly}
+        onChange={(event) => {
+          if (variant) onChange(variant.discriminatorPath, event.target.value);
+        }}
+      >
+        {selected === undefined ? <option value="" /> : null}
+        {/* The current value may not be one of the known branches (e.g. a
+            protocol outside the schema's coverage) — keep it selectable and
+            visible instead of letting the browser silently pick another
+            option to display. */}
+        {!matched && selected !== undefined ? (
+          <option value={selectedValue}>{selectedValue}</option>
+        ) : null}
+        {options.map((option) => {
+          const optionValue = String(option.value);
+          return (
+            <option key={optionValue} value={optionValue}>
+              {option.label ?? optionValue}
+            </option>
+          );
+        })}
+      </select>
+      {/* Never colour-only (NFR-A11Y): an unrecognised value gets a text marker. */}
+      {!matched && selected !== undefined ? (
+        <span data-variant-unmatched="true">field.variant.unmatched</span>
+      ) : null}
+    </span>
+  );
+}
+
 export const DEFAULT_CONTROLS: Record<string, ControlComponent> = {
   text: TextControl,
   textarea: TextareaControl,
@@ -233,5 +286,6 @@ export const DEFAULT_CONTROLS: Record<string, ControlComponent> = {
   'key-value': KeyValueControl,
   object: ContainerControl,
   list: TagsControl,
+  variant: VariantControl,
   unknown: UnknownControl,
 };

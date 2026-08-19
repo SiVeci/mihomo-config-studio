@@ -135,3 +135,127 @@ describe('schema-only extension end to end (FR-SCHEMA-06)', () => {
     expect(onChange).toHaveBeenCalledWith(['sample', 'unified-delay'], true);
   });
 });
+
+// Deliberately Mihomo-unrelated branch names ("a"/"b", not "vmess"/"trojan"):
+// the renderer must work from `field.variant`, produced entirely from the
+// schema's own const/enum branches, not from recognising a protocol name
+// (FR-SCHEMA-06 applied to unions).
+const VARIANT_MODULE: SchemaModule = {
+  manifest: { id: 'variant-sample', root: ['sample'], version: '1.0.0' },
+  schema: {
+    type: 'object',
+    properties: {
+      transport: { oneOf: [{ $ref: '#/$defs/kindA' }, { $ref: '#/$defs/kindB' }] },
+    },
+    $defs: {
+      shared: { type: 'object', properties: { note: { type: 'string' } } },
+      kindA: {
+        allOf: [
+          { $ref: '#/$defs/shared' },
+          { type: 'object', properties: { kind: { const: 'a' }, x: { type: 'string' } } },
+        ],
+      },
+      kindB: {
+        allOf: [
+          { $ref: '#/$defs/shared' },
+          { type: 'object', properties: { kind: { const: 'b' }, y: { type: 'string' } } },
+        ],
+      },
+    },
+  },
+  ui: {
+    fields: {
+      transport: {
+        label: 'field.transport',
+        variantLabels: { a: 'variant.kindA', b: 'variant.kindB' },
+      },
+    },
+  },
+};
+
+const VARIANT_DOCUMENT = {
+  sample: { transport: { kind: 'a', note: 'shared-value', x: 'hello', extra: 'unlisted' } },
+};
+
+describe('variant control (FR-SCHEMA-02 rendering, E4)', () => {
+  function renderVariant(overrides: Partial<Parameters<typeof SchemaForm>[0]> = {}) {
+    const onChange = vi.fn<(path: ConfigPath, value: unknown) => void>();
+    render(
+      <SchemaForm
+        module={VARIANT_MODULE}
+        value={VARIANT_DOCUMENT}
+        mode="advanced"
+        onChange={onChange}
+        {...overrides}
+      />,
+    );
+    return onChange;
+  }
+
+  function variantSelect(): HTMLSelectElement {
+    const select = fieldNode('/sample/transport')?.querySelector('select[data-control="variant"]');
+    if (!select) throw new Error('variant select not rendered');
+    return select as HTMLSelectElement;
+  }
+
+  it('renders a discriminator select with schema-derived options and labels', () => {
+    renderVariant();
+    const select = variantSelect();
+    expect([...select.options].map((option) => option.value)).toEqual(['a', 'b']);
+    expect([...select.options].map((option) => option.textContent)).toEqual([
+      'variant.kindA',
+      'variant.kindB',
+    ]);
+    expect(select.value).toBe('a');
+  });
+
+  it('reports switching the discriminator as one onChange to the discriminator path, not the field path', () => {
+    const onChange = renderVariant();
+    fireEvent.change(variantSelect(), { target: { value: 'b' } });
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(['sample', 'transport', 'kind'], 'b');
+  });
+
+  it("renders the matched branch's own fields, not the other branch's", () => {
+    renderVariant();
+    expect(fieldNode('/sample/transport/x')).not.toBeNull();
+    expect(fieldNode('/sample/transport/y')).toBeNull();
+    // Shared (via $defs/allOf) fields still render as ordinary children.
+    expect(fieldNode('/sample/transport/note')).not.toBeNull();
+    // The discriminator itself is the select above, not a duplicated child row.
+    expect(fieldNode('/sample/transport/kind')).toBeNull();
+  });
+
+  it('surfaces a property the matched branch does not declare as an unknown row instead of dropping it (E4)', () => {
+    renderVariant();
+    const node = fieldNode('/sample/transport/extra');
+    expect(node?.getAttribute('data-unknown')).toBe('true');
+    expect(node?.textContent).toContain('unlisted');
+  });
+
+  it('uses a labelled group instead of a dangling label (NFR-A11Y)', () => {
+    renderVariant();
+    const field = fieldNode('/sample/transport');
+    // The transport field itself must not get a `<label for>` — only its
+    // plain-text children (which are genuinely labelable) legitimately do.
+    expect(field?.querySelector('label[for="/sample/transport"]')).toBeNull();
+
+    const group = field?.querySelector('[role="group"]');
+    expect(group).not.toBeNull();
+    const labelledBy = group?.getAttribute('aria-labelledby');
+    expect(labelledBy).toBeTruthy();
+    expect(document.getElementById(labelledBy ?? '')?.textContent).toContain('field.transport');
+  });
+
+  it('marks an unrecognised discriminator value with non-colour text feedback instead of guessing a branch', () => {
+    renderVariant({ value: { sample: { transport: { kind: 'c', mystery: true } } } });
+
+    const select = variantSelect();
+    expect(select.value).toBe('c'); // kept visible/selectable, not silently coerced
+    expect(fieldNode('/sample/transport')?.textContent).toContain('field.variant.unmatched');
+    // No branch matched, so no children are planned — the raw value is not
+    // decomposed into editable rows, but it is not lost either (see #0).
+    expect(fieldNode('/sample/transport/mystery')).toBeNull();
+  });
+});

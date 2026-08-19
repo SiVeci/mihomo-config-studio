@@ -8,6 +8,8 @@ export type {
   FormPlanOptions,
   PlannedField,
   PlannedGroup,
+  VariantInfo,
+  VariantOption,
 } from './form-plan.js';
 export { SchemaRefError, resolveRef } from './ref.js';
 export { KNOWN_FORMATS } from './types.js';
