@@ -123,7 +123,12 @@ describe('handleWorkerRequest / applyPatch', () => {
     const patch: IssueFix = { kind: 'set-scalar', path: ['port'], value: 7891 };
 
     const response = handleWorkerRequest(state, { type: 'applyPatch', requestId: 'r1', patch });
-    expect(response).toEqual({ type: 'applyPatch', requestId: 'r1' });
+    expect(response).toEqual({
+      type: 'applyPatch',
+      requestId: 'r1',
+      canUndo: true,
+      canRedo: false,
+    });
 
     const serialized = handleWorkerRequest(state, { type: 'serialize', requestId: 'r2' });
     expect(serialized.type).toBe('serialize');
@@ -223,7 +228,12 @@ describe('handleWorkerRequest / applyPatch', () => {
     const patch: IssueFix = { kind: 'set', path: ['hosts'], value: { 'b.example.com': '5.6.7.8' } };
 
     const response = handleWorkerRequest(state, { type: 'applyPatch', requestId: 'r1', patch });
-    expect(response).toEqual({ type: 'applyPatch', requestId: 'r1' });
+    expect(response).toEqual({
+      type: 'applyPatch',
+      requestId: 'r1',
+      canUndo: true,
+      canRedo: false,
+    });
 
     const serialized = handleWorkerRequest(state, { type: 'serialize', requestId: 'r2' });
     if (serialized.type !== 'serialize') throw new Error('unreachable');
@@ -244,6 +254,161 @@ describe('handleWorkerRequest / applyPatch', () => {
       messageKey: 'worker.error.YAML_INVALID_OPERATION',
       path: ['hosts'],
     });
+  });
+});
+
+describe('handleWorkerRequest / undo, redo (FR-PROJ-04, v0.3.0 #15)', () => {
+  it('undo reports NO_DOCUMENT before any successful parse', () => {
+    const state = createWorkerState();
+    const response = handleWorkerRequest(state, { type: 'undo', requestId: 'r1' });
+    expect(response).toEqual({
+      type: 'error',
+      requestId: 'r1',
+      code: 'NO_DOCUMENT',
+      messageKey: 'worker.error.noDocument',
+    });
+  });
+
+  it('redo reports NO_DOCUMENT before any successful parse', () => {
+    const state = createWorkerState();
+    const response = handleWorkerRequest(state, { type: 'redo', requestId: 'r1' });
+    expect(response).toEqual({
+      type: 'error',
+      requestId: 'r1',
+      code: 'NO_DOCUMENT',
+      messageKey: 'worker.error.noDocument',
+    });
+  });
+
+  it('undo with nothing recorded is a no-op — reflects the unchanged document, never throws', () => {
+    const state = parsed();
+    expect(() => handleWorkerRequest(state, { type: 'undo', requestId: 'r1' })).not.toThrow();
+    const response = handleWorkerRequest(state, { type: 'undo', requestId: 'r2' });
+    if (response.type !== 'undo') throw new Error('unreachable');
+    expect(response).toMatchObject({ canUndo: false, canRedo: false, text: SAMPLE });
+  });
+
+  it('redo with nothing recorded is a no-op — reflects the unchanged document, never throws', () => {
+    const state = parsed();
+    expect(() => handleWorkerRequest(state, { type: 'redo', requestId: 'r1' })).not.toThrow();
+    const response = handleWorkerRequest(state, { type: 'redo', requestId: 'r2' });
+    if (response.type !== 'redo') throw new Error('unreachable');
+    expect(response).toMatchObject({ canUndo: false, canRedo: false, text: SAMPLE });
+  });
+
+  it('undo after a real applyPatch restores the export text byte-exact and flips canUndo/canRedo', () => {
+    const state = parsed();
+    const patch: IssueFix = { kind: 'set-scalar', path: ['port'], value: 7891 };
+    handleWorkerRequest(state, { type: 'applyPatch', requestId: 'r1', patch });
+
+    const response = handleWorkerRequest(state, { type: 'undo', requestId: 'r2' });
+
+    if (response.type !== 'undo') throw new Error('unreachable');
+    expect(response.text).toBe(SAMPLE);
+    expect(response.canUndo).toBe(false);
+    expect(response.canRedo).toBe(true);
+    expect(response.value).toMatchObject({ port: 7890 });
+  });
+
+  it('redo after an undo restores the edited text byte-exact', () => {
+    const state = parsed();
+    const patch: IssueFix = { kind: 'set-scalar', path: ['port'], value: 7891 };
+    handleWorkerRequest(state, { type: 'applyPatch', requestId: 'r1', patch });
+    handleWorkerRequest(state, { type: 'undo', requestId: 'r2' });
+
+    const response = handleWorkerRequest(state, { type: 'redo', requestId: 'r3' });
+
+    if (response.type !== 'redo') throw new Error('unreachable');
+    expect(response.text).toContain('port: 7891');
+    expect(response.canUndo).toBe(true);
+    expect(response.canRedo).toBe(false);
+    expect(response.value).toMatchObject({ port: 7891 });
+  });
+
+  it('two edits to the same path within the merge window collapse into one undo step', () => {
+    const state = parsed();
+    handleWorkerRequest(state, {
+      type: 'applyPatch',
+      requestId: 'r1',
+      patch: { kind: 'set-scalar', path: ['port'], value: 1 },
+    });
+    handleWorkerRequest(state, {
+      type: 'applyPatch',
+      requestId: 'r2',
+      patch: { kind: 'set-scalar', path: ['port'], value: 2 },
+    });
+
+    // One undo reaches all the way back to the original text, not the
+    // intermediate `port: 1` — proving both edits merged into one entry.
+    const response = handleWorkerRequest(state, { type: 'undo', requestId: 'r3' });
+
+    if (response.type !== 'undo') throw new Error('unreachable');
+    expect(response.text).toBe(SAMPLE);
+    expect(response.canUndo).toBe(false);
+  });
+
+  it('a new edit after undo truncates the redo branch', () => {
+    const state = parsed();
+    handleWorkerRequest(state, {
+      type: 'applyPatch',
+      requestId: 'r1',
+      patch: { kind: 'set-scalar', path: ['port'], value: 7891 },
+    });
+    handleWorkerRequest(state, { type: 'undo', requestId: 'r2' });
+
+    handleWorkerRequest(state, {
+      type: 'applyPatch',
+      requestId: 'r3',
+      patch: { kind: 'set-scalar', path: ['port'], value: 7892 },
+    });
+
+    const response = handleWorkerRequest(state, { type: 'redo', requestId: 'r4' });
+    if (response.type !== 'redo') throw new Error('unreachable');
+    expect(response.canRedo).toBe(false); // nothing to redo — the old branch was discarded
+  });
+
+  it('a fresh parse resets the undo/redo stack, so a project switch never reaches into the previous document', () => {
+    const state = parsed();
+    handleWorkerRequest(state, {
+      type: 'applyPatch',
+      requestId: 'r1',
+      patch: { kind: 'set-scalar', path: ['port'], value: 7891 },
+    });
+
+    handleWorkerRequest(state, { type: 'parse', requestId: 'r2', text: 'mode: direct\n' });
+
+    const response = handleWorkerRequest(state, { type: 'undo', requestId: 'r3' });
+    if (response.type !== 'undo') throw new Error('unreachable');
+    expect(response).toMatchObject({ canUndo: false, canRedo: false, text: 'mode: direct\n' });
+  });
+
+  it('re-parsing the exact text the Worker already holds does NOT reset the undo stack (regression: caught manually in a real browser, not by any automated test — see the plan\'s #15 "执行时修正")', () => {
+    // `ProjectPage` feeds every applyPatch/undo/redo response's `text`
+    // straight back into `configText`, which is `YamlEditor`'s controlled
+    // `text` prop — its own debounced effect re-parses that *exact same*
+    // text roughly 300ms later, with no user action involved. A parse that
+    // unconditionally reset history made undo silently stop working a
+    // fraction of a second after every single edit: invisible to a fast
+    // synchronous test (which asserts well inside that window), real for
+    // an actual user waiting more than 300ms before clicking Undo.
+    const state = parsed();
+    handleWorkerRequest(state, {
+      type: 'applyPatch',
+      requestId: 'r1',
+      patch: { kind: 'set-scalar', path: ['port'], value: 7891 },
+    });
+    const serialized = handleWorkerRequest(state, { type: 'serialize', requestId: 'r2' });
+    if (serialized.type !== 'serialize') throw new Error('unreachable');
+
+    // The exact scenario: YamlEditor's own debounce re-parses the document's
+    // own just-produced text, not anything a user typed.
+    handleWorkerRequest(state, { type: 'parse', requestId: 'r3', text: serialized.text });
+
+    const response = handleWorkerRequest(state, { type: 'undo', requestId: 'r4' });
+    if (response.type !== 'undo') throw new Error('unreachable');
+    expect(response.text).toBe(SAMPLE);
+    expect(response.canUndo).toBe(false);
+    expect(response.canRedo).toBe(true);
   });
 });
 

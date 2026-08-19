@@ -6,8 +6,10 @@ import type {
   IssueFix,
   LocateResponse,
   ParseResponse,
+  RedoResponse,
   SerializeOptions,
   SerializeResponse,
+  UndoResponse,
   ValidateResponse,
   ValueResponse,
   WorkerRequest,
@@ -123,6 +125,22 @@ export class WorkerClient {
       type: 'value',
       requestId: this.#makeRequestId(),
     }) as Promise<ValueResponse>;
+  }
+
+  /** No-op (reflected in `canUndo`) when there is nothing to undo, never a rejection (v0.3.0 #15). */
+  undo(): Promise<UndoResponse> {
+    return this.#send({
+      type: 'undo',
+      requestId: this.#makeRequestId(),
+    }) as Promise<UndoResponse>;
+  }
+
+  /** No-op (reflected in `canRedo`) when there is nothing to redo, never a rejection (v0.3.0 #15). */
+  redo(): Promise<RedoResponse> {
+    return this.#send({
+      type: 'redo',
+      requestId: this.#makeRequestId(),
+    }) as Promise<RedoResponse>;
   }
 
   /**

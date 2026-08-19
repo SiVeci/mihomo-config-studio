@@ -58,13 +58,13 @@ describe('WorkerClient request/response correlation', () => {
     expect(worker.sent.map((request) => request.requestId)).toEqual(['req-1', 'req-2']);
   });
 
-  it('round-trips applyPatch / validate / diff / serialize / locate against a parsed document', async () => {
+  it('round-trips applyPatch / validate / diff / serialize / locate / value against a parsed document', async () => {
     const worker = new FakeWorker();
     const client = new WorkerClient(worker);
     await client.parse('mode: rule\nport: 7890\n');
 
     const patched = await client.applyPatch({ kind: 'set-scalar', path: ['port'], value: 7891 });
-    expect(patched.type).toBe('applyPatch');
+    expect(patched).toMatchObject({ type: 'applyPatch', canUndo: true, canRedo: false });
 
     const validated = await client.validate();
     expect(validated).toEqual({ type: 'validate', requestId: validated.requestId, issues: [] });
@@ -77,6 +77,32 @@ describe('WorkerClient request/response correlation', () => {
 
     const located = await client.locate(['port']);
     expect(located.range?.start.line).toBe(2);
+
+    const valued = await client.value();
+    expect(valued.value).toMatchObject({ port: 7891 });
+  });
+
+  it('round-trips undo / redo against a parsed document, real HistoryStack included (v0.3.0 #15)', async () => {
+    const worker = new FakeWorker();
+    const client = new WorkerClient(worker);
+    await client.parse('mode: rule\nport: 7890\n');
+    await client.applyPatch({ kind: 'set-scalar', path: ['port'], value: 7891 });
+
+    const undone = await client.undo();
+    expect(undone).toMatchObject({
+      type: 'undo',
+      canUndo: false,
+      canRedo: true,
+      text: 'mode: rule\nport: 7890\n',
+    });
+
+    const redone = await client.redo();
+    expect(redone).toMatchObject({
+      type: 'redo',
+      canUndo: true,
+      canRedo: false,
+    });
+    expect(redone.text).toContain('port: 7891');
   });
 
   it('forwards serialize() options through to the request when given', async () => {

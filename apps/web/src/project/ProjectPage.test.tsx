@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
-import { HistoryStack } from '@mcs/config-model';
 import { GENERAL_MODULE } from '@mcs/schema-builtin';
 import { MemoryStorageAdapter } from '@mcs/storage';
-import { MihomoYamlDocument } from '@mcs/yaml-engine';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,7 +11,11 @@ import type { YamlEditorWorkerClient } from '../editor/YamlEditor.js';
 import { t } from '../i18n/index.js';
 import type { ImportWorkerClient } from '../import/ImportPanel.js';
 import type { IssuePanelWorkerClient } from '../issues/IssuePanel.js';
-import { createWorkerState, handleWorkerRequest } from '../worker/protocol.js';
+import {
+  createWorkerState,
+  handleWorkerRequest,
+  VALIDATION_DEBOUNCE_MS,
+} from '../worker/protocol.js';
 import type { WorkerRequest } from '../worker/protocol.js';
 import {
   DEFAULT_PROJECT_CONFIG_TEXT,
@@ -47,8 +49,29 @@ const FAKE_CLIENT: FakeClient = {
     requestId: 'fake',
     diff: { hunks: [], added: 0, removed: 0, identical: true, trailingNewlineChanged: false },
   }),
-  applyPatch: async (_patch) => ({ type: 'applyPatch', requestId: 'fake' }),
+  applyPatch: async (_patch) => ({
+    type: 'applyPatch',
+    requestId: 'fake',
+    canUndo: false,
+    canRedo: false,
+  }),
   value: async () => ({ type: 'value', requestId: 'fake', value: {} }),
+  undo: async () => ({
+    type: 'undo',
+    requestId: 'fake',
+    canUndo: false,
+    canRedo: false,
+    text: '',
+    value: {},
+  }),
+  redo: async () => ({
+    type: 'redo',
+    requestId: 'fake',
+    canUndo: false,
+    canRedo: false,
+    text: '',
+    value: {},
+  }),
 };
 
 const decoder = new TextDecoder();
@@ -583,95 +606,152 @@ describe('ProjectPage / delete (FR-PROJ-03)', () => {
   });
 });
 
-describe('ProjectPage / undo-redo shell (FR-PROJ-04 UI wiring; see plan #11 deviation note)', () => {
-  it('renders Undo and Redo disabled while the injected history stack is empty', async () => {
+describe('ProjectPage / undo-redo (FR-PROJ-04, v0.3.0 #15)', () => {
+  // Real `WorkerClient` + real `handleWorkerRequest`, matching the "module
+  // form wiring" tests below: undo/redo now lives entirely in the Worker's
+  // own `HistoryStack` (v0.3.0 #15), so a canned-response fake could not
+  // exercise any of this — there would be nothing real to undo.
+  async function setUpWithRealDocument(yaml: string) {
     const adapter = new MemoryStorageAdapter();
-    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
+    const client = new WorkerClient(new RealWorker());
+    render(<ProjectPage client={client} adapter={adapter} />);
     await screen.findByText(t('project.emptyState'));
+
     fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
     await screen.findByLabelText(t('project.nameLabel'));
+    const editorTextarea = screen.getByLabelText<HTMLTextAreaElement>(t('editor.title'));
+    await waitFor(() => expect(editorTextarea.value).toBe(DEFAULT_PROJECT_CONFIG_TEXT));
+    fireEvent.change(editorTextarea, { target: { value: yaml } });
+    await waitFor(() => {
+      expect(document.querySelector('[data-module-section="general"]')).not.toBeNull();
+    });
+    return { editorTextarea };
+  }
 
-    const undoButton = screen.getByRole<HTMLButtonElement>('button', {
-      name: t('project.undoButton'),
-    });
-    const redoButton = screen.getByRole<HTMLButtonElement>('button', {
-      name: t('project.redoButton'),
-    });
-    expect(undoButton.disabled).toBe(true);
-    expect(redoButton.disabled).toBe(true);
+  function undoButton(): HTMLButtonElement {
+    return screen.getByRole<HTMLButtonElement>('button', { name: t('project.undoButton') });
+  }
+  function redoButton(): HTMLButtonElement {
+    return screen.getByRole<HTMLButtonElement>('button', { name: t('project.redoButton') });
+  }
+
+  it('renders Undo and Redo disabled for a freshly parsed document with no edits yet', async () => {
+    await setUpWithRealDocument('mode: rule\n');
+    expect(undoButton().disabled).toBe(true);
+    expect(redoButton().disabled).toBe(true);
   });
 
-  it('enables Undo once the injected stack has a recorded entry, and the button calls undo()', async () => {
-    const adapter = new MemoryStorageAdapter();
-    const historyStack = new HistoryStack();
-    const { document: doc } = MihomoYamlDocument.parse('mode: rule\n');
-    historyStack.record(doc!, 'test edit', () => doc!.setScalarIn(['mode'], 'direct'));
-    expect(historyStack.canUndo).toBe(true);
+  it('a real field edit enables Undo; clicking it restores the export text byte-exact and enables Redo', async () => {
+    const { editorTextarea } = await setUpWithRealDocument('mode: rule\n');
+    const before = editorTextarea.value;
 
-    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} historyStack={historyStack} />);
-    await screen.findByText(t('project.emptyState'));
-    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
-    await screen.findByLabelText(t('project.nameLabel'));
+    const modeLabel = GENERAL_MODULE.i18n?.['zh-CN']?.['field.mode'];
+    if (!modeLabel) throw new Error('GENERAL_MODULE has no zh-CN field.mode label');
+    fireEvent.change(screen.getByLabelText(modeLabel), { target: { value: 'global' } });
+    await waitFor(() => expect(editorTextarea.value).toContain('mode: global'));
+    await waitFor(() => expect(undoButton().disabled).toBe(false));
 
-    const undoButton = screen.getByRole<HTMLButtonElement>('button', {
-      name: t('project.undoButton'),
-    });
-    expect(undoButton.disabled).toBe(false);
+    fireEvent.click(undoButton());
 
-    fireEvent.click(undoButton);
+    await waitFor(() => expect(editorTextarea.value).toBe(before));
+    expect(undoButton().disabled).toBe(true);
+    expect(redoButton().disabled).toBe(false);
+  });
 
-    expect(historyStack.canUndo).toBe(false);
-    expect(historyStack.canRedo).toBe(true);
-    await waitFor(() => {
-      const redoButton = screen.getByRole<HTMLButtonElement>('button', {
-        name: t('project.redoButton'),
-      });
-      expect(redoButton.disabled).toBe(false);
-    });
+  it('Redo restores the edited text byte-exact after an undo', async () => {
+    const { editorTextarea } = await setUpWithRealDocument('mode: rule\n');
+    const modeLabel = GENERAL_MODULE.i18n?.['zh-CN']?.['field.mode'];
+    if (!modeLabel) throw new Error('GENERAL_MODULE has no zh-CN field.mode label');
+    fireEvent.change(screen.getByLabelText(modeLabel), { target: { value: 'global' } });
+    await waitFor(() => expect(editorTextarea.value).toContain('mode: global'));
+    const afterEdit = editorTextarea.value;
+    fireEvent.click(undoButton());
+    await waitFor(() => expect(redoButton().disabled).toBe(false));
+
+    fireEvent.click(redoButton());
+
+    await waitFor(() => expect(editorTextarea.value).toBe(afterEdit));
+    expect(undoButton().disabled).toBe(false);
+    expect(redoButton().disabled).toBe(true);
   });
 
   it('Ctrl+Z triggers undo and Ctrl+Shift+Z triggers redo via the keyboard', async () => {
-    const adapter = new MemoryStorageAdapter();
-    const historyStack = new HistoryStack();
-    const { document: doc } = MihomoYamlDocument.parse('mode: rule\n');
-    historyStack.record(doc!, 'test edit', () => doc!.setScalarIn(['mode'], 'direct'));
-
-    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} historyStack={historyStack} />);
-    await screen.findByText(t('project.emptyState'));
-    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
-    await screen.findByLabelText(t('project.nameLabel'));
+    const { editorTextarea } = await setUpWithRealDocument('mode: rule\n');
+    const before = editorTextarea.value;
+    const modeLabel = GENERAL_MODULE.i18n?.['zh-CN']?.['field.mode'];
+    if (!modeLabel) throw new Error('GENERAL_MODULE has no zh-CN field.mode label');
+    fireEvent.change(screen.getByLabelText(modeLabel), { target: { value: 'global' } });
+    await waitFor(() => expect(editorTextarea.value).toContain('mode: global'));
+    const afterEdit = editorTextarea.value;
 
     fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
-    expect(historyStack.canUndo).toBe(false);
-    expect(historyStack.canRedo).toBe(true);
+    await waitFor(() => expect(editorTextarea.value).toBe(before));
 
     fireEvent.keyDown(window, { key: 'z', ctrlKey: true, shiftKey: true });
-    expect(historyStack.canUndo).toBe(true);
-    expect(historyStack.canRedo).toBe(false);
+    await waitFor(() => expect(editorTextarea.value).toBe(afterEdit));
   });
 
-  it('a keyboard shortcut without a document to redo/undo is a no-op, not a crash', async () => {
-    const adapter = new MemoryStorageAdapter();
-    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
-    await screen.findByText(t('project.emptyState'));
+  it('a new edit after undo truncates the redo branch (engine behaviour, reconfirmed through the protocol)', async () => {
+    const { editorTextarea } = await setUpWithRealDocument('mode: rule\nport: 7890\n');
+    const modeLabel = GENERAL_MODULE.i18n?.['zh-CN']?.['field.mode'];
+    if (!modeLabel) throw new Error('GENERAL_MODULE has no zh-CN field.mode label');
+    fireEvent.change(screen.getByLabelText(modeLabel), { target: { value: 'global' } });
+    await waitFor(() => expect(editorTextarea.value).toContain('mode: global'));
+    fireEvent.click(undoButton());
+    await waitFor(() => expect(redoButton().disabled).toBe(false));
+
+    fireEvent.change(screen.getByLabelText(modeLabel), { target: { value: 'direct' } });
+
+    await waitFor(() => expect(editorTextarea.value).toContain('mode: direct'));
+    expect(redoButton().disabled).toBe(true);
+  });
+
+  it('an undo/redo keyboard shortcut with nothing to undo/redo is a no-op, not a crash', async () => {
+    await setUpWithRealDocument('mode: rule\n');
 
     expect(() => fireEvent.keyDown(window, { key: 'z', ctrlKey: true })).not.toThrow();
+    expect(() =>
+      fireEvent.keyDown(window, { key: 'z', ctrlKey: true, shiftKey: true }),
+    ).not.toThrow();
+    expect(undoButton().disabled).toBe(true);
+    expect(redoButton().disabled).toBe(true);
   });
 
-  it('a key combo other than Ctrl/Cmd+Z does not touch the history stack', async () => {
-    const adapter = new MemoryStorageAdapter();
-    const historyStack = new HistoryStack();
-    const { document: doc } = MihomoYamlDocument.parse('mode: rule\n');
-    historyStack.record(doc!, 'test edit', () => doc!.setScalarIn(['mode'], 'direct'));
-
-    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} historyStack={historyStack} />);
-    await screen.findByText(t('project.emptyState'));
+  it('a key combo other than Ctrl/Cmd+Z does not trigger undo or redo', async () => {
+    const { editorTextarea } = await setUpWithRealDocument('mode: rule\n');
+    const modeLabel = GENERAL_MODULE.i18n?.['zh-CN']?.['field.mode'];
+    if (!modeLabel) throw new Error('GENERAL_MODULE has no zh-CN field.mode label');
+    fireEvent.change(screen.getByLabelText(modeLabel), { target: { value: 'global' } });
+    await waitFor(() => expect(editorTextarea.value).toContain('mode: global'));
+    const afterEdit = editorTextarea.value;
 
     fireEvent.keyDown(window, { key: 'a', ctrlKey: true });
     fireEvent.keyDown(window, { key: 'z' }); // no modifier key held
 
-    expect(historyStack.canUndo).toBe(true);
-    expect(historyStack.canRedo).toBe(false);
+    expect(editorTextarea.value).toBe(afterEdit);
+    expect(undoButton().disabled).toBe(false);
+    expect(redoButton().disabled).toBe(true);
+  });
+
+  it('undo still works after waiting past YamlEditor’s own debounce window (regression: a real user, unlike a fast synchronous test, always waits this long)', async () => {
+    const { editorTextarea } = await setUpWithRealDocument('mode: rule\n');
+    const before = editorTextarea.value;
+    const modeLabel = GENERAL_MODULE.i18n?.['zh-CN']?.['field.mode'];
+    if (!modeLabel) throw new Error('GENERAL_MODULE has no zh-CN field.mode label');
+    fireEvent.change(screen.getByLabelText(modeLabel), { target: { value: 'global' } });
+    await waitFor(() => expect(editorTextarea.value).toContain('mode: global'));
+
+    // YamlEditor's own debounced re-parse of this exact (unchanged-since)
+    // text fires in here — the earlier undo/redo tests above all click
+    // Undo well before this window elapses, which is exactly how the
+    // original bug (parse() unconditionally resetting history) stayed
+    // invisible to every one of them.
+    await new Promise((resolve) => setTimeout(resolve, VALIDATION_DEBOUNCE_MS + 100));
+
+    expect(undoButton().disabled).toBe(false);
+    fireEvent.click(undoButton());
+
+    await waitFor(() => expect(editorTextarea.value).toBe(before));
   });
 });
 

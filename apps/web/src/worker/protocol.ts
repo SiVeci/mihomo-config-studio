@@ -1,3 +1,4 @@
+import { HistoryStack } from '@mcs/config-model';
 import type { SchemaModule } from '@mcs/schema-core';
 import { builtinAsStoredBundle, createRegistry } from '@mcs/schema-registry';
 import type { IssueFix, ValidationIssue } from '@mcs/validator';
@@ -76,6 +77,14 @@ export interface ValueRequest {
   type: 'value';
   requestId: string;
 }
+export interface UndoRequest {
+  type: 'undo';
+  requestId: string;
+}
+export interface RedoRequest {
+  type: 'redo';
+  requestId: string;
+}
 
 export type WorkerRequest =
   | ParseRequest
@@ -84,7 +93,9 @@ export type WorkerRequest =
   | DiffRequest
   | SerializeRequest
   | LocateRequest
-  | ValueRequest;
+  | ValueRequest
+  | UndoRequest
+  | RedoRequest;
 
 export interface ParseResponse {
   type: 'parse';
@@ -96,6 +107,9 @@ export interface ParseResponse {
 export interface ApplyPatchResponse {
   type: 'applyPatch';
   requestId: string;
+  /** So the caller can drive undo/redo button disabled state without a separate round trip (v0.3.0 #15). */
+  canUndo: boolean;
+  canRedo: boolean;
 }
 export interface ValidateResponse {
   type: 'validate';
@@ -123,6 +137,28 @@ export interface ValueResponse {
   requestId: string;
   value: unknown;
 }
+/**
+ * `text`/`value` are the document's state *after* the undo/redo (unchanged
+ * from before it when there was nothing to undo/redo) — bundled so the
+ * caller can refresh the raw editor and the form in one round trip, the same
+ * reasoning `ParseResponse.value` already applies.
+ */
+export interface UndoResponse {
+  type: 'undo';
+  requestId: string;
+  canUndo: boolean;
+  canRedo: boolean;
+  text: string;
+  value: unknown;
+}
+export interface RedoResponse {
+  type: 'redo';
+  requestId: string;
+  canUndo: boolean;
+  canRedo: boolean;
+  text: string;
+  value: unknown;
+}
 /** NFR-SEC-03: never carries configuration values — only a stable code, an i18n key, and a path. */
 export interface WorkerErrorResponse {
   type: 'error';
@@ -140,15 +176,25 @@ export type WorkerResponse =
   | SerializeResponse
   | LocateResponse
   | ValueResponse
+  | UndoResponse
+  | RedoResponse
   | WorkerErrorResponse;
 
-/** The Worker's own state: the document produced by the most recent `parse`. */
+/**
+ * The Worker's own state: the document produced by the most recent `parse`,
+ * and (v0.3.0 #15) the undo/redo stack for edits made since — living here
+ * alongside the document it describes is deliberate (v0.2.0 #11's own
+ * "执行时修正" already called this out): the main thread holding it would
+ * break the same Worker-ownership boundary `MihomoYamlDocument` itself
+ * already respects.
+ */
 export interface WorkerState {
   parseResult: ParseResult | null;
+  historyStack: HistoryStack;
 }
 
 export function createWorkerState(): WorkerState {
-  return { parseResult: null };
+  return { parseResult: null, historyStack: new HistoryStack() };
 }
 
 /**
@@ -172,12 +218,29 @@ export function handleWorkerRequest(state: WorkerState, request: WorkerRequest):
       return handleLocate(state, request);
     case 'value':
       return handleValue(state, request);
+    case 'undo':
+      return handleUndo(state, request);
+    case 'redo':
+      return handleRedo(state, request);
   }
 }
 
 function handleParse(state: WorkerState, request: ParseRequest): ParseResponse {
+  // `ProjectPage` feeds every `applyPatch`/`undo`/`redo` response's `text`
+  // straight back into `configText`, which is `YamlEditor`'s `text` prop —
+  // so its own debounced effect re-parses that *exact same* text ~300ms
+  // after every one of those, no user action involved. Comparing against
+  // the document already held is what tells "the Worker's own echo of an
+  // edit it just made" apart from "a genuinely new document" (project
+  // switch/import) or "a real raw-text edit" (both change the text) — only
+  // the latter two are a fresh undo scope. Getting this wrong the other way
+  // silently wipes undo history a fraction of a second after every single
+  // edit, which is invisible to a fast synchronous test but real for an
+  // actual user (caught manually in a real browser, v0.3.0 #15).
+  const isEchoOfCurrentDocument = state.parseResult?.document?.toText() === request.text;
   const parseResult = MihomoYamlDocument.parse(request.text);
   state.parseResult = parseResult;
+  if (!isEchoOfCurrentDocument) state.historyStack = new HistoryStack();
   return {
     type: 'parse',
     requestId: request.requestId,
@@ -193,11 +256,63 @@ function handleApplyPatch(
   const document = state.parseResult?.document;
   if (!document) return noDocumentError(request.requestId);
   try {
-    applyIssueFix(document, request.patch);
-    return { type: 'applyPatch', requestId: request.requestId };
+    const { patch } = request;
+    // Same path within the merge window collapses into one undo step — this
+    // is what keeps typing into one text field from pushing one history
+    // entry per keystroke; a merge is still one document-text transition
+    // either way, `HistoryStack.record()` handles both uniformly.
+    state.historyStack.record(
+      document,
+      `${patch.kind}:${JSON.stringify(patch.path)}`,
+      () => applyIssueFix(document, patch),
+      JSON.stringify(patch.path),
+    );
+    return {
+      type: 'applyPatch',
+      requestId: request.requestId,
+      canUndo: state.historyStack.canUndo,
+      canRedo: state.historyStack.canRedo,
+    };
   } catch (error) {
     return errorResponseFrom(request.requestId, error);
   }
+}
+
+function handleUndo(state: WorkerState, request: UndoRequest): UndoResponse | WorkerErrorResponse {
+  const document = state.parseResult?.document;
+  if (!document) return noDocumentError(request.requestId);
+  const restoredText = state.historyStack.undo();
+  if (restoredText !== null) state.parseResult = MihomoYamlDocument.parse(restoredText);
+  // Non-null either way: `restoredText === null` leaves `state.parseResult`
+  // as the already-confirmed-non-null value from above; a non-null
+  // `restoredText` is itself a `document.toText()` snapshot recorded from a
+  // document that composed successfully, and M0-1's round-trip guarantee
+  // means re-parsing that exact text composes again.
+  const current = state.parseResult!.document!;
+  return {
+    type: 'undo',
+    requestId: request.requestId,
+    canUndo: state.historyStack.canUndo,
+    canRedo: state.historyStack.canRedo,
+    text: current.toText(),
+    value: current.toJS(),
+  };
+}
+
+function handleRedo(state: WorkerState, request: RedoRequest): RedoResponse | WorkerErrorResponse {
+  const document = state.parseResult?.document;
+  if (!document) return noDocumentError(request.requestId);
+  const restoredText = state.historyStack.redo();
+  if (restoredText !== null) state.parseResult = MihomoYamlDocument.parse(restoredText);
+  const current = state.parseResult!.document!;
+  return {
+    type: 'redo',
+    requestId: request.requestId,
+    canUndo: state.historyStack.canUndo,
+    canRedo: state.historyStack.canRedo,
+    text: current.toText(),
+    value: current.toJS(),
+  };
 }
 
 function handleValidate(

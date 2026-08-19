@@ -1,9 +1,8 @@
-import { HistoryStack } from '@mcs/config-model';
 import type { FormMode, SchemaModule } from '@mcs/schema-core';
 import { builtinAsStoredBundle, createRegistry } from '@mcs/schema-registry';
 import { AutoSaver } from '@mcs/storage';
 import type { StorageAdapter } from '@mcs/storage';
-import { useEffect, useReducer, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { DiffPanel } from '../diff/DiffPanel.js';
 import type { DiffPanelWorkerClient } from '../diff/DiffPanel.js';
@@ -22,7 +21,9 @@ import type {
   ApplyPatchResponse,
   ConfigPath,
   IssueFix,
+  RedoResponse,
   TextRange,
+  UndoResponse,
   ValidationIssue,
   ValueResponse,
 } from '../worker/protocol.js';
@@ -42,10 +43,18 @@ import './ProjectPage.css';
 
 type ProjectField = 'name' | 'description' | 'targetProfile';
 
-/** `ModuleFormPage`'s own edits round-trip through these two — no dedicated child component owns this slice of the client since `ModuleFormPage` itself takes a plain `onFieldChange` callback, not a Worker client (v0.3.0 #14). */
+/**
+ * Document-editing operations `ProjectPage` itself calls directly rather
+ * than through a child component's own props — `ModuleFormPage` takes a
+ * plain `onFieldChange` callback, not a Worker client, and undo/redo are
+ * document-level (affect the raw editor and the form alike), not owned by
+ * either (v0.3.0 #14/#15).
+ */
 export interface ModuleFormWorkerClient {
   applyPatch(patch: IssueFix): Promise<ApplyPatchResponse>;
   value(): Promise<ValueResponse>;
+  undo(): Promise<UndoResponse>;
+  redo(): Promise<RedoResponse>;
 }
 
 export interface ProjectPageProps {
@@ -65,15 +74,6 @@ export interface ProjectPageProps {
     IssuePanelWorkerClient &
     DiffPanelWorkerClient &
     ModuleFormWorkerClient;
-  /**
-   * Injectable for tests; production always takes the default (a fresh,
-   * always-empty stack). Real document-level recording — the only thing that
-   * would ever make `canUndo`/`canRedo` true outside a test — arrives in #13
-   * once the Worker protocol grows `undo`/`redo` messages (see the plan's
-   * "执行时修正" note for #11: the one live `MihomoYamlDocument` lives inside
-   * the Worker per #10, so this shell cannot record real edits yet).
-   */
-  readonly historyStack?: HistoryStack;
   /** Injectable clock so autosave timing is exactly assertable in tests. */
   readonly now?: () => number;
   /** Forwarded to `ExportDialog` as-is; injectable because jsdom has no `URL.createObjectURL` (see `ExportDialog`'s own doc comment). */
@@ -83,7 +83,6 @@ export interface ProjectPageProps {
 export function ProjectPage({
   adapter,
   client,
-  historyStack: historyStackProp,
   now = Date.now,
   downloadFile,
 }: ProjectPageProps): ReactNode {
@@ -96,8 +95,11 @@ export function ProjectPage({
   const [importBaseline, setImportBaseline] = useState('');
   const [savedBaseline, setSavedBaseline] = useState('');
   const [showExportDialog, setShowExportDialog] = useState(false);
-  const [historyStack] = useState(() => historyStackProp ?? new HistoryStack());
-  const [, bumpHistoryVersion] = useReducer((count: number) => count + 1, 0);
+  // Driven by the Worker's own HistoryStack (v0.3.0 #15) — the one live
+  // MihomoYamlDocument lives there (v0.2.0 #10), so this shell never records
+  // edits itself, only reflects `canUndo`/`canRedo` back from each response.
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
   const [documentValue, setDocumentValue] = useState<unknown>(null);
   const [formMode, setFormMode] = useState<FormMode>('basic');
   // Static for the process lifetime: v0.3.0 has no Bundle-install UI yet, so
@@ -143,6 +145,8 @@ export function ProjectPage({
       // Otherwise the form would keep rendering the previous project's
       // fields until this project's own YamlEditor debounce fires.
       setDocumentValue(null);
+      setCanUndo(false);
+      setCanRedo(false);
       return;
     }
     let cancelled = false;
@@ -240,19 +244,31 @@ export function ProjectPage({
     function handleKeyDown(event: KeyboardEvent): void {
       if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'z') return;
       event.preventDefault();
-      if (event.shiftKey) handleRedo();
-      else handleUndo();
+      if (event.shiftKey) void handleRedo();
+      else void handleUndo();
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  function handleUndo(): void {
-    if (historyStack.undo() !== null) bumpHistoryVersion();
+  async function handleUndo(): Promise<void> {
+    const response = await client.undo();
+    applyHistoryResponse(response);
   }
 
-  function handleRedo(): void {
-    if (historyStack.redo() !== null) bumpHistoryVersion();
+  async function handleRedo(): Promise<void> {
+    const response = await client.redo();
+    applyHistoryResponse(response);
+  }
+
+  /** Shared by `handleUndo`/`handleRedo`: both responses have the identical shape (v0.3.0 #15). */
+  function applyHistoryResponse(response: UndoResponse | RedoResponse): void {
+    setCanUndo(response.canUndo);
+    setCanRedo(response.canRedo);
+    setDocumentValue(response.value);
+    configTextRef.current = response.text;
+    setConfigText(response.text);
+    configAutoSaverRef.current?.touch(now());
   }
 
   async function handleCreate(): Promise<void> {
@@ -338,7 +354,9 @@ export function ProjectPage({
    */
   async function handleDocumentFieldChange(path: ConfigPath, value: unknown): Promise<void> {
     const patch: IssueFix = { kind: 'set', path, value };
-    await client.applyPatch(patch);
+    const patchResponse = await client.applyPatch(patch);
+    setCanUndo(patchResponse.canUndo);
+    setCanRedo(patchResponse.canRedo);
     const [valueResponse, serializeResponse] = await Promise.all([
       client.value(),
       client.serialize(),
@@ -430,10 +448,10 @@ export function ProjectPage({
           />
           <ProjectDetail
             project={selected}
-            canUndo={historyStack.canUndo}
-            canRedo={historyStack.canRedo}
-            onUndo={handleUndo}
-            onRedo={handleRedo}
+            canUndo={canUndo}
+            canRedo={canRedo}
+            onUndo={() => void handleUndo()}
+            onRedo={() => void handleRedo()}
             onFieldChange={handleFieldChange}
             onExportClick={() => setShowExportDialog(true)}
             confirmingDelete={confirmingDeleteId === selected.id}
