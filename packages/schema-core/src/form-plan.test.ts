@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildFormPlan, inferControl, type PlannedField } from './form-plan.js';
 import { sampleModule } from './testing/sample-module.js';
-import type { SchemaModule } from './types.js';
+import type { JsonSchema, SchemaModule } from './types.js';
 
 const DOCUMENT = {
   sample: {
@@ -50,6 +50,91 @@ describe('control inference (FR-SCHEMA-01, FR-SCHEMA-02, FR-SCHEMA-06)', () => {
       expect(inferControl({ type: 'string' }, key)).toBe('secret');
     }
     expect(inferControl({ type: 'string' }, 'server')).toBe('text');
+  });
+});
+
+describe('discriminated union control inference (FR-SCHEMA-02)', () => {
+  const SHARED_DEFS: Record<string, JsonSchema> = {
+    shared: { type: 'object', properties: { label: { type: 'string' } } },
+    kindA: {
+      allOf: [
+        { $ref: '#/$defs/shared' },
+        {
+          type: 'object',
+          properties: { kind: { const: 'a' }, x: { type: 'string' } },
+          required: ['kind', 'x'],
+        },
+      ],
+    },
+    kindB: {
+      allOf: [
+        { $ref: '#/$defs/shared' },
+        { type: 'object', properties: { kind: { const: 'b' }, y: { type: 'integer' } } },
+      ],
+    },
+  };
+  const ROOT: JsonSchema = {
+    type: 'object',
+    properties: { transport: { oneOf: [{ $ref: '#/$defs/kindA' }, { $ref: '#/$defs/kindB' }] } },
+    $defs: SHARED_DEFS,
+  };
+
+  it('infers variant for a oneOf union whose branches share a $defs/allOf const discriminator', () => {
+    const transportSchema = ROOT.properties?.transport;
+    expect(transportSchema).toBeDefined();
+    expect(inferControl(transportSchema as JsonSchema, 'transport', ROOT)).toBe('variant');
+  });
+
+  it('accepts a single-value enum as a discriminator, not just const', () => {
+    const schema: JsonSchema = {
+      oneOf: [
+        {
+          type: 'object',
+          properties: { kind: { type: 'string', enum: ['p'] }, p: { type: 'string' } },
+        },
+        {
+          type: 'object',
+          properties: { kind: { type: 'string', enum: ['q'] }, q: { type: 'string' } },
+        },
+      ],
+    };
+    expect(inferControl(schema)).toBe('variant');
+  });
+
+  it('also recognizes anyOf unions, not just oneOf', () => {
+    const schema: JsonSchema = {
+      anyOf: [
+        { type: 'object', properties: { kind: { const: 'a' } } },
+        { type: 'object', properties: { kind: { const: 'b' } } },
+      ],
+    };
+    expect(inferControl(schema)).toBe('variant');
+  });
+
+  it('falls back to unknown, never guessing, when branches share no const/enum property', () => {
+    const schema: JsonSchema = {
+      oneOf: [
+        { type: 'object', properties: { x: { type: 'string' } } },
+        { type: 'object', properties: { y: { type: 'string' } } },
+      ],
+    };
+    expect(inferControl(schema)).toBe('unknown');
+  });
+
+  it('does not recurse forever on a self-referential allOf cycle (malicious schema safety)', () => {
+    const root: JsonSchema = {
+      $defs: {
+        cyclic: {
+          allOf: [
+            { $ref: '#/$defs/cyclic' },
+            { type: 'object', properties: { kind: { const: 'a' } } },
+          ],
+        },
+        other: { type: 'object', properties: { kind: { const: 'b' } } },
+      },
+    };
+    const schema: JsonSchema = { oneOf: [{ $ref: '#/$defs/cyclic' }, { $ref: '#/$defs/other' }] };
+    expect(() => inferControl(schema, 'x', root)).not.toThrow();
   });
 });
 
@@ -210,5 +295,154 @@ describe('schema-only extension (FR-SCHEMA-06)', () => {
       control: 'select',
       enumValues: ['always', 'strict', 'off'],
     });
+  });
+});
+
+describe('discriminated union planning (FR-SCHEMA-02, E4)', () => {
+  // Deliberately Mihomo-unrelated names: `proxies` working is meant to be one
+  // instance of this general mechanism, not a special case the planner knows
+  // about (FR-SCHEMA-06 applied to unions).
+  const variantModule: SchemaModule = {
+    manifest: { id: 'variant-sample', root: ['sample'], version: '1.0.0' },
+    schema: {
+      type: 'object',
+      properties: {
+        transport: { oneOf: [{ $ref: '#/$defs/kindA' }, { $ref: '#/$defs/kindB' }] },
+      },
+      $defs: {
+        shared: { type: 'object', properties: { label: { type: 'string' } } },
+        kindA: {
+          allOf: [
+            { $ref: '#/$defs/shared' },
+            {
+              type: 'object',
+              properties: { kind: { const: 'a' }, x: { type: 'string' } },
+              required: ['kind', 'x'],
+            },
+          ],
+        },
+        kindB: {
+          allOf: [
+            { $ref: '#/$defs/shared' },
+            { type: 'object', properties: { kind: { const: 'b' }, y: { type: 'integer' } } },
+          ],
+        },
+      },
+    },
+    ui: {
+      fields: {
+        // Only branch "a" gets a label, so the fallback-to-raw-value case
+        // (rendered by form-renderer in #1) has something to fall back from.
+        transport: { variantLabels: { a: 'variant.kindA' } },
+      },
+    },
+  };
+
+  it("plans the matched branch's properties as children without adding a path segment", () => {
+    const doc = {
+      sample: { transport: { kind: 'a', label: 'shared-a', x: 'hello', extra: 'unlisted' } },
+    };
+    const plan = buildFormPlan(variantModule, doc, { mode: 'advanced' });
+    const transport = find(plan.fields, 'transport');
+
+    expect(transport.control).toBe('variant');
+    expect(transport.variant).toMatchObject({
+      discriminatorKey: 'kind',
+      selected: 'a',
+      matched: true,
+    });
+    expect(transport.variant?.options).toEqual([
+      { value: 'a', label: 'variant.kindA' },
+      { value: 'b' },
+    ]);
+    expect(find(transport.children ?? [], 'x')).toMatchObject({
+      path: ['sample', 'transport', 'x'],
+      value: 'hello',
+    });
+    // The discriminator is represented by `variant`, not duplicated as a child row.
+    expect(transport.children?.some((child) => child.key === 'kind')).toBe(false);
+  });
+
+  it("replans a different branch's properties when the discriminator value changes", () => {
+    const doc = { sample: { transport: { kind: 'b', label: 'shared-b', y: 42 } } };
+    const plan = buildFormPlan(variantModule, doc, { mode: 'advanced' });
+    const transport = find(plan.fields, 'transport');
+
+    expect(transport.variant).toMatchObject({ selected: 'b', matched: true });
+    expect(transport.children?.map((child) => child.key).sort()).toEqual(['label', 'y']);
+    expect(find(transport.children ?? [], 'y').control).toBe('integer');
+  });
+
+  it('keeps a property the matched branch does not declare as an unknown child instead of dropping it (E4)', () => {
+    const doc = {
+      sample: { transport: { kind: 'a', label: 'shared-a', x: 'hello', extra: 'unlisted' } },
+    };
+    const plan = buildFormPlan(variantModule, doc, { mode: 'advanced' });
+    const transport = find(plan.fields, 'transport');
+
+    expect(find(transport.children ?? [], 'extra')).toMatchObject({
+      unknown: true,
+      value: 'unlisted',
+      path: ['sample', 'transport', 'extra'],
+    });
+    expect(plan.unknownFields.some((field) => field.key === 'extra')).toBe(true);
+  });
+
+  it('does not plan children when the value matches no branch, but keeps the raw value intact', () => {
+    const doc = { sample: { transport: { kind: 'c', mystery: true } } };
+    const plan = buildFormPlan(variantModule, doc, { mode: 'advanced' });
+    const transport = find(plan.fields, 'transport');
+
+    expect(transport.variant).toMatchObject({ selected: 'c', matched: false });
+    expect(transport.children).toBeUndefined();
+    expect(transport.value).toEqual({ kind: 'c', mystery: true });
+  });
+
+  it('prefers the first common candidate key in declaration order when several qualify', () => {
+    const module: SchemaModule = {
+      manifest: { id: 'two-candidates', root: ['sample'], version: '1.0.0' },
+      schema: {
+        type: 'object',
+        properties: {
+          transport: {
+            oneOf: [
+              { type: 'object', properties: { kind: { const: 'a' }, type: { const: 'x' } } },
+              { type: 'object', properties: { kind: { const: 'b' }, type: { const: 'y' } } },
+            ],
+          },
+        },
+      },
+      ui: {},
+    };
+    const plan = buildFormPlan(module, { sample: { transport: { kind: 'a', type: 'x' } } });
+    expect(find(plan.fields, 'transport').variant?.discriminatorKey).toBe('kind');
+  });
+
+  it('marks the unknown-control fallback reason instead of silently guessing, and keeps the value', () => {
+    const badModule: SchemaModule = {
+      manifest: { id: 'bad-union', root: ['sample'], version: '1.0.0' },
+      schema: {
+        type: 'object',
+        properties: {
+          mystery: {
+            oneOf: [
+              { type: 'object', properties: { x: { type: 'string' } } },
+              { type: 'object', properties: { y: { type: 'string' } } },
+            ],
+          },
+        },
+      },
+      ui: {},
+    };
+    const plan = buildFormPlan(
+      badModule,
+      { sample: { mystery: { x: 'hi' } } },
+      { mode: 'advanced' },
+    );
+    const mystery = find(plan.fields, 'mystery');
+
+    expect(mystery.control).toBe('unknown');
+    expect(mystery.unknownReason).toBe('variant-no-discriminator');
+    expect(mystery.value).toEqual({ x: 'hi' });
   });
 });

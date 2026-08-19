@@ -4,6 +4,7 @@ import { evaluateCondition, type ConditionContext } from './condition.js';
 import { resolveRef } from './ref.js';
 import type {
   ControlType,
+  JsonPrimitive,
   JsonSchema,
   Platform,
   SchemaModule,
@@ -17,6 +18,28 @@ export interface FormPlanOptions {
   mode?: FormMode;
   /** Fields restricted to other platforms are hidden but never removed. */
   platform?: Platform;
+}
+
+/** One selectable branch of a `variant` field's discriminator (FR-SCHEMA-02). */
+export interface VariantOption {
+  value: JsonPrimitive;
+  /** i18n key; the renderer falls back to the raw value when absent. */
+  label?: string;
+}
+
+/**
+ * Discriminator metadata for a `control: 'variant'` field: which sibling
+ * property picks the branch, what values are possible, and whether the
+ * current value matches one of them. Planning never deletes a field to make
+ * a branch "fit" (E4) — `matched: false` just means the branch's properties
+ * were not planned as children this time, not that the value was dropped.
+ */
+export interface VariantInfo {
+  discriminatorKey: string;
+  discriminatorPath: ConfigPath;
+  options: VariantOption[];
+  selected?: JsonPrimitive;
+  matched: boolean;
 }
 
 export interface PlannedField {
@@ -39,6 +62,13 @@ export interface PlannedField {
   group: string;
   enumValues?: readonly unknown[];
   children?: PlannedField[];
+  /** Only set when `control === 'variant'`. */
+  variant?: VariantInfo;
+  /**
+   * Diagnostic-only machine code for why `control` fell back to `'unknown'`
+   * instead of a more specific control. Never rendered as user-facing text.
+   */
+  unknownReason?: 'variant-no-discriminator';
 }
 
 export interface PlannedGroup {
@@ -201,13 +231,21 @@ interface FieldArgs {
 function planField(args: FieldArgs): PlannedField {
   const { key, schema, spec, value, context, basePath, mode, platform } = args;
   const path: ConfigPath = [...basePath, key];
-  const control = spec.control ?? inferControl(schema, key);
+  const explicitControl = spec.control !== undefined;
+  const control = spec.control ?? inferControl(schema, key, args.rootSchema);
 
   const platformAllowed =
     platform === undefined || spec.platforms === undefined || spec.platforms.includes(platform);
   const modeAllowed = mode === 'advanced' || spec.advanced !== true;
   const conditionAllowed =
     spec.visibleWhen === undefined || evaluateCondition(spec.visibleWhen, context);
+
+  // A schema-declared union with no discoverable discriminator falls back to
+  // `unknown` (never a guess) — this records why, for diagnostics only.
+  const isUnresolvedVariant =
+    !explicitControl &&
+    control === 'unknown' &&
+    (schema.oneOf !== undefined || schema.anyOf !== undefined);
 
   const field: PlannedField = {
     key,
@@ -227,6 +265,7 @@ function planField(args: FieldArgs): PlannedField {
     unknown: false,
     group: spec.group ?? DEFAULT_GROUP.id,
     ...(schema.enum !== undefined ? { enumValues: schema.enum } : {}),
+    ...(isUnresolvedVariant ? { unknownReason: 'variant-no-discriminator' as const } : {}),
   };
 
   if (control === 'object') {
@@ -241,18 +280,99 @@ function planField(args: FieldArgs): PlannedField {
       ...(platform !== undefined ? { platform } : {}),
       depth: args.depth + 1,
     });
+  } else if (control === 'variant') {
+    planVariantChildren(field, { schema, spec, value, path, context, mode, platform }, args);
   }
 
   return field;
 }
 
 /**
+ * Plan a `variant` field's discriminator metadata and, when the current value
+ * matches one of the union's branches, that branch's properties as children.
+ *
+ * Switching branches is not this function's job: it never deletes anything.
+ * A property the record carries but the matched branch does not declare
+ * still comes out the other end of `planObject`'s own "undeclared property"
+ * path as an unknown child — the same guarantee basic/advanced mode gives,
+ * applied to union branches (E4).
+ */
+function planVariantChildren(
+  field: PlannedField,
+  ctx: {
+    schema: JsonSchema;
+    spec: UiFieldSpec;
+    value: unknown;
+    path: ConfigPath;
+    context: ConditionContext;
+    mode: FormMode;
+    /** Required (not optional) so a possibly-`undefined` local can be passed
+     * through directly; `exactOptionalPropertyTypes` forbids that for an
+     * optional property. */
+    platform: Platform | undefined;
+  },
+  args: FieldArgs,
+): void {
+  const analysis = analyzeVariant(ctx.schema, args.rootSchema);
+  if (!analysis) return;
+
+  const record = isRecord(ctx.value) ? ctx.value : {};
+  const rawSelected = record[analysis.discriminatorKey];
+  const selected = isJsonPrimitive(rawSelected) ? rawSelected : undefined;
+  const matchedBranch = analysis.branches.find((branch) => branch.value === selected);
+
+  field.variant = {
+    discriminatorKey: analysis.discriminatorKey,
+    discriminatorPath: [...ctx.path, analysis.discriminatorKey],
+    options: analysis.branches.map((branch) => {
+      const label = ctx.spec.variantLabels?.[String(branch.value)];
+      return { value: branch.value, ...(label !== undefined ? { label } : {}) };
+    }),
+    ...(selected !== undefined ? { selected } : {}),
+    matched: matchedBranch !== undefined,
+  };
+
+  if (!matchedBranch) return;
+
+  // Plan with the discriminator still among the properties — otherwise
+  // `planObject` cannot tell "declared, just represented elsewhere" from
+  // "undeclared", and would re-surface it as an unknown field. Drop it from
+  // the result instead: it is already represented by `field.variant`.
+  const { properties, required } = collectProperties(matchedBranch.schema, args.rootSchema);
+  const children = planObject({
+    schema: { properties, required: [...required] },
+    rootSchema: args.rootSchema,
+    ui: ctx.spec.fields ?? {},
+    value: ctx.value,
+    basePath: ctx.path,
+    context: ctx.context,
+    mode: ctx.mode,
+    ...(ctx.platform !== undefined ? { platform: ctx.platform } : {}),
+    depth: args.depth + 1,
+  });
+  field.children = children.filter((child) => child.key !== analysis.discriminatorKey);
+}
+
+/**
  * Pick a control from the JSON Schema alone. This mapping is why a bundle can
  * add a plain field without shipping UI metadata.
+ *
+ * `rootSchema` defaults to `schema` itself so existing callers that pass a
+ * self-contained schema (no local `$ref`) keep working unchanged; planning
+ * passes the module's actual root so `oneOf`/`anyOf` branches that reach into
+ * `$defs` resolve correctly.
  */
-export function inferControl(schema: JsonSchema, key = ''): ControlType {
+export function inferControl(
+  schema: JsonSchema,
+  key = '',
+  rootSchema: JsonSchema = schema,
+): ControlType {
   if (SENSITIVE_KEY.test(key) && isTypeOf(schema, 'string')) return 'secret';
   if (schema.enum) return 'select';
+
+  if (schema.oneOf !== undefined || schema.anyOf !== undefined) {
+    return analyzeVariant(schema, rootSchema) !== undefined ? 'variant' : 'unknown';
+  }
 
   if (isTypeOf(schema, 'boolean')) return 'switch';
   if (isTypeOf(schema, 'integer')) {
@@ -279,6 +399,111 @@ export function inferControl(schema: JsonSchema, key = ''): ControlType {
   }
 
   return 'unknown';
+}
+
+interface VariantBranch {
+  /** Branch schema after `$ref` resolution (may still be `allOf`-shaped). */
+  schema: JsonSchema;
+  value: JsonPrimitive;
+}
+
+interface VariantAnalysis {
+  discriminatorKey: string;
+  branches: VariantBranch[];
+}
+
+interface CandidateBranch {
+  schema: JsonSchema;
+  value: JsonPrimitive | undefined;
+}
+
+function candidateHasValue(branch: CandidateBranch): branch is VariantBranch {
+  return branch.value !== undefined;
+}
+
+/**
+ * Find the property that discriminates a `oneOf`/`anyOf` union: a `const` or
+ * single-value `enum` present in every branch, preferring the first common
+ * candidate in declaration order. This is declarative on purpose — nothing
+ * here is specific to Mihomo's `type` field, so any bundle union with a
+ * shared literal-valued property gets a working selector (FR-SCHEMA-06
+ * applied to unions). Returns `undefined` rather than guessing when no
+ * property qualifies in every branch; a synthesized bad schema should not
+ * crash the planner.
+ */
+function analyzeVariant(schema: JsonSchema, rootSchema: JsonSchema): VariantAnalysis | undefined {
+  const branches = schema.oneOf ?? schema.anyOf;
+  if (!branches || branches.length === 0) return undefined;
+
+  const resolvedBranches = branches.map((branch) => resolveRef(branch, rootSchema));
+  const branchProperties = resolvedBranches.map(
+    (branchSchema) => collectProperties(branchSchema, rootSchema).properties,
+  );
+  const firstProperties = branchProperties[0];
+  if (!firstProperties) return undefined;
+
+  for (const key of Object.keys(firstProperties)) {
+    const candidates: CandidateBranch[] = resolvedBranches.map((branchSchema, index) => ({
+      schema: branchSchema,
+      value: discriminatorValue(branchProperties[index] ?? {}, key, rootSchema),
+    }));
+    if (candidates.every(candidateHasValue)) {
+      return { discriminatorKey: key, branches: candidates };
+    }
+  }
+  return undefined;
+}
+
+function discriminatorValue(
+  properties: Record<string, JsonSchema>,
+  key: string,
+  rootSchema: JsonSchema,
+): JsonPrimitive | undefined {
+  const propSchema = properties[key];
+  if (propSchema === undefined) return undefined;
+  const resolved = resolveRef(propSchema, rootSchema);
+  if (resolved.const !== undefined) return resolved.const;
+  if (resolved.enum !== undefined && resolved.enum.length === 1) return resolved.enum[0];
+  return undefined;
+}
+
+/**
+ * Flatten a schema's own `properties` with everything contributed by its
+ * `allOf` members (recursively), resolving `$ref` at each step. This is what
+ * lets a union branch declare shared fields via `$defs` + `allOf` (ADR-008)
+ * — e.g. `proxies`' common `name`/`server`/`port` — while still being planned
+ * as one flat set of properties. Own properties win over `allOf`-contributed
+ * ones on a name clash, since they are the more specific declaration.
+ */
+function collectProperties(
+  schema: JsonSchema,
+  rootSchema: JsonSchema,
+  depth = 0,
+): { properties: Record<string, JsonSchema>; required: Set<string> } {
+  if (depth > MAX_NESTING) return { properties: {}, required: new Set() };
+  const resolved = resolveRef(schema, rootSchema);
+  const properties: Record<string, JsonSchema> = {};
+  const required = new Set<string>();
+
+  for (const member of resolved.allOf ?? []) {
+    const nested = collectProperties(member, rootSchema, depth + 1);
+    Object.assign(properties, nested.properties);
+    for (const nestedKey of nested.required) required.add(nestedKey);
+  }
+
+  Object.assign(properties, resolved.properties ?? {});
+  for (const ownKey of resolved.required ?? []) required.add(ownKey);
+
+  return { properties, required };
+}
+
+function isJsonPrimitive(value: unknown): value is JsonPrimitive {
+  return (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  );
 }
 
 function isTypeOf(schema: JsonSchema, type: string): boolean {

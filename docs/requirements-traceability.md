@@ -9,7 +9,7 @@
 > 本表随每个垂直切片更新。任何标记为 Done 的行都必须能指向具体测试文件。
 
 最近一次核对：2026-08-16（v0.2.0 收口）。`pnpm run test:coverage` 50 文件 /
-610 例全绿，行覆盖率 96.77%、分支 93.97%、函数 95.49%、语句 96.77%。
+610 例全绿，行覆盖率 96.77%、分支 93.96%、函数 95.49%、语句 96.77%。
 
 > 本表目前只覆盖 PRD §8.1、8.2、8.4、8.5、8.6、8.7、8.9、8.10 与 §11。
 > §8.3 配置模块覆盖、§8.8 模板、§8.11 订阅地址管理尚未建行——这些模块本身
@@ -18,11 +18,11 @@
 
 ## 里程碑映射
 
-| 本仓库阶段        | PRD 里程碑 | 状态                                                    |
-| ----------------- | ---------- | ------------------------------------------------------- |
-| M0 技术风险验证   | PRD M0     | v0.1.0 已收口（5 项中 4 项 Done，M0-5 Partial，见下表） |
-| M1 骨架与配置内核 | PRD M1     | v0.2.0 已收口（9 项退出条件全部 Done，见下表）          |
-| M2 及以后         | PRD M2–M7  | 未开始                                                  |
+| 本仓库阶段        | PRD 里程碑 | 状态                                                          |
+| ----------------- | ---------- | ------------------------------------------------------------- |
+| M0 技术风险验证   | PRD M0     | v0.1.0 已收口（5 项中 4 项 Done，M0-5 Partial，见下表）       |
+| M1 骨架与配置内核 | PRD M1     | v0.2.0 已收口（9 项退出条件全部 Done，见下表）                |
+| M2 及以后         | PRD M2–M7  | M2 进行中（v0.3.0，见[执行计划](./releases/plans/v0.3.0.md)） |
 
 ## M0 退出条件
 
@@ -80,15 +80,15 @@
 
 ### 8.4 Schema 驱动表单
 
-| ID           | 优先级 | 状态     | 证据 / 缺口                                                                                                                                                                                                                                                                                                                             |
-| ------------ | ------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| FR-SCHEMA-01 | P0     | **Done** | `form-plan.test.ts`「plans every declared property with values from the document」「resolves $ref and plans nested object children」；`index.test.tsx`「renders a control per planned field, chosen from the schema」                                                                                                                   |
-| FR-SCHEMA-02 | P0     | Partial  | 字符串、数字、布尔、枚举、列表、映射、密钥、嵌套对象已覆盖（`form-plan.test.ts`「derives a control for every supported shape without UI metadata」）。**联合类型未实现**：`inferControl` 无 `oneOf`/`anyOf` 分支，判别式联合落入 `unknown` 控件，直接阻塞 §8.3 的九种 P0 出站协议                                                       |
-| FR-SCHEMA-03 | P0     | Partial  | `visibleWhen`/`requiredWhen`、默认值、范围、正则已实现（`form-plan.test.ts`「applies visibleWhen and requiredWhen against sibling values」、`condition.test.ts` 11 例、`validate.test.ts`「checks enum, const and numeric bounds」「checks string length, pattern and format」）。互斥与跨字段依赖缺 `validation.rules` DSL（PRD §9.3） |
-| FR-SCHEMA-04 | P0     | Partial  | `UiFieldSpec` 已定义 `docs`/`platforms`/`since`/`deprecatedSince`/`safety`，`form-renderer/src/index.tsx` 已渲染官方文档链接与废弃/实验/危险徽章；仅 `platforms` 有断言（`form-plan.test.ts`「hides platform-restricted fields on other platforms」），其余元数据缺测试                                                                 |
-| FR-SCHEMA-05 | P0     | Partial  | 渲染侧不含任何字段专属代码路径已证明（`index.test.tsx` describe「SchemaForm (FR-SCHEMA-01, FR-SCHEMA-05)」）；模块发现、依赖解析与版本选择的 `schema-registry` 尚未建立                                                                                                                                                                 |
-| FR-SCHEMA-06 | P0     | **Done** | `form-plan.test.ts`「renders a brand-new field with no UI entry and no page code change」；`index.test.tsx`「renders a field added by a bundle update with no renderer change」                                                                                                                                                         |
-| FR-SCHEMA-07 | P1     | Partial  | `tools/schema-cli`：打包、哈希、签名与静态检查已实现并测试（`pack.test.ts`、`static-check.test.ts`、`sign.test.ts`、`index.test.ts`）。缺口：PRD 要求的"预览"工具（渲染/可视化 Schema 供贡献者检查）未实现，目前只有验证/打包能力                                                                                                       |
+| ID           | 优先级 | 状态     | 证据 / 缺口                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------ | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-SCHEMA-01 | P0     | **Done** | `form-plan.test.ts`「plans every declared property with values from the document」「resolves $ref and plans nested object children」；`index.test.tsx`「renders a control per planned field, chosen from the schema」                                                                                                                                                                                                                                                                                                               |
+| FR-SCHEMA-02 | P0     | Partial  | 字符串、数字、布尔、枚举、列表、映射、密钥、嵌套对象已覆盖（`form-plan.test.ts`「derives a control for every supported shape without UI metadata」）。**联合类型规划侧已补**（v0.3.0 #0，[ADR-019](./adr/ADR-019-discriminated-union-control.md)）：`inferControl` 新增 `oneOf`/`anyOf` 判别式联合分支，声明式判别键发现、`$defs`/`allOf` 分支展平、切换分支不丢字段（E4）均有断言，见 `form-plan.test.ts` 的「discriminated union control inference」「discriminated union planning」两组用例。**渲染侧（判别值选择器控件）待 #1** |
+| FR-SCHEMA-03 | P0     | Partial  | `visibleWhen`/`requiredWhen`、默认值、范围、正则已实现（`form-plan.test.ts`「applies visibleWhen and requiredWhen against sibling values」、`condition.test.ts` 11 例、`validate.test.ts`「checks enum, const and numeric bounds」「checks string length, pattern and format」）。互斥与跨字段依赖缺 `validation.rules` DSL（PRD §9.3）                                                                                                                                                                                             |
+| FR-SCHEMA-04 | P0     | Partial  | `UiFieldSpec` 已定义 `docs`/`platforms`/`since`/`deprecatedSince`/`safety`，`form-renderer/src/index.tsx` 已渲染官方文档链接与废弃/实验/危险徽章；仅 `platforms` 有断言（`form-plan.test.ts`「hides platform-restricted fields on other platforms」），其余元数据缺测试                                                                                                                                                                                                                                                             |
+| FR-SCHEMA-05 | P0     | Partial  | 渲染侧不含任何字段专属代码路径已证明（`index.test.tsx` describe「SchemaForm (FR-SCHEMA-01, FR-SCHEMA-05)」）；模块发现、依赖解析与版本选择的 `schema-registry` 尚未建立                                                                                                                                                                                                                                                                                                                                                             |
+| FR-SCHEMA-06 | P0     | **Done** | `form-plan.test.ts`「renders a brand-new field with no UI entry and no page code change」；`index.test.tsx`「renders a field added by a bundle update with no renderer change」                                                                                                                                                                                                                                                                                                                                                     |
+| FR-SCHEMA-07 | P1     | Partial  | `tools/schema-cli`：打包、哈希、签名与静态检查已实现并测试（`pack.test.ts`、`static-check.test.ts`、`sign.test.ts`、`index.test.ts`）。缺口：PRD 要求的"预览"工具（渲染/可视化 Schema 供贡献者检查）未实现，目前只有验证/打包能力                                                                                                                                                                                                                                                                                                   |
 
 ### 8.5 引用与关系管理
 

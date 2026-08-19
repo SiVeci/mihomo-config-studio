@@ -12,7 +12,7 @@
 | ------------------------------------------------- | ---------- | --------- | ----------------------------- | ------ |
 | [v0.1.0](./v0.1.0-m0-closeout.md)                 | M0         | 不发布    | 技术风险验证收尾              | 已完成 |
 | [v0.2.0](./v0.2.0-config-core-and-web-shell.md)   | M1         | 不发布    | 配置内核与 Web 骨架           | 已完成 |
-| [v0.3.0](./v0.3.0-schema-forms-alpha.md)          | M2         | **Alpha** | Schema 表单与前半配置模块     | 未开始 |
+| [v0.3.0](./v0.3.0-schema-forms-alpha.md)          | M2         | **Alpha** | Schema 表单与前半配置模块     | 进行中 |
 | [v0.4.0](./v0.4.0-rules-and-graph.md)             | M3         | 不发布    | 规则、代理组与关系图          | 未开始 |
 | [v0.5.0](./v0.5.0-bundle-update-and-migration.md) | M4         | 不发布    | Bundle 更新、签名、迁移与回滚 | 未开始 |
 | [v0.6.0](./v0.6.0-android-beta.md)                | M5         | **Beta**  | Android 集成与 PWA            | 未开始 |

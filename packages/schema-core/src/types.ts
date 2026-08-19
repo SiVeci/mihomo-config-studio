@@ -113,6 +113,7 @@ export type ControlType =
   | 'key-value'
   | 'object'
   | 'list'
+  | 'variant'
   | 'unknown';
 
 export type Platform = 'linux' | 'windows' | 'darwin' | 'android' | 'ios' | 'router';
@@ -147,6 +148,12 @@ export interface UiFieldSpec {
   item?: UiFieldSpec;
   /** UI spec for nested object properties. */
   fields?: Record<string, UiFieldSpec>;
+  /**
+   * i18n keys for a `variant` field's discriminator options, keyed by the
+   * discriminator value as a string. Falls back to the raw value when a key
+   * is missing (FR-SCHEMA-02).
+   */
+  variantLabels?: Record<string, string>;
 }
 
 export interface UiGroup {

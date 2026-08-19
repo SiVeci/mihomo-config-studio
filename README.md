@@ -31,8 +31,9 @@
 
 **M1（骨架与配置内核）已完成（v0.2.0）**：不安装任何 Schema 模块即可走通
 「导入 → 原文编辑 → 差异 → 导出」完整闭环，全部退出条件见
-[需求追踪表](docs/requirements-traceability.md)。尚未发布可用版本——下一步是
-M2（Schema 表单，v0.3.0）。
+[需求追踪表](docs/requirements-traceability.md)。**M2（Schema 表单与前半配置
+模块，v0.3.0）进行中**，详见[版本执行计划](docs/releases/plans/v0.3.0.md)。
+尚未发布可用版本。
 
 ## 仓库结构
 
@@ -45,12 +46,12 @@ packages/
   yaml-engine/         AST 解析、局部修改、序列化、差异        ✅ M0 已验证
   schema-core/         JSON Schema、UI Schema 和类型          ✅ M0 已验证
   schema-registry/     模块发现、依赖解析和版本选择           ✅ M0 已验证
-  schema-builtin/      随应用发布的默认 Bundle
+  schema-builtin/      随应用发布的默认 Bundle                🚧 规划中（v0.3.0 #6 落地）
   form-renderer/       Schema 驱动表单与控件映射              ✅ M0 已验证
   validator/           语法、结构、语义、引用和安全检查        ✅ 骨架 + 流水线 + 1MB 导入基准（v0.2.0 #1-2、#16）
-  migration/           声明式迁移计划与预览
+  migration/           声明式迁移计划与预览                    🚧 规划中（v0.5.0）
   graph/               引用索引、循环检测和关系图数据         ✅ M0 已验证
-  templates/           模板定义与变量
+  templates/           模板定义与变量                          🚧 规划中（v0.3.0 #20 落地）
   storage/             Web/Android 存储抽象                  ✅ 端口 + 内存/IndexedDB + 自动保存/快照裁剪（v0.2.0 #4-5）
   project-format/      .mcsproj 导入导出                     ✅ ZIP 往返 + 导出接线（v0.2.0 #6、#15）
   ui/                  通用 UI、主题与无障碍组件               ✅ 设计令牌 + 文字色层 + 对比度断言（v0.2.0 #7-8）
