@@ -1,0 +1,17 @@
+mode: rule
+common-health-check: &common-hc
+  enable: true
+  interval: 300
+  url: https://cp.cloudflare.com/generate_204
+proxy-providers:
+  provider-a:
+    type: http
+    url: "https://example.com/subscribe-a"
+    health-check:
+      <<: *common-hc
+  provider-b:
+    type: http
+    url: "https://example.com/subscribe-b"
+    health-check:
+      <<: *common-hc
+      interval: 600

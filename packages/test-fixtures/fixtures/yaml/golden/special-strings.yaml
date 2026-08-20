@@ -1,0 +1,19 @@
+mode: rule
+proxies:
+  - name: "yes"
+    type: ss
+    server: example.com
+    port: 443
+    cipher: aes-128-gcm
+    password: "123456"
+  - name: "🇭🇰 香港 01 | 2x"
+    type: ss
+    server: example.com
+    port: 443
+    cipher: aes-128-gcm
+    password: 'p@ss: w0rd! #not-a-comment'
+  - name: 'null'
+    type: trojan
+    server: example.org
+    port: 443
+    password: "*not-an-alias"

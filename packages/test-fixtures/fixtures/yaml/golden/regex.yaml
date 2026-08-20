@@ -1,0 +1,7 @@
+mode: rule
+proxy-providers:
+  my-subscription:
+    type: http
+    url: "https://example.com/subscribe"
+    filter: "(?i)hk|hongkong|香港"
+    exclude-filter: "(?i)expire|流量|官网"

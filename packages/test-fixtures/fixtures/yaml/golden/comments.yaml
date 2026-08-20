@@ -1,0 +1,12 @@
+# Leading document comment, before any key
+mode: rule # trailing comment on a scalar value
+# Standalone comment on its own line, between two top-level keys
+log-level: info
+dns:
+  enable: true
+  # A comment indented to match a nested block, right before a key
+  nameserver:
+    - 223.5.5.5 # trailing comment on a list item
+    - 1.1.1.1
+  # A comment right before the end of a nested block
+# A comment right before the end of the file, at document indent
