@@ -72,6 +72,7 @@ const FAKE_CLIENT: FakeClient = {
     text: '',
     value: {},
   }),
+  previewProvider: async (_text) => ({ type: 'previewProvider', requestId: 'fake', preview: null }),
 };
 
 const decoder = new TextDecoder();

@@ -602,11 +602,31 @@ describe('buildArrayFormPlan (FR-SCHEMA-01, v0.3.0 #14)', () => {
     });
   });
 
-  it('returns an empty array when the module’s root is absent or not an array, without throwing', () => {
+  it('returns an empty array when the module’s root is absent or neither a list nor a map, without throwing', () => {
     expect(buildArrayFormPlan(ARRAY_ENTRY_MODULE, {}, { mode: 'advanced' })).toEqual([]);
     expect(
-      buildArrayFormPlan(ARRAY_ENTRY_MODULE, { items: 'not-an-array' }, { mode: 'advanced' }),
+      buildArrayFormPlan(ARRAY_ENTRY_MODULE, { items: 'not-a-collection' }, { mode: 'advanced' }),
     ).toEqual([]);
+  });
+
+  // `proxy-providers`' real upstream shape (v0.3.0 #17, confirmed against the
+  // vendored comprehensive sample): a YAML *map* keyed by provider name, not
+  // a list. `isArrayEntryModule` cannot tell the two apart from the schema
+  // alone (both are a bare `oneOf`), so `buildArrayFormPlan` must plan a map
+  // just as well as a list — regression for the real bug this exposed: #14's
+  // own fixtures only ever used a list, so a map-shaped module silently
+  // planned to `[]` (`Array.isArray` false) instead of failing loudly.
+  it('plans one field per entry of a map-shaped collection too, addressed by its real string key', () => {
+    const fields = buildArrayFormPlan(
+      ARRAY_ENTRY_MODULE,
+      { items: { 'provider-a': { kind: 'a', label: 'first', onlyA: 1 } } },
+      { mode: 'advanced' },
+    );
+    expect(fields).toHaveLength(1);
+    expect(fields[0]?.path).toEqual(['items', 'provider-a']);
+    expect(fields[0]?.variant?.discriminatorPath).toEqual(['items', 'provider-a', 'kind']);
+    const onlyA = fields[0]?.children?.find((child) => child.key === 'onlyA');
+    expect(onlyA).toMatchObject({ path: ['items', 'provider-a', 'onlyA'], value: 1 });
   });
 });
 
@@ -645,5 +665,21 @@ describe('collectUnknownFields (FR-VAL-05 UI side, v0.3.0 #16)', () => {
       { mode: 'advanced' },
     );
     expect(unknown).toEqual([]);
+  });
+
+  // Regression for a real bug (v0.3.0 #17, caught live in a browser — React
+  // warned about two list items sharing the same key): `additionalKnownPaths`
+  // only suppresses a leaf *some* module declares as its own. A leaf *no*
+  // module recognises isn't in that set either, so both ALPHA_MODULE and
+  // BETA_MODULE (sharing `root: []`, general/inbound's real shape) used to
+  // each independently report the exact same path as their own unknown
+  // field — one leaf, two identical entries.
+  it('reports a leaf no module recognises exactly once, even when several modules share its document root', () => {
+    const unknown = collectUnknownFields(
+      [ALPHA_MODULE, BETA_MODULE],
+      { ...SHARED_ROOT_DOCUMENT, mystery: 1 },
+      { mode: 'advanced' },
+    );
+    expect(unknown.map((field) => field.path)).toEqual([['mystery']]);
   });
 });

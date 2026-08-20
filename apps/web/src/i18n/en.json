@@ -87,5 +87,18 @@
   "form.module.sniffer": "Domain sniffing",
   "form.module.inbound": "Inbound & TUN",
   "form.module.proxies": "Proxy nodes",
-  "form.module.proxy-providers": "Proxy subscriptions"
+  "form.module.proxy-providers": "Proxy subscriptions",
+  "field.reveal": "Show",
+  "field.hide": "Hide",
+  "field.copy": "Copy",
+  "field.copied": "Copied",
+  "form.subscriptionUrl.notice": "The web app never fetches this subscription URL automatically — it's only stored for export. To inspect the nodes, download the subscription file and use the Provider file preview under “Import configuration.”",
+  "providerPreview.title": "Local Provider file preview",
+  "providerPreview.fileButton": "Choose Provider file",
+  "providerPreview.errorMessage": "Can't preview this file: not a valid Provider file (needs a top-level proxies list)",
+  "providerPreview.nodeCount": "{count} node(s)",
+  "providerPreview.unnamedNode": "(unnamed)",
+  "providerPreview.unknownType": "(unknown type)",
+  "providerPreview.fieldsLabel": "Fields present:",
+  "providerPreview.notAppliedNotice": "Structural preview only — nothing is written to the current project."
 }

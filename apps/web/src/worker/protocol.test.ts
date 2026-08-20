@@ -583,3 +583,81 @@ describe('handleWorkerRequest / locate', () => {
     expect(response).toEqual({ type: 'locate', requestId: 'r1', range: null });
   });
 });
+
+describe('handleWorkerRequest / previewProvider (PRD §8.11, v0.3.0 #17)', () => {
+  it('summarizes proxy count, name, and type — never touching the currently open project state', () => {
+    const state = parsed(); // a real project document is already open
+    const response = handleWorkerRequest(state, {
+      type: 'previewProvider',
+      requestId: 'r1',
+      text: 'proxies:\n  - name: HK-01\n    type: ss\n    server: s\n    port: 1\n    password: hunter2\n',
+    });
+
+    if (response.type !== 'previewProvider') throw new Error('unreachable');
+    expect(response.preview).toEqual({
+      proxyCount: 1,
+      nodes: [
+        {
+          name: 'HK-01',
+          proxyType: 'ss',
+          fieldKeys: ['name', 'type', 'server', 'port', 'password'],
+        },
+      ],
+    });
+    // The Worker's actual open document is untouched by the preview call.
+    expect(state.parseResult?.document?.toText()).toBe(SAMPLE);
+  });
+
+  it('never includes a sensitive value anywhere in the response — only the key name, for any field beyond name/type', () => {
+    const state = createWorkerState();
+    const response = handleWorkerRequest(state, {
+      type: 'previewProvider',
+      requestId: 'r1',
+      text: 'proxies:\n  - name: a\n    type: vmess\n    uuid: 11111111-2222-3333-4444-555555555555\n    password: hunter2\n',
+    });
+
+    const serialized = JSON.stringify(response);
+    expect(serialized).not.toContain('11111111-2222-3333-4444-555555555555');
+    expect(serialized).not.toContain('hunter2');
+    expect(serialized).toContain('uuid');
+    expect(serialized).toContain('password');
+  });
+
+  it('is null for a syntax error, same as for well-formed YAML with no top-level proxies list', () => {
+    const state = createWorkerState();
+
+    const syntaxError = handleWorkerRequest(state, {
+      type: 'previewProvider',
+      requestId: 'r1',
+      text: 'a: [1, 2\n',
+    });
+    if (syntaxError.type !== 'previewProvider') throw new Error('unreachable');
+    expect(syntaxError.preview).toBeNull();
+
+    const notAProviderFile = handleWorkerRequest(state, {
+      type: 'previewProvider',
+      requestId: 'r2',
+      text: 'mode: rule\n',
+    });
+    if (notAProviderFile.type !== 'previewProvider') throw new Error('unreachable');
+    expect(notAProviderFile.preview).toBeNull();
+  });
+
+  it('counts a malformed (non-object) entry rather than throwing, with empty shape info', () => {
+    const state = createWorkerState();
+    const response = handleWorkerRequest(state, {
+      type: 'previewProvider',
+      requestId: 'r1',
+      text: 'proxies:\n  - "just a string"\n  - name: b\n    type: ss\n',
+    });
+
+    if (response.type !== 'previewProvider') throw new Error('unreachable');
+    expect(response.preview).toEqual({
+      proxyCount: 2,
+      nodes: [
+        { name: null, proxyType: null, fieldKeys: [] },
+        { name: 'b', proxyType: 'ss', fieldKeys: ['name', 'type'] },
+      ],
+    });
+  });
+});

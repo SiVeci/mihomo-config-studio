@@ -7,7 +7,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { t } from '../i18n/index.js';
-import type { ValidationIssue } from '../worker/protocol.js';
+import type { PreviewProviderResponse, ValidationIssue } from '../worker/protocol.js';
 import { ImportPanel } from './ImportPanel.js';
 import type { ImportWorkerClient } from './ImportPanel.js';
 
@@ -25,9 +25,13 @@ const BLOCKING_ISSUE: ValidationIssue = {
   blocking: true,
 };
 
-function fakeClient(issues: ValidationIssue[] = []): ImportWorkerClient {
+function fakeClient(
+  issues: ValidationIssue[] = [],
+  preview: PreviewProviderResponse['preview'] = null,
+): ImportWorkerClient {
   return {
     parse: async () => ({ type: 'parse', requestId: 'fake', issues, value: {} }),
+    previewProvider: async () => ({ type: 'previewProvider', requestId: 'fake', preview }),
   };
 }
 
@@ -152,5 +156,68 @@ describe('ImportPanel / NFR-REL-04 (never overwrite the imported file)', () => {
     for (const api of writeCapableApis) {
       expect(source, `ImportPanel.tsx must not reference ${api}`).not.toContain(api);
     }
+  });
+});
+
+describe('ImportPanel / ADR-005 (no client-side subscription fetch)', () => {
+  const HERE = dirname(fileURLToPath(import.meta.url));
+
+  it('the source never references fetch or XMLHttpRequest — the Worker parses text this panel already has, never a URL', () => {
+    const source = readFileSync(join(HERE, 'ImportPanel.tsx'), 'utf8');
+    expect(source).not.toMatch(/\bfetch\s*\(/);
+    expect(source).not.toContain('XMLHttpRequest');
+  });
+});
+
+describe('ImportPanel / local Provider file preview (PRD §8.11, v0.3.0 #17)', () => {
+  function selectProviderFile(text: string, name = 'provider.yaml'): void {
+    const file = new File([text], name, { type: 'text/yaml' });
+    fireEvent.change(screen.getByLabelText<HTMLInputElement>(t('providerPreview.fileButton')), {
+      target: { files: [file] },
+    });
+  }
+
+  it('shows the node count and each node’s name/type without touching the open project (never calls onImport)', async () => {
+    const onImport = vi.fn();
+    const client = fakeClient([], {
+      proxyCount: 2,
+      nodes: [
+        { name: 'HK-01', proxyType: 'ss', fieldKeys: ['name', 'type', 'server', 'port'] },
+        { name: null, proxyType: null, fieldKeys: ['type'] },
+      ],
+    });
+    render(<ImportPanel client={client} onImport={onImport} />);
+
+    selectProviderFile('proxies:\n  - name: HK-01\n    type: ss\n');
+
+    await screen.findByText(t('providerPreview.nodeCount', { count: 2 }));
+    expect(screen.getByText('HK-01')).toBeDefined();
+    expect(screen.getByText(t('providerPreview.unnamedNode'))).toBeDefined();
+    expect(screen.getByText(t('providerPreview.unknownType'))).toBeDefined();
+    expect(onImport).not.toHaveBeenCalled();
+  });
+
+  it('shows an error message for a file that is not a valid Provider file, without touching the open project', async () => {
+    const onImport = vi.fn();
+    const client = fakeClient([], null);
+    render(<ImportPanel client={client} onImport={onImport} />);
+
+    selectProviderFile('mode: rule\n', 'not-a-provider.yaml');
+
+    await screen.findByText(t('providerPreview.errorMessage'));
+    expect(onImport).not.toHaveBeenCalled();
+  });
+
+  it('renders only the field-key shape for a sensitive field, never a value — the response type has no value to render in the first place (NFR-SEC-02/SEC-03)', async () => {
+    const client = fakeClient([], {
+      proxyCount: 1,
+      nodes: [{ name: 'a', proxyType: 'vmess', fieldKeys: ['name', 'type', 'uuid', 'password'] }],
+    });
+    render(<ImportPanel client={client} onImport={vi.fn()} />);
+
+    selectProviderFile('proxies:\n  - name: a\n    type: vmess\n');
+
+    const fieldsRow = await screen.findByText(/uuid, password/);
+    expect(fieldsRow.textContent).not.toMatch(/[-]{4,}|@|:\/\//); // no value-shaped text sneaked in
   });
 });

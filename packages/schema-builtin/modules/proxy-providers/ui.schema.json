@@ -22,7 +22,7 @@
       "docs": "https://wiki.metacubex.one/config/proxy-providers/",
       "safety": "caution",
       "sensitive": true,
-      "control": "secret"
+      "control": "subscription-url"
     },
     "interval": {
       "label": "field.interval",

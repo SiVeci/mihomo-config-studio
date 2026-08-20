@@ -766,7 +766,7 @@ describe('proxy-providers module (v0.3.0 #11 — discriminated union: http/file/
     }
   });
 
-  it('masks the subscription "url" as a secret control but leaves "health-check.url" — same name, different field — fully visible (NFR-SEC-02, plan-mandated distinction)', () => {
+  it('masks the subscription "url" as a subscription-url control but leaves "health-check.url" — same name, different field — fully visible (NFR-SEC-02, plan-mandated distinction)', () => {
     const plan = planOneUnionItem(PROXY_PROVIDERS_MODULE, {
       type: 'http',
       url: 'https://example.com/subscribe?token=abc123',
@@ -774,8 +774,11 @@ describe('proxy-providers module (v0.3.0 #11 — discriminated union: http/file/
     });
     const item = plan.fields.find((field) => field.key === 'item');
 
+    // v0.3.0 #17: a dedicated control, not the generic `secret` — the
+    // subscription URL needs its own explicit copy action and an ADR-005
+    // disclaimer that a plain password/UUID field does not.
     const subscriptionUrl = item?.children?.find((child) => child.key === 'url');
-    expect(subscriptionUrl?.control).toBe('secret');
+    expect(subscriptionUrl?.control).toBe('subscription-url');
     expect(subscriptionUrl?.sensitive).toBe(true);
 
     const healthCheck = item?.children?.find((child) => child.key === 'health-check');

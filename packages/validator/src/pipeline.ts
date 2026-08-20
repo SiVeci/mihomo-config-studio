@@ -1,4 +1,12 @@
-import { buildFormPlan, evaluateRules, validateValue, type SchemaModule } from '@mcs/schema-core';
+import {
+  buildArrayFormPlan,
+  buildFormPlan,
+  evaluateRules,
+  flattenFields,
+  isArrayEntryModule,
+  validateValue,
+  type SchemaModule,
+} from '@mcs/schema-core';
 import type { ConfigPath, ParseResult } from '@mcs/yaml-engine';
 
 import { fromRuleIssue, fromSchemaIssue, fromYamlIssue } from './issue.js';
@@ -58,6 +66,20 @@ export const syntaxStage: ValidationStage = {
  * consumers; checked against the *union* of every module's own claims here,
  * it is not a problem for validation at all: a field either belongs to one
  * of the installed modules or it does not).
+ *
+ * `isArrayEntryModule` modules (`proxies`/`proxy-providers`) get a different
+ * treatment (v0.3.0 #17 — a real bug found and fixed): `module.schema`
+ * describes one *entry* of a list-or-map collection, never the collection
+ * itself, so validating `document.getIn(module.manifest.root)` directly
+ * against it (as every other module correctly does) always failed with a
+ * spurious blocking `schema.oneOf` error for *any* document with so much as
+ * one proxy or provider — the whole collection could never match a schema
+ * that describes a single entry. `buildArrayFormPlan` already does the real
+ * per-entry discriminator matching for rendering (v0.3.0 #14); reused here
+ * so an entry matching no branch (a P1/P2 protocol, deliberately out of this
+ * module's P0 scope) is skipped rather than treated as a violation — its
+ * fields still surface through the unknown-field pass below, same as any
+ * other unrecognised leaf.
  */
 export const schemaStage: ValidationStage = {
   id: SCHEMA_STAGE_ID,
@@ -69,15 +91,42 @@ export const schemaStage: ValidationStage = {
     const issues: ValidationIssue[] = [];
     const knownPaths = new Set<string>();
     const fullValue = document.toJS();
+    const locator = document;
 
     for (const module of modules) {
+      if (isArrayEntryModule(module)) {
+        for (const field of buildArrayFormPlan(module, fullValue, { mode: 'advanced' })) {
+          if (field.variant?.matched) {
+            for (const schemaIssue of validateValue(field.value, module.schema, {
+              basePath: field.path,
+            })) {
+              issues.push(fromSchemaIssue(schemaIssue, { module: module.manifest.id, locator }));
+            }
+            for (const ruleIssue of evaluateRules(module.rules ?? [], field.value, {
+              basePath: field.path,
+            })) {
+              issues.push(fromRuleIssue(ruleIssue, { module: module.manifest.id, locator }));
+            }
+          }
+          for (const flattened of flattenFields([field])) {
+            if (!flattened.unknown) knownPaths.add(serializePath(flattened.path));
+          }
+          // The discriminator itself (e.g. `type`) is deliberately excluded
+          // from `.children` by `planVariantChildren` — it is represented by
+          // `field.variant` instead, not re-listed as a child — so without
+          // this it would never enter `knownPaths` and would misread as an
+          // unrecognised leaf on every single entry, matched or not.
+          if (field.variant) knownPaths.add(serializePath(field.variant.discriminatorPath));
+        }
+        continue;
+      }
+
       // A module's own section can be entirely absent (no module here
       // declares any top-level `required`) — `undefined`/`null` would
       // otherwise read as a spurious `schema.type` violation against that
       // module's (always object-shaped) root schema.
       const scope = document.getIn(module.manifest.root);
       if (scope !== undefined && scope !== null) {
-        const locator = document;
         for (const schemaIssue of validateValue(scope, module.schema, {
           basePath: module.manifest.root,
         })) {

@@ -6,6 +6,7 @@ import type {
   IssueFix,
   LocateResponse,
   ParseResponse,
+  PreviewProviderResponse,
   RedoResponse,
   SerializeOptions,
   SerializeResponse,
@@ -141,6 +142,15 @@ export class WorkerClient {
       type: 'redo',
       requestId: this.#makeRequestId(),
     }) as Promise<RedoResponse>;
+  }
+
+  /** Structural preview of a local Provider file — unrelated to (never touches) the currently open project (PRD §8.11, v0.3.0 #17). */
+  previewProvider(text: string): Promise<PreviewProviderResponse> {
+    return this.#send({
+      type: 'previewProvider',
+      requestId: this.#makeRequestId(),
+      text,
+    }) as Promise<PreviewProviderResponse>;
   }
 
   /**

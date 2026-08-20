@@ -33,10 +33,12 @@ export const BUILTIN_MODULE: SchemaModule = GENERAL_MODULE;
  * protocols; #11 fixed a latent `proxies` masking gap (`obfs-password` was
  * `sensitive: true` without `control: 'secret'` — `sensitive` alone does not
  * drive control selection, see #11's plan notes) and added
- * `modules/proxy-providers.json`, the sixth and last P0 module.
+ * `modules/proxy-providers.json`, the sixth and last P0 module; #17 changed
+ * `proxy-providers`' `url` field from the generic `secret` control to a
+ * dedicated `subscription-url` control (PRD §8.11, ADR-005).
  */
 export const BUILTIN_TRUST_ANCHOR_PUBLIC_KEY_HEX =
-  'd4fac965d4b3d83b8bfaa4efc207f6769fdb6dc18e7630d1940ad01c199e97e7';
+  'd2ce866c86f0f62dad8455692e5d3ee1628d7431bcb1143bbecf368a90ea199d';
 
 export const BUILTIN_MANIFEST: BundleManifest = {
   bundleId: 'builtin',
@@ -63,7 +65,7 @@ export const BUILTIN_MANIFEST: BundleManifest = {
     },
     {
       path: 'modules/proxy-providers.json',
-      sha256: 'db9e2654dff40688ccf6ae9148fed1e6a237e3a36f0903c0e0ac9f9c3240ba5b',
+      sha256: '614e59a5ee51f069441c7d716a916b43a02347df4f1cf2573d82118fc0289f76',
     },
     {
       path: 'modules/sniffer.json',
@@ -71,8 +73,8 @@ export const BUILTIN_MANIFEST: BundleManifest = {
     },
   ],
   signature:
-    'b769b7dbdd689708d71fcf98e038716a7f56dd8c5578dd0fe63b76eef6cbb8ef3e50f787c1c1e1e4321c12038565c3da721f32f3853e7f82a862480c863fde0d',
-  signedAt: '2026-08-19T00:00:00Z',
+    '6fc0bfd284e478e258f9e42db5b0a46b7307421904447a4dac56e4edba8b363ba34deb0e500ac987cffd9090066052497eae857940cbc806e1cfc637ef64ba00',
+  signedAt: '2026-08-20T00:00:00Z',
 };
 
 export interface BuiltinBundle {

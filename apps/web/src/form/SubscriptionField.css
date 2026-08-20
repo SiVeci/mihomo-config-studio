@@ -1,0 +1,17 @@
+.subscription-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mcs-spacing-xxs);
+}
+
+.subscription-field__input {
+  flex: 1 1 auto;
+  min-width: 12ch;
+}
+
+.subscription-field__notice {
+  flex-basis: 100%;
+  color: var(--mcs-color-text-muted);
+  font-size: var(--mcs-font-size-caption);
+}

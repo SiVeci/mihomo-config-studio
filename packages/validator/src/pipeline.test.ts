@@ -1,4 +1,10 @@
-import { DNS_MODULE, GENERAL_MODULE, INBOUND_MODULE } from '@mcs/schema-builtin';
+import {
+  DNS_MODULE,
+  GENERAL_MODULE,
+  INBOUND_MODULE,
+  PROXIES_MODULE,
+  PROXY_PROVIDERS_MODULE,
+} from '@mcs/schema-builtin';
 import type { SchemaModule } from '@mcs/schema-core';
 import { BUILTIN_BUNDLE, createRegistry, type StoredBundle } from '@mcs/schema-registry';
 import { MihomoYamlDocument } from '@mcs/yaml-engine';
@@ -122,11 +128,11 @@ describe('schemaStage (FR-VAL-01, FR-VAL-05, v0.3.0 #12)', () => {
         '      mode: http',
       ].join('\n'),
     );
-    // "proxies" is document-rooted as a *list*; schemaStage validates one
-    // resolved module's own scope (see PROXIES_MODULE's module doc comment
-    // — array-of-entries planning is #14's job), so no module here claims
-    // any of it and every leaf reads as an unknown field. That is exactly
-    // the FR-VAL-05 case this test exists to prove non-blocking.
+    // PROXIES_MODULE is not installed here at all (only DNS_MODULE is), so
+    // nothing claims any of this — every leaf reads as an unknown field.
+    // That is the FR-VAL-05 case this test exists to prove non-blocking; the
+    // "isArrayEntryModule modules" describe block below covers what happens
+    // once PROXIES_MODULE actually *is* installed (v0.3.0 #17).
     const issues = schemaStage.run({ parse, modules: [DNS_MODULE] });
     expect(issues.length).toBeGreaterThan(0);
     expect(issues.every((issue) => issue.severity === 'info')).toBe(true);
@@ -171,6 +177,147 @@ describe('schemaStage (FR-VAL-01, FR-VAL-05, v0.3.0 #12)', () => {
     const parse = MihomoYamlDocument.parse('sample:\n  flag: true\n');
     expect(() => schemaStage.run({ parse, modules: [noRulesModule] })).not.toThrow();
     expect(schemaStage.run({ parse, modules: [noRulesModule] })).toEqual([]);
+  });
+});
+
+describe('schemaStage / isArrayEntryModule modules (proxies, proxy-providers, v0.3.0 #17)', () => {
+  // Regression for a real, previously-shipped bug: `module.schema` for these
+  // two modules describes one *entry* of a list-or-map collection, never the
+  // collection itself. Before this fix, `schemaStage` validated
+  // `document.getIn(module.manifest.root)` (the whole list/map) directly
+  // against that single-entry schema, which could never match — a
+  // `schema.oneOf` "matches: 0" blocking error on *any* document with so
+  // much as one proxy or provider, real config or not. Never caught earlier:
+  // every prior test/manual session either used a module without real
+  // content (`DEFAULT_PROJECT_CONFIG_TEXT` is just `mode: rule`) or called
+  // `buildFormPlan`/`validateValue` directly against one already-unwrapped
+  // entry, bypassing `schemaStage` entirely.
+
+  it('does not block a real, fully valid proxies list — the exact case that always failed before this fix', () => {
+    const parse = MihomoYamlDocument.parse(
+      'proxies:\n  - name: a\n    type: ss\n    server: s\n    port: 1\n    cipher: aes-128-gcm\n    password: hunter2\n',
+    );
+    expect(schemaStage.run({ parse, modules: [PROXIES_MODULE] })).toEqual([]);
+  });
+
+  it('does not block a real, fully valid proxy-providers map — same fix, map-shaped collection', () => {
+    const parse = MihomoYamlDocument.parse(
+      'proxy-providers:\n  my-subscription:\n    type: http\n    url: "https://example.com"\n    interval: 3600\n',
+    );
+    expect(schemaStage.run({ parse, modules: [PROXY_PROVIDERS_MODULE] })).toEqual([]);
+  });
+
+  it('validates each proxies entry independently, addressed at its own absolute path — a real violation in one entry does not implicate its siblings', () => {
+    const parse = MihomoYamlDocument.parse(
+      [
+        'proxies:',
+        '  - name: a',
+        '    type: ss',
+        '    server: s',
+        '    port: 1',
+        '    cipher: aes-128-gcm',
+        '    password: hunter2',
+        '  - name: b',
+        '    type: ss',
+        '    server: s',
+        '    port: "not-a-port-number"',
+        '    cipher: aes-128-gcm',
+        '    password: hunter2',
+      ].join('\n'),
+    );
+    const issues = schemaStage.run({ parse, modules: [PROXIES_MODULE] });
+    expect(hasBlockingIssues(issues)).toBe(true);
+    expect(issues).toContainEqual(
+      expect.objectContaining({ blocking: true, path: ['proxies', 1] }),
+    );
+    expect(issues.some((issue) => issue.blocking && issue.path?.[1] === 0)).toBe(false);
+  });
+
+  it('a proxies entry matching no P0 protocol (P1/P2, deliberately unmodelled) never blocks — its fields surface as non-blocking unknown-field, its siblings validate normally', () => {
+    const parse = MihomoYamlDocument.parse(
+      [
+        'proxies:',
+        '  - name: a',
+        '    type: ss',
+        '    server: s',
+        '    port: 1',
+        '    cipher: aes-128-gcm',
+        '    password: hunter2',
+        '  - name: snell1',
+        '    type: snell',
+        '    server: server',
+        '    port: 1',
+        '    psk: hunter2',
+      ].join('\n'),
+    );
+    const issues = schemaStage.run({ parse, modules: [PROXIES_MODULE] });
+    expect(hasBlockingIssues(issues)).toBe(false);
+    expect(
+      issues.every((issue) => issue.severity === 'info' && issue.code === 'unknown-field'),
+    ).toBe(true);
+    expect(issues.map((issue) => issue.path)).toEqual(
+      expect.arrayContaining([
+        ['proxies', 1, 'name'],
+        ['proxies', 1, 'server'],
+        ['proxies', 1, 'port'],
+        ['proxies', 1, 'psk'],
+      ]),
+    );
+  });
+
+  it('never flags a matched entry’s own discriminator key ("type") as unknown — it is represented structurally, not silently dropped', () => {
+    const parse = MihomoYamlDocument.parse(
+      'proxies:\n  - name: a\n    type: ss\n    server: s\n    port: 1\n    cipher: aes-128-gcm\n    password: hunter2\n',
+    );
+    const issues = schemaStage.run({ parse, modules: [PROXIES_MODULE] });
+    expect(issues).toEqual([]);
+  });
+
+  it('never flags an *unmatched* entry’s discriminator key as unknown either — only its unrecognised siblings', () => {
+    const parse = MihomoYamlDocument.parse(
+      'proxies:\n  - name: snell1\n    type: snell\n    server: server\n    port: 1\n',
+    );
+    const issues = schemaStage.run({ parse, modules: [PROXIES_MODULE] });
+    expect(issues.map((issue) => issue.path)).not.toContainEqual(['proxies', 0, 'type']);
+  });
+
+  it('fires a real validation.rules.json cross-field rule on the correct single entry, not the whole collection (TUICv4 token vs TUICv5 uuid+password)', () => {
+    const parse = MihomoYamlDocument.parse(
+      [
+        'proxies:',
+        '  - name: t1',
+        '    type: tuic',
+        '    server: s',
+        '    port: 1',
+        '    uuid: 11111111-2222-3333-4444-555555555555',
+        '    password: hunter2',
+        '    token: also-set',
+      ].join('\n'),
+    );
+    const issues = schemaStage.run({ parse, modules: [PROXIES_MODULE] });
+    const ruleIssue = issues.find((issue) => issue.code.startsWith('rule.'));
+    expect(ruleIssue).toBeDefined();
+    expect(ruleIssue?.path?.[0]).toBe('proxies');
+    expect(ruleIssue?.path?.[1]).toBe(0);
+  });
+
+  it('tolerates an array-entry module that omits `rules` entirely, same as an ordinary module can', () => {
+    const noRulesArrayModule: SchemaModule = {
+      manifest: { id: 'sample-items', root: ['items'], version: '1.0.0' },
+      schema: {
+        oneOf: [
+          {
+            type: 'object',
+            properties: { kind: { const: 'a' }, flag: { type: 'boolean' } },
+            required: ['kind'],
+          },
+        ],
+      },
+      ui: {},
+    };
+    const parse = MihomoYamlDocument.parse('items:\n  - kind: a\n    flag: true\n');
+    expect(() => schemaStage.run({ parse, modules: [noRulesArrayModule] })).not.toThrow();
+    expect(schemaStage.run({ parse, modules: [noRulesArrayModule] })).toEqual([]);
   });
 });
 
@@ -269,6 +416,31 @@ describe('runPipeline with real schema-registry-resolved modules (FR-VAL-01, FR-
       ['mode: rule', 'mixed-port: 7890', 'dns:', '  enable: true', '  enhanced-mode: fake-ip'].join(
         '\n',
       ),
+    );
+    const ctx: PipelineContext = { parse, modules };
+
+    const issues = runPipeline(ctx);
+
+    expect(hasBlockingIssues(issues)).toBe(false);
+  });
+
+  it('does not block a real document with actual proxy nodes and a provider — the exact real-world shape the v0.3.0 #17 regression above targets, now proven through the full production path (registry -> pipeline)', () => {
+    const parse = MihomoYamlDocument.parse(
+      [
+        'mode: rule',
+        'proxies:',
+        '  - name: hk',
+        '    type: ss',
+        '    server: example.com',
+        '    port: 443',
+        '    cipher: aes-128-gcm',
+        '    password: hunter2',
+        'proxy-providers:',
+        '  my-subscription:',
+        '    type: http',
+        '    url: "https://example.com/subscribe"',
+        '    interval: 3600',
+      ].join('\n'),
     );
     const ctx: PipelineContext = { parse, modules };
 

@@ -86,6 +86,16 @@ export interface RedoRequest {
   type: 'redo';
   requestId: string;
 }
+/**
+ * A standalone structural preview of a local Provider file (PRD §8.11,
+ * ADR-005) — unrelated to the currently open project, so unlike every other
+ * request here this never reads or writes `WorkerState`.
+ */
+export interface PreviewProviderRequest {
+  type: 'previewProvider';
+  requestId: string;
+  text: string;
+}
 
 export type WorkerRequest =
   | ParseRequest
@@ -96,7 +106,8 @@ export type WorkerRequest =
   | LocateRequest
   | ValueRequest
   | UndoRequest
-  | RedoRequest;
+  | RedoRequest
+  | PreviewProviderRequest;
 
 export interface ParseResponse {
   type: 'parse';
@@ -160,6 +171,30 @@ export interface RedoResponse {
   text: string;
   value: unknown;
 }
+/**
+ * One entry of a Provider file's `proxies:` list. Deliberately an allowlist,
+ * not a denylist: `name`/`proxyType` are the only two values ever read out
+ * of the entry and surfaced, so there is no sensitive-key pattern to keep in
+ * sync — everything else about the entry is exposed only as a key name in
+ * `fieldKeys`, never a value (NFR-SEC-02/SEC-03 — a node's `password`/`uuid`
+ * must never appear in the preview, and this is true by construction rather
+ * than by a regex staying complete).
+ */
+export interface ProviderPreviewNode {
+  name: string | null;
+  proxyType: string | null;
+  fieldKeys: readonly string[];
+}
+export interface ProviderPreview {
+  proxyCount: number;
+  nodes: readonly ProviderPreviewNode[];
+}
+/** `preview` is `null` for a syntax error or a document with no top-level `proxies:` list — the UI shows one generic message either way. */
+export interface PreviewProviderResponse {
+  type: 'previewProvider';
+  requestId: string;
+  preview: ProviderPreview | null;
+}
 /** NFR-SEC-03: never carries configuration values — only a stable code, an i18n key, and a path. */
 export interface WorkerErrorResponse {
   type: 'error';
@@ -179,6 +214,7 @@ export type WorkerResponse =
   | ValueResponse
   | UndoResponse
   | RedoResponse
+  | PreviewProviderResponse
   | WorkerErrorResponse;
 
 /**
@@ -223,6 +259,8 @@ export function handleWorkerRequest(state: WorkerState, request: WorkerRequest):
       return handleUndo(state, request);
     case 'redo':
       return handleRedo(state, request);
+    case 'previewProvider':
+      return handlePreviewProvider(request);
   }
 }
 
@@ -367,6 +405,36 @@ function handleValue(
   const document = state.parseResult?.document;
   if (!document) return noDocumentError(request.requestId);
   return { type: 'value', requestId: request.requestId, value: document.toJS() };
+}
+
+function handlePreviewProvider(request: PreviewProviderRequest): PreviewProviderResponse {
+  // Reuses the same parser (limits, security posture) `handleParse` does,
+  // but never touches `state`: a Provider file is unrelated to whichever
+  // project document is currently open (PRD §8.11 — structural preview
+  // only, never merged in).
+  const parseResult = MihomoYamlDocument.parse(request.text);
+  return {
+    type: 'previewProvider',
+    requestId: request.requestId,
+    preview: summarizeProviderFile(parseResult.document?.toJS() ?? null),
+  };
+}
+
+function summarizeProviderFile(value: unknown): ProviderPreview | null {
+  if (!isPlainObject(value) || !Array.isArray(value.proxies)) return null;
+  const nodes: ProviderPreviewNode[] = value.proxies.map((entry) => {
+    if (!isPlainObject(entry)) return { name: null, proxyType: null, fieldKeys: [] };
+    return {
+      name: typeof entry.name === 'string' ? entry.name : null,
+      proxyType: typeof entry.type === 'string' ? entry.type : null,
+      fieldKeys: Object.keys(entry),
+    };
+  });
+  return { proxyCount: nodes.length, nodes };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function applyIssueFix(document: MihomoYamlDocument, patch: IssueFix): void {

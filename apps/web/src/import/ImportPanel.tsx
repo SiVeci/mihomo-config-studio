@@ -2,7 +2,7 @@ import { useState, type ChangeEvent, type DragEvent, type ReactNode } from 'reac
 
 import { t } from '../i18n/index.js';
 import { hasBlockingIssues } from '../worker/protocol.js';
-import type { ParseResponse } from '../worker/protocol.js';
+import type { ParseResponse, PreviewProviderResponse } from '../worker/protocol.js';
 import './ImportPanel.css';
 
 /**
@@ -12,6 +12,7 @@ import './ImportPanel.css';
  */
 export interface ImportWorkerClient {
   parse(text: string): Promise<ParseResponse>;
+  previewProvider(text: string): Promise<PreviewProviderResponse>;
 }
 
 export interface ImportPanelProps {
@@ -21,6 +22,7 @@ export interface ImportPanelProps {
 }
 
 type Status = 'idle' | 'success' | 'error';
+type ProviderPreviewStatus = 'idle' | 'success' | 'error';
 
 /**
  * Three entry points for FR-YAML-01: file picker, drag-and-drop, and a plain
@@ -32,10 +34,20 @@ type Status = 'idle' | 'success' | 'error';
  * structural test in `ImportPanel.test.tsx` asserts this file never mentions
  * a write-capable File System Access API, so a future edit that adds one
  * cannot land silently.
+ *
+ * A fourth, unrelated entry point lives here too (PRD §8.11, ADR-005,
+ * v0.3.0 #17): local Provider file preview. It shares this file because it
+ * shares the exact same `File.text()`-only read path and the same NFR-REL-04
+ * guarantee — but it never calls `onImport`, so a previewed Provider file
+ * can never end up merged into the open project by accident. ADR-005 also
+ * means this file must never gain a network request of its own for either
+ * feature; `ImportPanel.test.tsx` has a matching structural scan for that.
  */
 export function ImportPanel({ client, onImport }: ImportPanelProps): ReactNode {
   const [pasteText, setPasteText] = useState('');
   const [status, setStatus] = useState<Status>('idle');
+  const [providerPreviewStatus, setProviderPreviewStatus] = useState<ProviderPreviewStatus>('idle');
+  const [providerPreview, setProviderPreview] = useState<PreviewProviderResponse['preview']>(null);
 
   async function attemptImport(text: string): Promise<void> {
     const response = await client.parse(text);
@@ -67,6 +79,21 @@ export function ImportPanel({ client, onImport }: ImportPanelProps): ReactNode {
     event.preventDefault();
     const file = event.dataTransfer.files[0];
     if (file) void handleFile(file);
+  }
+
+  async function handleProviderFile(file: File): Promise<void> {
+    setProviderPreview(null);
+    setProviderPreviewStatus('idle');
+    const text = await file.text();
+    const { preview } = await client.previewProvider(text);
+    setProviderPreview(preview);
+    setProviderPreviewStatus(preview ? 'success' : 'error');
+  }
+
+  function handleProviderFileInputChange(event: ChangeEvent<HTMLInputElement>): void {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (file) void handleProviderFile(file);
   }
 
   return (
@@ -115,6 +142,46 @@ export function ImportPanel({ client, onImport }: ImportPanelProps): ReactNode {
           {t('import.errorMessage')}
         </p>
       )}
+
+      <section className="import-panel__provider-preview" aria-label={t('providerPreview.title')}>
+        <h3 className="import-panel__subtitle">{t('providerPreview.title')}</h3>
+        <p className="import-panel__provider-preview-notice">
+          {t('providerPreview.notAppliedNotice')}
+        </p>
+        <label className="import-panel__file-label" htmlFor="provider-preview-file-input">
+          {t('providerPreview.fileButton')}
+        </label>
+        <input
+          id="provider-preview-file-input"
+          className="import-panel__file-input"
+          type="file"
+          accept=".yaml,.yml"
+          onChange={handleProviderFileInputChange}
+        />
+
+        {providerPreviewStatus === 'success' && providerPreview && (
+          <div className="import-panel__provider-preview-result">
+            <p>{t('providerPreview.nodeCount', { count: providerPreview.proxyCount })}</p>
+            <ul className="import-panel__provider-preview-list">
+              {providerPreview.nodes.map((node, index) => (
+                <li key={index} className="import-panel__provider-preview-node">
+                  <strong>{node.name ?? t('providerPreview.unnamedNode')}</strong>
+                  {' — '}
+                  <span>{node.proxyType ?? t('providerPreview.unknownType')}</span>
+                  <div className="import-panel__provider-preview-fields">
+                    {t('providerPreview.fieldsLabel')} {node.fieldKeys.join(', ')}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {providerPreviewStatus === 'error' && (
+          <p className="import-panel__status import-panel__status--error">
+            {t('providerPreview.errorMessage')}
+          </p>
+        )}
+      </section>
     </section>
   );
 }

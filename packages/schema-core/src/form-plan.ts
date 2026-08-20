@@ -1,4 +1,4 @@
-import type { ConfigPath } from '@mcs/yaml-engine';
+import type { ConfigPath, PathSegment } from '@mcs/yaml-engine';
 
 import { evaluateCondition, type ConditionContext } from './condition.js';
 import { resolveRef } from './ref.js';
@@ -143,7 +143,7 @@ export function buildFormPlan(
   });
 
   const groups = groupFields(module.ui.groups ?? [], fields);
-  const flat = flatten(fields);
+  const flat = flattenFields(fields);
 
   return {
     moduleId: module.manifest.id,
@@ -218,27 +218,39 @@ export function isArrayEntryModule(module: SchemaModule): boolean {
 
 /**
  * `buildFormPlan`'s counterpart for `isArrayEntryModule` modules: one
- * `PlannedField` per array element, in document order, each addressed by
- * its real absolute path (`[...module.manifest.root, index, ...]`).
+ * `PlannedField` per collection entry, in document order, each addressed by
+ * its real absolute path (`[...module.manifest.root, key, ...]`).
+ *
+ * The collection itself can be either shape upstream: `proxies` is a YAML
+ * *list* (`key` is the numeric index), but `proxy-providers` is a YAML *map*
+ * keyed by provider name (confirmed against the vendored comprehensive
+ * sample, `proxy-providers.provider-a`/`provider-b`) — both share the exact
+ * same discriminated-union-at-the-root schema shape `isArrayEntryModule`
+ * detects, so both must be handled here. Missed until v0.3.0 #17 wired
+ * `proxy-providers` into `ModuleFormPage` for the first time: #14's own
+ * fixtures only ever exercised the list-shaped case (`proxies`), so a
+ * map-shaped module silently planned to `[]` (empty form, no error) instead
+ * of failing loudly — `Array.isArray(entries)` was `false` for a real
+ * `proxy-providers` document and the function returned early.
  *
  * `buildFormPlan` cannot plan this shape end-to-end — the schema's `oneOf`
- * sits at its own root, and the document value there is an array, not a
- * record `planObject` can walk. Each element is planned by wrapping it as
- * `{ item: element }` under a synthetic `root: []` probe module (the same
+ * sits at its own root, and the document value there is a list or map, not a
+ * record `planObject` can walk. Each entry is planned by wrapping it as
+ * `{ item: entry }` under a synthetic `root: []` probe module (the same
  * technique `schema-builtin`'s `builtin.test.ts` proved out per-protocol as
  * `planOneUnionItem`), then unwrapping: the resulting single `item` field
  * (typically `control: 'variant'`, discriminated on whichever property the
  * union's branches share) has every path in its subtree — its own, its
  * children's, and its `variant.discriminatorPath` — rewritten from a
- * leading `'item'` segment to `[...module.manifest.root, index]`.
+ * leading `'item'` segment to `[...module.manifest.root, key]`.
  */
 export function buildArrayFormPlan(
   module: SchemaModule,
   documentValue: unknown,
   options: FormPlanOptions = {},
 ): PlannedField[] {
-  const entries = readPath(documentValue, module.manifest.root);
-  if (!Array.isArray(entries)) return [];
+  const entries = collectionEntries(readPath(documentValue, module.manifest.root));
+  if (entries === null) return [];
 
   const probeModule: SchemaModule = {
     manifest: { id: module.manifest.id, root: [], version: module.manifest.version },
@@ -250,13 +262,20 @@ export function buildArrayFormPlan(
     ui: { fields: { item: { fields: module.ui.fields ?? {} } } },
   };
 
-  return entries.map((entry, index) => {
+  return entries.map(([key, entry]) => {
     const plan = buildFormPlan(probeModule, { item: entry }, options);
     // The probe schema always declares exactly one property ('item'), so
     // `planObject` always produces exactly one field for it.
     const itemField = plan.fields[0]!;
-    return reprefixField(itemField, [...module.manifest.root, index]);
+    return reprefixField(itemField, [...module.manifest.root, key]);
   });
+}
+
+/** `null` when `value` is neither shape a collection-of-entries module can hold. */
+function collectionEntries(value: unknown): Array<[PathSegment, unknown]> | null {
+  if (Array.isArray(value)) return value.map((entry, index) => [index, entry]);
+  if (isRecord(value)) return Object.entries(value);
+  return null;
 }
 
 /** Rewrites a field (and its children/variant discriminator) planned under a leading `'item'` segment to address `newPrefix` instead — see `buildArrayFormPlan`. */
@@ -293,6 +312,15 @@ function reprefixField(field: PlannedField, newPrefix: ConfigPath): PlannedField
  * `additionalKnownPaths` entries — absolute document paths — could never
  * match anything inside `buildArrayFormPlan`'s synthetic per-element `item`
  * namespace regardless.
+ *
+ * De-duplicated by path (v0.3.0 #17 — a real bug, caught live in a browser,
+ * `UnknownFieldTree`'s `key={pointer}` collided): `additionalKnownPaths`
+ * only suppresses a leaf that *some* module actually declares as its own
+ * field. A leaf *no* installed module recognises — the ordinary case this
+ * function exists for — is not in that set either, so every module sharing
+ * a document root independently (and correctly, from its own narrow view)
+ * reports the exact same path as its own unknown field. One combined list
+ * means one entry per real leaf, not one per module that failed to claim it.
  */
 export function collectUnknownFields(
   modules: readonly SchemaModule[],
@@ -301,13 +329,18 @@ export function collectUnknownFields(
 ): PlannedField[] {
   const additionalKnownPaths = computeKnownPaths(modules, documentValue, options);
   const unknown: PlannedField[] = [];
+  const seen = new Set<string>();
   for (const module of modules) {
-    if (isArrayEntryModule(module)) {
-      const items = buildArrayFormPlan(module, documentValue, options);
-      unknown.push(...flatten(items).filter((field) => field.unknown));
-    } else {
-      const plan = buildFormPlan(module, documentValue, { ...options, additionalKnownPaths });
-      unknown.push(...plan.unknownFields);
+    const fields = isArrayEntryModule(module)
+      ? flattenFields(buildArrayFormPlan(module, documentValue, options)).filter(
+          (field) => field.unknown,
+        )
+      : buildFormPlan(module, documentValue, { ...options, additionalKnownPaths }).unknownFields;
+    for (const field of fields) {
+      const key = serializePath(field.path);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unknown.push(field);
     }
   }
   return unknown;
@@ -741,11 +774,20 @@ function groupFields(groups: UiGroup[], fields: PlannedField[]): PlannedGroup[] 
     .sort((a, b) => a.order - b.order);
 }
 
-function flatten(fields: PlannedField[]): PlannedField[] {
+/**
+ * A `PlannedField` tree flattened to include every nested child, depth-first
+ * — the same shape `FormPlan.fields` and `collectUnknownFields` already rely
+ * on internally. Exported (v0.3.0 #17) because `@mcs/validator`'s
+ * `schemaStage` needs the identical operation for `buildArrayFormPlan`'s
+ * per-entry result, which — unlike `FormPlan.fields` — comes back
+ * unflattened (one top-level field per collection entry, its own children
+ * nested underneath).
+ */
+export function flattenFields(fields: readonly PlannedField[]): PlannedField[] {
   const out: PlannedField[] = [];
   for (const field of fields) {
     out.push(field);
-    if (field.children) out.push(...flatten(field.children));
+    if (field.children) out.push(...flattenFields(field.children));
   }
   return out;
 }

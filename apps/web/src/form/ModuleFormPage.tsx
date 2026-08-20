@@ -4,13 +4,24 @@ import {
   type FormMode,
   type SchemaModule,
 } from '@mcs/schema-core';
-import { SchemaArrayForm, SchemaForm } from '@mcs/form-renderer';
+import { SchemaArrayForm, SchemaForm, type ControlComponent } from '@mcs/form-renderer';
 import { forwardRef, useImperativeHandle, useMemo, useRef, type ReactNode } from 'react';
 
 import { getLocale, t, translateModuleAware } from '../i18n/index.js';
 import type { TranslationKey } from '../i18n/index.js';
 import { toPointer, type ConfigPath } from '../worker/protocol.js';
+import { SubscriptionField } from './SubscriptionField.js';
 import './ModuleFormPage.css';
+
+/**
+ * `proxy-providers.url` opts into this via an explicit `control` override in
+ * its own `ui.schema.json` (v0.3.0 #17) — nothing here names that module or
+ * field, so this map works the same way for any future module that reaches
+ * for the same control string (FR-SCHEMA-05).
+ */
+const APP_CONTROLS: Record<string, ControlComponent> = {
+  'subscription-url': SubscriptionField,
+};
 
 export interface ModuleFormPageProps {
   /** Dependency-first order from `SchemaRegistry.modules()` — this page never hardcodes a module id (FR-SCHEMA-05). */
@@ -119,6 +130,7 @@ export const ModuleFormPage = forwardRef<ModuleFormPageHandle, ModuleFormPagePro
                   value={value}
                   mode={mode}
                   onChange={onFieldChange}
+                  controls={APP_CONTROLS}
                   t={translate}
                 />
               ) : (
@@ -128,6 +140,7 @@ export const ModuleFormPage = forwardRef<ModuleFormPageHandle, ModuleFormPagePro
                   mode={mode}
                   onChange={onFieldChange}
                   additionalKnownPaths={knownPaths}
+                  controls={APP_CONTROLS}
                   t={translate}
                 />
               )}

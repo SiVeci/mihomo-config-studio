@@ -6,6 +6,7 @@ export {
   buildFormPlan,
   collectUnknownFields,
   computeKnownPaths,
+  flattenFields,
   inferControl,
   isArrayEntryModule,
 } from './form-plan.js';

@@ -112,6 +112,7 @@ export type ControlType =
   | 'multi-select'
   | 'tags'
   | 'secret'
+  | 'subscription-url'
   | 'key-value'
   | 'object'
   | 'list'

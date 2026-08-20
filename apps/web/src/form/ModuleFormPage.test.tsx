@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { DNS_MODULE, GENERAL_MODULE, INBOUND_MODULE, PROXIES_MODULE } from '@mcs/schema-builtin';
+import {
+  DNS_MODULE,
+  GENERAL_MODULE,
+  INBOUND_MODULE,
+  PROXIES_MODULE,
+  PROXY_PROVIDERS_MODULE,
+} from '@mcs/schema-builtin';
 import type { ConfigPath } from '@mcs/yaml-engine';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { createRef } from 'react';
@@ -153,6 +159,58 @@ describe('ModuleFormPage (FR-SCHEMA-01, PRD §7.4, v0.3.0 #14)', () => {
       '[data-field="/proxies/1/password"] input',
     ) as HTMLInputElement | null;
     expect(passwordInput?.type).toBe('password');
+  });
+});
+
+describe('ModuleFormPage / proxy-providers (v0.3.0 #17)', () => {
+  // Upstream's real shape (confirmed against the vendored comprehensive
+  // sample): `proxy-providers:` is a YAML *map* keyed by provider name, not
+  // a list — unlike `proxies`. Regression: #14 built `buildArrayFormPlan`
+  // (via `isArrayEntryModule`, which cannot distinguish list from map at the
+  // schema level, both being a bare `oneOf`) only ever exercised against the
+  // list-shaped `proxies`, so a map document silently planned to nothing —
+  // no error, just an empty section — until #17 fixed `buildArrayFormPlan`
+  // itself and, for the first time, actually rendered this module here.
+  const DOCUMENT_WITH_PROVIDERS = {
+    'proxy-providers': {
+      'provider-a': {
+        type: 'http',
+        url: 'https://example.com/subscribe?token=abc123',
+        interval: 3600,
+      },
+    },
+  };
+
+  it('renders one entry per map key, addressed by its real provider name (not silently empty)', () => {
+    render(
+      <ModuleFormPage
+        modules={[PROXY_PROVIDERS_MODULE]}
+        value={DOCUMENT_WITH_PROVIDERS}
+        mode="advanced"
+        onModeChange={vi.fn()}
+        onFieldChange={vi.fn()}
+      />,
+    );
+    const section = document.querySelector('[data-module-section="proxy-providers"]')!;
+    expect(section.querySelectorAll('[data-array-index]')).toHaveLength(1);
+    expect(section.querySelector('[data-field="/proxy-providers/provider-a"]')).not.toBeNull();
+  });
+
+  it('renders the subscription url through SubscriptionField — masked input plus an independent copy action — not the generic secret control', () => {
+    render(
+      <ModuleFormPage
+        modules={[PROXY_PROVIDERS_MODULE]}
+        value={DOCUMENT_WITH_PROVIDERS}
+        mode="advanced"
+        onModeChange={vi.fn()}
+        onFieldChange={vi.fn()}
+      />,
+    );
+    const urlField = document.querySelector('[data-field="/proxy-providers/provider-a/url"]')!;
+    expect(urlField.getAttribute('data-control')).toBe('subscription-url');
+    const input = urlField.querySelector('input') as HTMLInputElement;
+    expect(input.type).toBe('password');
+    expect(screen.getByRole('button', { name: t('field.copy') })).toBeDefined();
   });
 });
 

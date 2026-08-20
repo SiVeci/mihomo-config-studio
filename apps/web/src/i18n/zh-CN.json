@@ -87,5 +87,18 @@
   "form.module.sniffer": "域名嗅探",
   "form.module.inbound": "入站与 TUN",
   "form.module.proxies": "代理节点",
-  "form.module.proxy-providers": "代理订阅"
+  "form.module.proxy-providers": "代理订阅",
+  "field.reveal": "显示",
+  "field.hide": "隐藏",
+  "field.copy": "复制",
+  "field.copied": "已复制",
+  "form.subscriptionUrl.notice": "网页端不会自动请求此订阅地址，仅保存供导出使用；如需查看节点，请下载订阅文件后使用「导入配置」中的 Provider 文件预览。",
+  "providerPreview.title": "本地 Provider 文件预览",
+  "providerPreview.fileButton": "选择 Provider 文件",
+  "providerPreview.errorMessage": "无法预览：内容不是有效的 Provider 文件（需要顶层 proxies 列表）",
+  "providerPreview.nodeCount": "共 {count} 个节点",
+  "providerPreview.unnamedNode": "（未命名）",
+  "providerPreview.unknownType": "（未知类型）",
+  "providerPreview.fieldsLabel": "包含字段：",
+  "providerPreview.notAppliedNotice": "仅结构预览，不会写入当前项目配置。"
 }

@@ -105,6 +105,19 @@ describe('WorkerClient request/response correlation', () => {
     expect(redone.text).toContain('port: 7891');
   });
 
+  it('previewProvider() never touches the currently open project document (PRD §8.11, v0.3.0 #17)', async () => {
+    const worker = new FakeWorker();
+    const client = new WorkerClient(worker);
+    await client.parse('mode: rule\nport: 7890\n');
+
+    const preview = await client.previewProvider('proxies:\n  - name: a\n    type: ss\n');
+    expect(preview.preview).toMatchObject({ proxyCount: 1 });
+
+    // The project document parsed above is untouched by the preview call.
+    const valued = await client.value();
+    expect(valued.value).toMatchObject({ mode: 'rule', port: 7890 });
+  });
+
   it('forwards serialize() options through to the request when given', async () => {
     const worker = new FakeWorker();
     const client = new WorkerClient(worker);
