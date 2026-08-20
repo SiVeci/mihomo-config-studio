@@ -247,6 +247,12 @@ importers:
 
   tools/android-manifest-check: {}
 
+  tools/core-test-runner:
+    dependencies:
+      '@mcs/templates':
+        specifier: workspace:*
+        version: link:../../packages/templates
+
   tools/schema-cli:
     dependencies:
       '@mcs/schema-registry':

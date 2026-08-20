@@ -1,7 +1,7 @@
 import type { Platform } from '@mcs/schema-core';
 
-import basicProxyManifest from '../templates/basic-proxy/template.manifest.json';
-import providerAutoSelectManifest from '../templates/provider-auto-select/template.manifest.json';
+import basicProxyManifest from '../templates/basic-proxy/template.manifest.json' with { type: 'json' };
+import providerAutoSelectManifest from '../templates/provider-auto-select/template.manifest.json' with { type: 'json' };
 
 /**
  * A built-in project template (PRD §8.8): starter project content a user

@@ -16,6 +16,7 @@
     { "path": "./packages/validator" },
     { "path": "./tools/schema-cli" },
     { "path": "./tools/android-manifest-check" },
+    { "path": "./tools/core-test-runner" },
     { "path": "./apps/android" },
     { "path": "./apps/web" }
   ]

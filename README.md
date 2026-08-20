@@ -61,7 +61,7 @@ tools/
   android-manifest-check/ Android 清单 VPN 权限断言（CI 强制） ✅ M0 已验证
   webcrypto-probe/     Ed25519 WebCrypto 可用性实测载体        ✅ M0 已验证（ADR-013）
   upstream-watch/      上游文档 / 示例变更监控                 🚧 规划中，未建
-  core-test-runner/    Mihomo 配置测试矩阵                     🚧 规划中，未建
+  core-test-runner/    Mihomo 配置测试矩阵                     ✅ v1.19.29 下载+校验+内核测试 + CI job（v0.3.0 #21）
 ```
 
 ## 本地开发

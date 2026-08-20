@@ -110,3 +110,38 @@ jobs:
             exit 1
           fi
           echo "No network egress found in packages/."
+
+  core-config-test:
+    name: built-in templates pass the real v1.19.29 kernel config test
+    runs-on: ubuntu-latest
+    # ADR-010 §4 posture: no secrets on a job that downloads and executes an
+    # external binary, no third-party actions beyond the three already used
+    # by every other job here, blocking (not continue-on-error) — PRD §13.5
+    # lists a template failing the real kernel config test as a release
+    # blocker.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build (same composite project graph `pnpm run typecheck` uses)
+        run: pnpm exec tsc -b tsconfig.build.json
+
+      # PRD §13.3/§13.5: downloads the pinned, digest-verified v1.19.29
+      # kernel (D-003 — upstream ships no checksum manifest, so this is
+      # GitHub's own reported asset digest, fixed and never recomputed) and
+      # runs every built-in template through a real `mihomo -t -f`. A
+      # digest mismatch or a non-zero exit from any template fails the job.
+      - name: Run built-in templates through the real Mihomo kernel
+        run: node tools/core-test-runner/dist/index.js

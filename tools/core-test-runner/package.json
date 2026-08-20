@@ -1,0 +1,13 @@
+{
+  "name": "@mcs/core-test-runner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Downloads the pinned, digest-verified v1.19.29 Mihomo kernel and runs every built-in template through a real `mihomo -t -f` config test (PRD §13.3/§13.5 release blocker).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@mcs/templates": "workspace:*"
+  }
+}
