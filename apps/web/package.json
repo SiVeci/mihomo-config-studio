@@ -23,6 +23,7 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@mcs/templates": "workspace:*",
     "@vitejs/plugin-react": "^4.3.4",
     "vite": "^6.0.7"
   }

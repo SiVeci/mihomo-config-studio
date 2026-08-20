@@ -817,3 +817,35 @@ describe('proxy-providers module (v0.3.0 #11 — discriminated union: http/file/
     expect(elapsedMs).toBeLessThan(50);
   });
 });
+
+/**
+ * v0.3.0 exit condition 4's own machine check, consolidated into one test
+ * over all six real modules (`ALL_MODULES`, not the four-module `MODULES`
+ * subset `describe.each` above uses) — the per-module "lists all four
+ * example kinds" tests above already prove this individually for each
+ * module (general/dns/sniffer/inbound via `describe.each`, proxies and
+ * proxy-providers each in their own describe block); this is the single,
+ * explicit statement that the exit condition itself asks for, not new
+ * coverage.
+ */
+describe('exit condition 4: every P0 module has all four example kinds (v0.3.0 #22)', () => {
+  const ALL_MODULES: readonly SchemaModule[] = [
+    GENERAL_MODULE,
+    DNS_MODULE,
+    SNIFFER_MODULE,
+    INBOUND_MODULE,
+    PROXIES_MODULE,
+    PROXY_PROVIDERS_MODULE,
+  ];
+  const REQUIRED_KINDS = ['valid', 'invalid', 'edge', 'unknown-fields'] as const;
+
+  it.each(ALL_MODULES.map((module) => [module.manifest.id, module] as const))(
+    '%s declares valid, invalid, edge, and unknown-fields examples',
+    (id, module) => {
+      const kinds = new Set(module.examples?.map((example) => example.kind));
+      for (const kind of REQUIRED_KINDS) {
+        expect(kinds.has(kind), `${id} is missing a "${kind}" example`).toBe(true);
+      }
+    },
+  );
+});

@@ -16,6 +16,7 @@
     { "path": "../../packages/schema-core" },
     { "path": "../../packages/schema-registry" },
     { "path": "../../packages/storage" },
+    { "path": "../../packages/templates" },
     { "path": "../../packages/ui" },
     { "path": "../../packages/validator" },
     { "path": "../../packages/yaml-engine" }
