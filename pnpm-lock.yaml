@@ -193,6 +193,25 @@ importers:
 
   packages/storage: {}
 
+  packages/templates:
+    dependencies:
+      '@mcs/schema-core':
+        specifier: workspace:*
+        version: link:../schema-core
+    devDependencies:
+      '@mcs/project-format':
+        specifier: workspace:*
+        version: link:../project-format
+      '@mcs/schema-builtin':
+        specifier: workspace:*
+        version: link:../schema-builtin
+      '@mcs/validator':
+        specifier: workspace:*
+        version: link:../validator
+      '@mcs/yaml-engine':
+        specifier: workspace:*
+        version: link:../yaml-engine
+
   packages/test-fixtures: {}
 
   packages/ui: {}

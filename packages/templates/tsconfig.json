@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../schema-core" },
+    { "path": "../project-format" },
+    { "path": "../schema-builtin" },
+    { "path": "../validator" },
+    { "path": "../yaml-engine" }
+  ]
+}

@@ -11,6 +11,7 @@
     { "path": "./packages/schema-builtin" },
     { "path": "./packages/schema-registry" },
     { "path": "./packages/storage" },
+    { "path": "./packages/templates" },
     { "path": "./packages/ui" },
     { "path": "./packages/validator" },
     { "path": "./tools/schema-cli" },

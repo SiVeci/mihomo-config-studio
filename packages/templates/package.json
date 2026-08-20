@@ -1,0 +1,19 @@
+{
+  "name": "@mcs/templates",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Built-in project templates, distributed alongside the signed Schema Bundle (PRD §8.8).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@mcs/schema-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@mcs/project-format": "workspace:*",
+    "@mcs/schema-builtin": "workspace:*",
+    "@mcs/validator": "workspace:*",
+    "@mcs/yaml-engine": "workspace:*"
+  }
+}
