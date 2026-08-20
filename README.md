@@ -30,10 +30,12 @@
 ## 项目状态
 
 **M1（骨架与配置内核）已完成（v0.2.0）**：不安装任何 Schema 模块即可走通
-「导入 → 原文编辑 → 差异 → 导出」完整闭环，全部退出条件见
-[需求追踪表](docs/requirements-traceability.md)。**M2（Schema 表单与前半配置
-模块，v0.3.0）进行中**，详见[版本执行计划](docs/releases/plans/v0.3.0.md)。
-尚未发布可用版本。
+「导入 → 原文编辑 → 差异 → 导出」完整闭环。**M2（Schema 表单与前半配置模块）
+已完成（v0.3.0）**：六个 P0 模块（general/dns/sniffer/inbound/proxies/
+proxy-providers）均有 Schema 驱动表单、Golden 往返测试与内置模板；全部退出条件见
+[需求追踪表](docs/requirements-traceability.md)，切片记录见
+[版本执行计划](docs/releases/plans/v0.3.0.md)。下一步 **M3（规则与图谱，
+v0.4.0）**尚未开工。尚未发布可用版本。
 
 ## 仓库结构
 
