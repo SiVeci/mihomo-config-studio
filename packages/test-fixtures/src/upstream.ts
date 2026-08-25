@@ -23,7 +23,11 @@ export const UPSTREAM_SOURCE = {
   retrievedOn: '2026-08-19',
 } as const;
 
-/** The six P0 modules this version covers (PRD §8.3, "配置模块覆盖" table). */
+/**
+ * The ten P0 modules this version covers (PRD §8.3, "配置模块覆盖" table).
+ * v0.3.0 shipped the first six; v0.4.0 #0 adds the back half: `proxy-groups`,
+ * `rule-providers`, `rules`, `sub-rules`.
+ */
 export const P0_MODULE_IDS = [
   'general',
   'dns',
@@ -31,6 +35,10 @@ export const P0_MODULE_IDS = [
   'inbound',
   'proxies',
   'proxy-providers',
+  'proxy-groups',
+  'rule-providers',
+  'rules',
+  'sub-rules',
 ] as const;
 export type P0ModuleId = (typeof P0_MODULE_IDS)[number];
 
@@ -50,12 +58,19 @@ export type P0Protocol = (typeof P0_PROTOCOLS)[number];
 
 export interface UpstreamFieldRecord {
   /**
-   * For `general`/`dns`/`sniffer`/`inbound`/`proxy-providers`: a dot path
-   * into the document (e.g. `profile.store-selected`), or a bare top-level
-   * key. For `proxies`: `_shared.<field>` for a field common to every P0
-   * protocol, `<protocol>.<field>` for a protocol-specific field, or a bare
-   * `<type>` naming a whole protocol this version deliberately does not
-   * cover (see `note`).
+   * For `general`/`dns`/`sniffer`/`inbound`: a dot path into the document
+   * (e.g. `profile.store-selected`), or a bare top-level key. For
+   * `proxies`/`proxy-providers`/`proxy-groups`/`rule-providers`:
+   * `_shared.<field>` for a field common to every branch of that module's
+   * discriminated union, `<branch>.<field>` for a branch-specific field, or
+   * a bare `<type>` naming a whole branch this version deliberately does not
+   * cover (see `note`). For `rules`: a bare upper-case rule-type token (e.g.
+   * `DOMAIN-SUFFIX`) — these are comma-separated list values, not YAML keys,
+   * so the traceability check below matches `<TYPE>,` rather than
+   * `<key>:` for this module (see `upstream.test.ts`). For `sub-rules`: this
+   * module has no field vocabulary of its own (its list items are rule
+   * lines using the exact same DSL as `rules`), so its record set only
+   * documents its distinct *shape*, not a duplicate type catalog.
    */
   path: string;
   /** False only when PRD claims P0 coverage this vendored sample does not demonstrate — see the record's `note`. */
@@ -447,6 +462,547 @@ const PROXY_PROVIDERS_FIELDS: UpstreamFieldRecord[] = [
   },
 ];
 
+/**
+ * proxy-groups (PRD §8.3 P0: Select、URL-Test、Fallback、Load-Balance). Same
+ * discriminated-union shape as `proxies`/`proxy-providers` — `type` picks
+ * the branch, shared fields apply regardless of it. Field grain follows
+ * plan #1's explicit scope (`docs/releases/plans/v0.4.0.md` #1 "实现要点"):
+ * `name`/`proxies`/`use`/`filter`/`exclude-filter` shared, plus each
+ * branch's own `url`/`interval`/`tolerance`/`lazy`/`strategy`. Other real,
+ * documented fields (`disable-udp`, `timeout`, `max-failed-times`,
+ * `expected-status`, `hidden`, `icon`, `include-all*`, `exclude-type`,
+ * deprecated `interface-name`/`routing-mark`) are deliberately outside this
+ * version's P0 range — they reach the user through the unknown-field tree,
+ * not silently dropped.
+ */
+const PROXY_GROUPS_FIELDS: UpstreamFieldRecord[] = [
+  { path: '_shared.name', presentUpstream: true },
+  { path: '_shared.type', presentUpstream: true, note: 'the discriminator key' },
+  { path: '_shared.proxies', presentUpstream: true },
+  { path: '_shared.use', presentUpstream: true, note: 'line 1712-1713 (UseProvider group)' },
+  { path: '_shared.filter', presentUpstream: true, note: 'line 1711' },
+  {
+    path: '_shared.exclude-filter',
+    presentUpstream: true,
+    note: 'verified via Meta-Docs (github.com/MetaCubeX/Meta-Docs, docs/config/proxy-groups/index.md, commit 89c2f10, retrieved 2026-08-25) — not directly demonstrated in the vendored sample, which only shows `filter:` at line 1711',
+  },
+
+  // url-test
+  { path: 'url-test.url', presentUpstream: true, note: 'line 1674' },
+  { path: 'url-test.interval', presentUpstream: true, note: 'line 1675' },
+  {
+    path: 'url-test.tolerance',
+    presentUpstream: true,
+    note: 'commented out in the sample (`# tolerance: 150`, line 1671) but a documented url-test-specific option',
+  },
+  {
+    path: 'url-test.lazy',
+    presentUpstream: true,
+    note: 'commented out in the sample (`# lazy: true`, line 1672); also the generic `lazy` field Meta-Docs documents (default true, health checks skipped while not the selected group)',
+  },
+
+  // fallback
+  { path: 'fallback.url', presentUpstream: true, note: 'line 1684' },
+  { path: 'fallback.interval', presentUpstream: true, note: 'line 1685' },
+
+  // load-balance
+  { path: 'load-balance.url', presentUpstream: true, note: 'line 1694' },
+  { path: 'load-balance.interval', presentUpstream: true, note: 'line 1695' },
+  {
+    path: 'load-balance.strategy',
+    presentUpstream: true,
+    note: 'commented out in the sample (`# strategy: consistent-hashing`, line 1696) but load-balance-specific',
+  },
+];
+
+/**
+ * rule-providers (PRD §8.3 P0: HTTP/File/Inline、Classical/Domain/IPCIDR、
+ * YAML/Text/MRS). Same discriminated-union shape as `proxy-providers` —
+ * `type` picks http/file/inline. Field grain follows plan #2's explicit
+ * scope: `behavior`/`format`/`interval`/`path`/`size-limit`/`proxy`
+ * attributed to the branch(es) they apply to, plus `type` (discriminator)
+ * and `url` (obviously required for `http`, omitted from the plan's prose
+ * list the same way the word "type" itself is). `header` is real (shown in
+ * both the vendored `proxy-providers` example and the official
+ * rule-provider example) but outside plan #2's explicit field range —
+ * reaches the user through the unknown-field tree, matching how
+ * `proxy-providers.exclude-type` was left unmodelled in v0.3.0 #11.
+ */
+const RULE_PROVIDERS_FIELDS: UpstreamFieldRecord[] = [
+  {
+    path: '_shared.type',
+    presentUpstream: true,
+    note: 'http | file | inline; line 1850/1858/1872/1879',
+  },
+  {
+    path: '_shared.behavior',
+    presentUpstream: true,
+    note: 'domain | ipcidr | classical; every one of the four vendored examples (rule1-rule4) sets it — lines 1847/1855/1875/1880',
+  },
+
+  { path: 'http.url', presentUpstream: true, note: 'line 1851/1873; required for type: http' },
+  {
+    path: 'http.format',
+    presentUpstream: true,
+    note: 'line 1874, the only literal `format:` in the sample; default yaml per Meta-Docs',
+  },
+  { path: 'http.interval', presentUpstream: true, note: 'line 1848' },
+  { path: 'http.path', presentUpstream: true, note: 'optional local cache location; line 1849' },
+  {
+    path: 'http.size-limit',
+    presentUpstream: true,
+    note: 'commented out in the sample (`# size-limit: 10240`, line 1853) but a documented http-fetch option',
+  },
+  {
+    path: 'http.proxy',
+    presentUpstream: true,
+    note: 'dialer used to fetch the provider itself; line 1852',
+  },
+
+  {
+    path: 'file.format',
+    presentUpstream: true,
+    note: 'verified via Meta-Docs (docs/config/rule-providers/index.md, commit 89c2f10, retrieved 2026-08-25) — format is generic to any on-disk ruleset file, not restricted to type: http by the doc text; not directly demonstrated on the file branch in the vendored sample',
+  },
+  { path: 'file.interval', presentUpstream: true, note: 'line 1856 (rule2, type: file)' },
+  {
+    path: 'file.path',
+    presentUpstream: true,
+    note: 'required source file for the file type; line 1857',
+  },
+
+  {
+    path: 'inline.payload',
+    presentUpstream: true,
+    note: 'inline provider only (type: inline); lines 1881-1884',
+  },
+];
+
+const META_DOCS_RULES_EVIDENCE =
+  'verified via Meta-Docs (github.com/MetaCubeX/Meta-Docs, docs/config/rules/index.md, commit 89c2f10, retrieved 2026-08-25) — not demonstrated anywhere in the vendored v1.19.29 sample';
+
+export interface UpstreamRuleTypeRecord {
+  /** Upper-case rule type token exactly as it appears in a rule line, e.g. `DOMAIN-SUFFIX`. */
+  type: string;
+  /**
+   * PRD §8.3 "路由规则" P0 range (常用域名、IP、端口、进程、GEO、RULE-SET、
+   * MATCH) vs P1/P2 (逻辑规则 explicitly, plus the advanced source/inbound/
+   * process-matching variants PRD's "常用" wording does not reach).
+   */
+  p0: boolean;
+  /** False only for MATCH, whose line is `MATCH,<target>` with no payload segment at all. */
+  payloadRequired: boolean;
+  /**
+   * Mirrors `config-model/src/rule-line.ts`'s `LAST_SEGMENT_IS_TARGET`:
+   * true means the target is the line's last comma-separated segment (used
+   * where the payload itself may contain commas — regex/logic/sub-rule
+   * payloads); false means the fixed third segment.
+   */
+  lastSegmentIsTarget: boolean;
+  /** Where this type's existence as a `rules:`/`sub-rules:` entry was verified. */
+  evidence: 'vendored-sample' | 'meta-docs';
+  note?: string;
+}
+
+/**
+ * The full rule-type catalog Mihomo documents for `rules:`/`sub-rules:`
+ * entries (Meta-Docs `docs/config/rules/index.md`), hand-transcribed and
+ * split into this version's P0 range and everything else. This is the
+ * comparison object #3's `rule-types.json` catalog (ADR-021) asserts
+ * against in both directions — the same role `UPSTREAM_P0_FIELDS` plays for
+ * the object-shaped modules. `RULES_FIELDS` below is *derived* from this
+ * list rather than hand-duplicated, so there is exactly one place these
+ * facts are recorded.
+ *
+ * Sixteen of the thirty-seven types are P0. Twelve of those sixteen are
+ * directly demonstrated in the vendored sample's `rules:` (1886-1897) or
+ * `sub-rules:` (1914-1921) sections, or in the DNS `fake-ip-filter` list,
+ * whose own comment (line 279) states it shares syntax with routing rules.
+ * `GEOIP`/`DST-PORT`/`PROCESS-NAME`/`PROCESS-PATH` are real, PRD-named P0
+ * types the vendored sample never demonstrates in either list — verified
+ * against the official Meta-Docs source instead, the same D-004 precedent
+ * `proxy-providers.filter`/`exclude-filter` used in v0.3.0. `DST-PORT` was
+ * chosen as the sole P0 "端口" representative over `SRC-PORT`
+ * (destination-port routing is the overwhelmingly common case); the P1/P2
+ * source/inbound-criteria variants are recorded, not modelled.
+ */
+export const UPSTREAM_RULE_TYPES: readonly UpstreamRuleTypeRecord[] = [
+  // --- P0 (PRD §8.3 常用域名、IP、端口、进程、GEO、RULE-SET、MATCH) ---
+  {
+    type: 'DOMAIN',
+    p0: true,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'vendored-sample',
+    note: 'sub-rules lines 1916/1917/1921',
+  },
+  {
+    type: 'DOMAIN-SUFFIX',
+    p0: true,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'vendored-sample',
+    note: 'line 1890',
+  },
+  {
+    type: 'DOMAIN-KEYWORD',
+    p0: true,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'vendored-sample',
+    note: 'line 1891',
+  },
+  {
+    type: 'DOMAIN-WILDCARD',
+    p0: true,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'vendored-sample',
+    note: 'line 1892',
+  },
+  {
+    type: 'DOMAIN-REGEX',
+    p0: true,
+    payloadRequired: true,
+    lastSegmentIsTarget: true,
+    evidence: 'vendored-sample',
+    note: 'line 1889; LAST_SEGMENT_IS_TARGET because the regex payload may itself contain a comma',
+  },
+  {
+    type: 'GEOSITE',
+    p0: true,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'vendored-sample',
+    note: 'line 282, DNS fake-ip-filter list — its own comment (line 279) states the syntax is shared with routing rules; standalone use in rules: confirmed by Meta-Docs',
+  },
+  {
+    type: 'IP-CIDR',
+    p0: true,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'vendored-sample',
+    note: 'line 1893/1919/1920',
+  },
+  {
+    type: 'IP-CIDR6',
+    p0: true,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'vendored-sample',
+    note: 'line 1894; an alias of IP-CIDR for v6 ranges per Meta-Docs',
+  },
+  {
+    type: 'IP-ASN',
+    p0: true,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'vendored-sample',
+    note: 'line 1888',
+  },
+  {
+    type: 'GEOIP',
+    p0: true,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'meta-docs',
+    note: META_DOCS_RULES_EVIDENCE,
+  },
+  {
+    type: 'DST-PORT',
+    p0: true,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'meta-docs',
+    note: `${META_DOCS_RULES_EVIDENCE}; chosen as the P0 "端口" representative over SRC-PORT`,
+  },
+  {
+    type: 'PROCESS-NAME',
+    p0: true,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'meta-docs',
+    note: META_DOCS_RULES_EVIDENCE,
+  },
+  {
+    type: 'PROCESS-PATH',
+    p0: true,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'meta-docs',
+    note: META_DOCS_RULES_EVIDENCE,
+  },
+  {
+    type: 'RULE-SET',
+    p0: true,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'vendored-sample',
+    note: 'line 1887; payload is a rule-providers name (a reference, not a literal value)',
+  },
+  {
+    type: 'SUB-RULE',
+    p0: true,
+    payloadRequired: false,
+    lastSegmentIsTarget: true,
+    evidence: 'vendored-sample',
+    note: 'lines 1896-1897; target is a sub-rule name, not a proxy/group — LAST_SEGMENT_IS_TARGET, payload is the nested logic expression (raw-only, logic is Out of scope)',
+  },
+  {
+    type: 'MATCH',
+    p0: true,
+    payloadRequired: false,
+    lastSegmentIsTarget: false,
+    evidence: 'vendored-sample',
+    note: 'line 286 (fake-ip-filter) and Meta-Docs `MATCH,auto`; no payload segment at all, parseRuleLine special-cases it',
+  },
+
+  // --- P1/P2 (逻辑规则 explicitly Out of scope, plus advanced variants PRD's "常用" wording does not reach) ---
+  {
+    type: 'IP-SUFFIX',
+    p0: false,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'meta-docs',
+    note: META_DOCS_RULES_EVIDENCE,
+  },
+  {
+    type: 'SRC-GEOIP',
+    p0: false,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'meta-docs',
+    note: META_DOCS_RULES_EVIDENCE,
+  },
+  {
+    type: 'SRC-IP-ASN',
+    p0: false,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'meta-docs',
+    note: META_DOCS_RULES_EVIDENCE,
+  },
+  {
+    type: 'SRC-IP-CIDR',
+    p0: false,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'meta-docs',
+    note: META_DOCS_RULES_EVIDENCE,
+  },
+  {
+    type: 'SRC-IP-SUFFIX',
+    p0: false,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'meta-docs',
+    note: META_DOCS_RULES_EVIDENCE,
+  },
+  {
+    type: 'SRC-PORT',
+    p0: false,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'meta-docs',
+    note: META_DOCS_RULES_EVIDENCE,
+  },
+  {
+    type: 'IN-PORT',
+    p0: false,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'meta-docs',
+    note: META_DOCS_RULES_EVIDENCE,
+  },
+  {
+    type: 'IN-TYPE',
+    p0: false,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'meta-docs',
+    note: META_DOCS_RULES_EVIDENCE,
+  },
+  {
+    type: 'IN-USER',
+    p0: false,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'meta-docs',
+    note: META_DOCS_RULES_EVIDENCE,
+  },
+  {
+    type: 'IN-NAME',
+    p0: false,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'meta-docs',
+    note: META_DOCS_RULES_EVIDENCE,
+  },
+  {
+    type: 'REMATCH-NAME',
+    p0: false,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'meta-docs',
+    note: `${META_DOCS_RULES_EVIDENCE}; tied to the advanced rematch outbound feature`,
+  },
+  {
+    type: 'PROCESS-PATH-WILDCARD',
+    p0: false,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'meta-docs',
+    note: META_DOCS_RULES_EVIDENCE,
+  },
+  {
+    type: 'PROCESS-PATH-REGEX',
+    p0: false,
+    payloadRequired: true,
+    lastSegmentIsTarget: true,
+    evidence: 'meta-docs',
+    note: `${META_DOCS_RULES_EVIDENCE}; LAST_SEGMENT_IS_TARGET already in config-model/src/rule-line.ts`,
+  },
+  {
+    type: 'PROCESS-NAME-WILDCARD',
+    p0: false,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'meta-docs',
+    note: META_DOCS_RULES_EVIDENCE,
+  },
+  {
+    type: 'PROCESS-NAME-REGEX',
+    p0: false,
+    payloadRequired: true,
+    lastSegmentIsTarget: true,
+    evidence: 'meta-docs',
+    note: `${META_DOCS_RULES_EVIDENCE}; LAST_SEGMENT_IS_TARGET already in config-model/src/rule-line.ts`,
+  },
+  {
+    type: 'UID',
+    p0: false,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'meta-docs',
+    note: `${META_DOCS_RULES_EVIDENCE}; Linux-only`,
+  },
+  {
+    type: 'NETWORK',
+    p0: false,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'vendored-sample',
+    note: 'nested inside a SUB-RULE payload at lines 1896-1897 (not as a standalone rules: entry there); standalone use confirmed by Meta-Docs',
+  },
+  {
+    type: 'DSCP',
+    p0: false,
+    payloadRequired: true,
+    lastSegmentIsTarget: false,
+    evidence: 'meta-docs',
+    note: `${META_DOCS_RULES_EVIDENCE}; tproxy udp inbound only`,
+  },
+  {
+    type: 'AND',
+    p0: false,
+    payloadRequired: true,
+    lastSegmentIsTarget: true,
+    evidence: 'vendored-sample',
+    note: 'nested inside a SUB-RULE payload at line 1897 (not as a standalone rules: entry there); standalone use + LAST_SEGMENT_IS_TARGET confirmed by Meta-Docs. Explicitly Out of scope (PRD §8.3 P1/P2 "逻辑规则") — must remain raw-string-only (FR-RULE-05)',
+  },
+  {
+    type: 'OR',
+    p0: false,
+    payloadRequired: true,
+    lastSegmentIsTarget: true,
+    evidence: 'vendored-sample',
+    note: 'nested inside a SUB-RULE payload at line 1896 (not as a standalone rules: entry there); standalone use + LAST_SEGMENT_IS_TARGET confirmed by Meta-Docs. Explicitly Out of scope (PRD §8.3 P1/P2 "逻辑规则") — must remain raw-string-only (FR-RULE-05)',
+  },
+  {
+    type: 'NOT',
+    p0: false,
+    payloadRequired: true,
+    lastSegmentIsTarget: true,
+    evidence: 'meta-docs',
+    note: `${META_DOCS_RULES_EVIDENCE}; LAST_SEGMENT_IS_TARGET already in config-model/src/rule-line.ts. Explicitly Out of scope (PRD §8.3 P1/P2 "逻辑规则") — must remain raw-string-only (FR-RULE-05)`,
+  },
+];
+
+/**
+ * Coarse P0-membership view of `UPSTREAM_RULE_TYPES`, in the same
+ * `UpstreamFieldRecord` shape every other module uses, so the existing
+ * cross-module structural tests (module-id set, "every absent entry has a
+ * note") stay uniform across all ten modules. Derived, not hand-duplicated
+ * — `UPSTREAM_RULE_TYPES` is the one place these facts are recorded.
+ * Literal-text traceability for this module uses comma syntax (`TYPE,`),
+ * not the `key:` pattern the generic check uses — see `upstream.test.ts`.
+ */
+const RULES_FIELDS: UpstreamFieldRecord[] = UPSTREAM_RULE_TYPES.map((rule) => {
+  const note = rule.p0
+    ? rule.note
+    : `P1/P2: ${rule.note ?? "not in this version's P0 rule-type range"}`;
+  return note !== undefined
+    ? { path: rule.type, presentUpstream: true, note }
+    : { path: rule.type, presentUpstream: true };
+});
+
+/**
+ * sub-rules (PRD §8.3 P0: 基础列表与引用). This module has no field
+ * vocabulary of its own — a sub-rule's list items are rule lines using the
+ * exact same DSL as `rules` (see `UPSTREAM_RULE_TYPES`), so this records
+ * only its distinct shape: a map from sub-rule name to an array of rule
+ * lines, and the `SUB-RULE` type (in `UPSTREAM_RULE_TYPES`) is the
+ * reference mechanism that points into it.
+ */
+const SUB_RULES_FIELDS: UpstreamFieldRecord[] = [
+  {
+    path: 'sub-rules',
+    presentUpstream: true,
+    note: 'name -> array of rule lines, lines 1914-1921; same DSL as rules:, no separate field vocabulary of its own — see UPSTREAM_RULE_TYPES',
+  },
+];
+
+export interface RuleProviderConstraint {
+  /** Human-readable summary of the constraint. */
+  description: string;
+  /** Whether this version's rule-providers `validation.rules.json` (plan #2) encodes this as a real cross-field rule. */
+  modeledThisVersion: boolean;
+  /** Where this was verified — at least one source; two when cross-checked. */
+  evidence: readonly string[];
+  note?: string;
+}
+
+/**
+ * Cross-field constraints on `rule-providers` entries, verified this round
+ * against two independent sources: the vendored v1.19.29 sample's own
+ * comment block and the official Meta-Docs page. The first entry closes the
+ * sole prerequisite `docs/releases/v0.4.0-rules-and-graph.md` names
+ * (`format: mrs` ⇒ `behavior`) and the matching `upstream-divergences.md`
+ * "待核对项" row.
+ */
+export const UPSTREAM_RULE_PROVIDER_CONSTRAINTS: readonly RuleProviderConstraint[] = [
+  {
+    description:
+      'format: mrs constrains behavior to domain or ipcidr — classical is not supported for mrs',
+    modeledThisVersion: true,
+    evidence: [
+      'vendored sample lines 1860-1870 (comment block on rule3): "mrs类型ruleset，目前仅支持domain和ipcidr(即不支持classical）"',
+      'Meta-Docs docs/config/rule-providers/index.md (commit 89c2f10, retrieved 2026-08-25): "mrs目前 behavior 仅支持 domain/ipcidr"',
+    ],
+    note: 'plan #2 encodes this in validation.rules.json using the existing closed Condition DSL operator set, no new operator',
+  },
+  {
+    description:
+      'a RULE-SET referenced by dns.fake-ip-filter or dns.nameserver-policy must have behavior in {domain, classical} — ipcidr is not valid there',
+    modeledThisVersion: false,
+    evidence: [
+      'vendored sample lines 272-273 (fake-ip-filter): "behavior 必须为 domain/classical"',
+      'vendored sample line 365 (nameserver-policy): "behavior 必须为 domain/classical"',
+    ],
+    note: "cross-module constraint (dns <-> rule-providers); this version's rule-providers module (plan #2) only validates rule-providers entries in isolation — recorded here, deliberately not modelled, not silently dropped",
+  },
+];
+
 export const UPSTREAM_P0_FIELDS: Record<P0ModuleId, UpstreamFieldRecord[]> = {
   general: GENERAL_FIELDS,
   dns: DNS_FIELDS,
@@ -454,4 +1010,8 @@ export const UPSTREAM_P0_FIELDS: Record<P0ModuleId, UpstreamFieldRecord[]> = {
   inbound: INBOUND_FIELDS,
   proxies: PROXIES_FIELDS,
   'proxy-providers': PROXY_PROVIDERS_FIELDS,
+  'proxy-groups': PROXY_GROUPS_FIELDS,
+  'rule-providers': RULE_PROVIDERS_FIELDS,
+  rules: RULES_FIELDS,
+  'sub-rules': SUB_RULES_FIELDS,
 };
