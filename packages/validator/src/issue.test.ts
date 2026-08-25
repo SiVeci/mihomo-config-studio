@@ -358,7 +358,7 @@ describe('IssueFix — the "set" kind (v0.3.0 #14, non-scalar form edits)', () =
     expect(objectFix.value).toEqual({ 'a.example.com': '127.0.0.1' });
   });
 
-  it('still narrows correctly in a kind switch alongside the original four kinds', () => {
+  it('still narrows correctly in a kind switch alongside the other kinds', () => {
     function describeKind(fix: IssueFix): string {
       switch (fix.kind) {
         case 'set-scalar':
@@ -368,9 +368,20 @@ describe('IssueFix — the "set" kind (v0.3.0 #14, non-scalar form edits)', () =
           return 'scalar-shaped';
         case 'set':
           return 'unrestricted';
+        case 'move':
+          return 'reorder';
       }
     }
     expect(describeKind({ kind: 'set', path: [], value: [1, 2] })).toBe('unrestricted');
     expect(describeKind({ kind: 'set-scalar', path: [], value: 'x' })).toBe('scalar-shaped');
+    expect(describeKind({ kind: 'move', path: ['rules'], from: 0, to: 2 })).toBe('reorder');
+  });
+});
+
+describe('IssueFix — the "move" kind (v0.4.0 #9, drag/keyboard reorder)', () => {
+  it('carries from/to indices instead of a value, unlike every other kind', () => {
+    const fix: IssueFix = { kind: 'move', path: ['rules'], from: 3, to: 0 };
+    expect(fix.from).toBe(3);
+    expect(fix.to).toBe(0);
   });
 });

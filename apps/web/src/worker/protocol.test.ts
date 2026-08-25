@@ -210,6 +210,42 @@ describe('handleWorkerRequest / applyPatch', () => {
     expect(serialized.text).toContain('DOMAIN,foo.com,DIRECT');
   });
 
+  it('move reorders a sequence item (v0.4.0 #9 drag/keyboard reorder)', () => {
+    const state = parsed(`mode: rule
+rules:
+  - MATCH,DIRECT
+  - DOMAIN,a.com,PROXY
+  - DOMAIN,b.com,PROXY
+`);
+    const patch: IssueFix = { kind: 'move', path: ['rules'], from: 0, to: 2 };
+
+    const response = handleWorkerRequest(state, { type: 'applyPatch', requestId: 'r1', patch });
+    expect(response).toEqual({
+      type: 'applyPatch',
+      requestId: 'r1',
+      canUndo: true,
+      canRedo: false,
+    });
+
+    const value = handleWorkerRequest(state, { type: 'value', requestId: 'r2' });
+    if (value.type !== 'value') throw new Error('unreachable');
+    expect(value.value).toMatchObject({
+      rules: ['DOMAIN,a.com,PROXY', 'DOMAIN,b.com,PROXY', 'MATCH,DIRECT'],
+    });
+  });
+
+  it('move with an out-of-range index is rejected as a structured error, not a thrown exception', () => {
+    const state = parsed(`mode: rule
+rules:
+  - MATCH,DIRECT
+`);
+    const patch: IssueFix = { kind: 'move', path: ['rules'], from: 0, to: 5 };
+
+    const response = handleWorkerRequest(state, { type: 'applyPatch', requestId: 'r1', patch });
+
+    expect(response).toMatchObject({ type: 'error', code: 'YAML_INVALID_OPERATION' });
+  });
+
   it('surfaces a path-not-found failure as a structured error, not a thrown exception', () => {
     const state = parsed();
     const patch: IssueFix = { kind: 'set-scalar', path: ['does', 'not', 'exist'], value: 1 };

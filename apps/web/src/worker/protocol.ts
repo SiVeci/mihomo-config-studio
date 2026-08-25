@@ -484,6 +484,9 @@ function applyIssueFix(document: MihomoYamlDocument, patch: IssueFix): void {
       }
       document.setIn(patch.path, patch.value);
       return;
+    case 'move':
+      document.moveSeqItem(patch.path, patch.from, patch.to);
+      return;
   }
 }
 

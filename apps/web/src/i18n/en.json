@@ -112,6 +112,8 @@
   "ruleList.emptyState": "No rules yet — switch to the Form view or edit the YAML directly to add some",
   "ruleList.addButton": "New rule",
   "ruleList.editButton": "Edit rule {index}",
+  "ruleList.movedAnnouncement": "Moved to position {index}",
+  "ruleList.dropIndicator": "Will move to position {index}",
   "ruleEditor.createTitle": "New rule",
   "ruleEditor.editTitle": "Edit rule",
   "ruleEditor.typeLabel": "Rule type",

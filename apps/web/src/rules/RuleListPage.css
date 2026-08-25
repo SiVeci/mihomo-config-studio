@@ -27,8 +27,27 @@
   gap: var(--mcs-spacing-sm);
   padding: 0 var(--mcs-spacing-sm);
   border-bottom: 1px solid var(--mcs-color-hairline);
+  border-top: 2px solid transparent;
   font-family: monospace;
   font-size: var(--mcs-font-size-body-sm);
+}
+
+.rule-list__row--selected {
+  background-color: var(--mcs-color-primary-disabled);
+}
+
+.rule-list__row--dragging {
+  opacity: 0.5;
+}
+
+.rule-list__row--drag-over {
+  border-top-color: var(--mcs-color-primary-active);
+}
+
+.rule-list__drop-indicator {
+  flex-shrink: 0;
+  color: var(--mcs-color-primary-active);
+  font-size: var(--mcs-font-size-caption);
 }
 
 .rule-list__index {
@@ -52,4 +71,13 @@
 .rule-list__empty {
   color: var(--mcs-color-text-muted);
   padding: var(--mcs-spacing-md);
+}
+
+.rule-list-page__live-region {
+  /* Visually hidden but still announced by assistive tech (aria-live). */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
 }

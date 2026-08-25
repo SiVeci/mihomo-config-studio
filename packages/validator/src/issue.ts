@@ -34,10 +34,17 @@ export type KernelModule = (typeof KERNEL_MODULES)[number];
  * no NFR-SEC-03 concern here — the user is choosing this value themselves,
  * not being shown a system-derived suggestion — so `value` is unrestricted
  * rather than limited to a Schema constant.
+ *
+ * `move` is v0.4.0 #9's reorder primitive: a user-driven sequence reorder
+ * (drag or the equivalent keyboard path), applied via
+ * `MihomoYamlDocument.moveSeqItem`. `path` addresses the sequence itself
+ * (e.g. `['rules']`), not an individual item — `from`/`to` are the item
+ * indices within it, the same pair `moveSeqItem` already takes.
  */
 export type IssueFix =
   | { kind: 'set-scalar' | 'remove' | 'rename' | 'append'; path: ConfigPath; value?: JsonPrimitive }
-  | { kind: 'set'; path: ConfigPath; value?: unknown };
+  | { kind: 'set'; path: ConfigPath; value?: unknown }
+  | { kind: 'move'; path: ConfigPath; from: number; to: number };
 
 /**
  * The single issue shape the UI consumes, unifying `YamlIssue` (syntax layer)

@@ -112,6 +112,8 @@
   "ruleList.emptyState": "还没有规则，切换到「表单」视图或直接编辑 YAML 添加",
   "ruleList.addButton": "新建规则",
   "ruleList.editButton": "编辑第 {index} 条规则",
+  "ruleList.movedAnnouncement": "已移动到第 {index} 条",
+  "ruleList.dropIndicator": "将移动到第 {index} 条",
   "ruleEditor.createTitle": "新建规则",
   "ruleEditor.editTitle": "编辑规则",
   "ruleEditor.typeLabel": "规则类型",

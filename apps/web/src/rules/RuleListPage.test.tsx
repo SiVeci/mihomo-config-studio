@@ -254,3 +254,243 @@ describe('RuleListPage / create and edit wiring (v0.4.0 #8, FR-RULE-01)', () => 
     expect(onApplyFix).not.toHaveBeenCalled();
   });
 });
+
+describe('RuleListPage / drag and keyboard reorder (v0.4.0 #9, FR-RULE-02, NFR-A11Y)', () => {
+  const THREE_RULES = ['MATCH,A', 'MATCH,B', 'MATCH,C'];
+
+  it('clicking a row selects it (aria-selected)', () => {
+    render(
+      <RuleListPage
+        {...baseProps({
+          rules: THREE_RULES,
+          rowHeight: ROW_HEIGHT,
+          containerHeight: CONTAINER_HEIGHT,
+        })}
+      />,
+    );
+    const rows = screen.getAllByRole('row');
+    fireEvent.click(rows[1] as HTMLElement);
+    expect(rows[1]?.getAttribute('aria-selected')).toBe('true');
+    expect(rows[0]?.getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('focusing a row selects it too, so a keyboard-only user (no click at all) can still select', () => {
+    render(
+      <RuleListPage
+        {...baseProps({
+          rules: THREE_RULES,
+          rowHeight: ROW_HEIGHT,
+          containerHeight: CONTAINER_HEIGHT,
+        })}
+      />,
+    );
+    const rows = screen.getAllByRole('row');
+    fireEvent.focus(rows[2] as HTMLElement);
+    expect(rows[2]?.getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('Alt+ArrowDown on the selected row moves it down one position via onApplyFix', async () => {
+    const onApplyFix = vi.fn<(fix: IssueFix) => Promise<void>>().mockResolvedValue(undefined);
+    render(
+      <RuleListPage
+        {...baseProps({
+          rules: THREE_RULES,
+          rowHeight: ROW_HEIGHT,
+          containerHeight: CONTAINER_HEIGHT,
+          onApplyFix,
+        })}
+      />,
+    );
+    const grid = screen.getByRole('grid');
+    const rows = screen.getAllByRole('row');
+    fireEvent.click(rows[0] as HTMLElement);
+    fireEvent.keyDown(grid, { key: 'ArrowDown', altKey: true });
+
+    await vi.waitFor(() => {
+      expect(onApplyFix).toHaveBeenCalledExactlyOnceWith({
+        kind: 'move',
+        path: ['rules'],
+        from: 0,
+        to: 1,
+      });
+    });
+  });
+
+  it('Alt+End moves the selected row straight to the last position', async () => {
+    const onApplyFix = vi.fn<(fix: IssueFix) => Promise<void>>().mockResolvedValue(undefined);
+    render(
+      <RuleListPage
+        {...baseProps({
+          rules: THREE_RULES,
+          rowHeight: ROW_HEIGHT,
+          containerHeight: CONTAINER_HEIGHT,
+          onApplyFix,
+        })}
+      />,
+    );
+    const grid = screen.getByRole('grid');
+    fireEvent.click(screen.getAllByRole('row')[0] as HTMLElement);
+    fireEvent.keyDown(grid, { key: 'End', altKey: true });
+
+    await vi.waitFor(() => {
+      expect(onApplyFix).toHaveBeenCalledExactlyOnceWith({
+        kind: 'move',
+        path: ['rules'],
+        from: 0,
+        to: 2,
+      });
+    });
+  });
+
+  it('announces the move via the aria-live region after it completes', async () => {
+    const onApplyFix = vi.fn<(fix: IssueFix) => Promise<void>>().mockResolvedValue(undefined);
+    render(
+      <RuleListPage
+        {...baseProps({
+          rules: THREE_RULES,
+          rowHeight: ROW_HEIGHT,
+          containerHeight: CONTAINER_HEIGHT,
+          onApplyFix,
+        })}
+      />,
+    );
+    const grid = screen.getByRole('grid');
+    fireEvent.click(screen.getAllByRole('row')[0] as HTMLElement);
+    fireEvent.keyDown(grid, { key: 'ArrowDown', altKey: true });
+
+    await screen.findByRole('status');
+    expect(screen.getByRole('status').textContent).toBe(
+      t('ruleList.movedAnnouncement', { index: 2 }),
+    );
+  });
+
+  it('does nothing at the top boundary (Alt+ArrowUp on the first row is a no-op, no onApplyFix call)', () => {
+    const onApplyFix = vi.fn<(fix: IssueFix) => Promise<void>>().mockResolvedValue(undefined);
+    render(
+      <RuleListPage
+        {...baseProps({
+          rules: THREE_RULES,
+          rowHeight: ROW_HEIGHT,
+          containerHeight: CONTAINER_HEIGHT,
+          onApplyFix,
+        })}
+      />,
+    );
+    const grid = screen.getByRole('grid');
+    fireEvent.click(screen.getAllByRole('row')[0] as HTMLElement);
+    fireEvent.keyDown(grid, { key: 'ArrowUp', altKey: true });
+
+    expect(onApplyFix).not.toHaveBeenCalled();
+  });
+
+  it('a plain arrow key without Alt does not reorder', () => {
+    const onApplyFix = vi.fn<(fix: IssueFix) => Promise<void>>().mockResolvedValue(undefined);
+    render(
+      <RuleListPage
+        {...baseProps({
+          rules: THREE_RULES,
+          rowHeight: ROW_HEIGHT,
+          containerHeight: CONTAINER_HEIGHT,
+          onApplyFix,
+        })}
+      />,
+    );
+    const grid = screen.getByRole('grid');
+    fireEvent.click(screen.getAllByRole('row')[0] as HTMLElement);
+    fireEvent.keyDown(grid, { key: 'ArrowDown' });
+
+    expect(onApplyFix).not.toHaveBeenCalled();
+  });
+
+  it('Alt+ArrowDown with no row selected does nothing', () => {
+    const onApplyFix = vi.fn<(fix: IssueFix) => Promise<void>>().mockResolvedValue(undefined);
+    render(
+      <RuleListPage
+        {...baseProps({
+          rules: THREE_RULES,
+          rowHeight: ROW_HEIGHT,
+          containerHeight: CONTAINER_HEIGHT,
+          onApplyFix,
+        })}
+      />,
+    );
+    fireEvent.keyDown(screen.getByRole('grid'), { key: 'ArrowDown', altKey: true });
+
+    expect(onApplyFix).not.toHaveBeenCalled();
+  });
+
+  /**
+   * jsdom's drag-event support is limited (no real `DataTransfer` drag
+   * feel) — per the plan, the core reorder-target assertions live on
+   * `reorder.ts`'s pure function and the keyboard path above; this only
+   * checks that the native HTML5 drag handlers are wired to the same
+   * `handleMove` and fire with the right indices, not that a real drag
+   * "feels" right.
+   */
+  it('dragging row 0 and dropping it on row 2 reorders via the same onApplyFix move call as the keyboard path', async () => {
+    const onApplyFix = vi.fn<(fix: IssueFix) => Promise<void>>().mockResolvedValue(undefined);
+    render(
+      <RuleListPage
+        {...baseProps({
+          rules: THREE_RULES,
+          rowHeight: ROW_HEIGHT,
+          containerHeight: CONTAINER_HEIGHT,
+          onApplyFix,
+        })}
+      />,
+    );
+    const rows = screen.getAllByRole('row');
+    const dataTransfer = { effectAllowed: '' };
+    fireEvent.dragStart(rows[0] as HTMLElement, { dataTransfer });
+    fireEvent.dragOver(rows[2] as HTMLElement, { dataTransfer });
+    fireEvent.drop(rows[2] as HTMLElement, { dataTransfer });
+
+    await vi.waitFor(() => {
+      expect(onApplyFix).toHaveBeenCalledExactlyOnceWith({
+        kind: 'move',
+        path: ['rules'],
+        from: 0,
+        to: 2,
+      });
+    });
+  });
+
+  it('shows the drop-target indicator with the position the dragged row will land at', () => {
+    render(
+      <RuleListPage
+        {...baseProps({
+          rules: THREE_RULES,
+          rowHeight: ROW_HEIGHT,
+          containerHeight: CONTAINER_HEIGHT,
+        })}
+      />,
+    );
+    const rows = screen.getAllByRole('row');
+    const dataTransfer = { effectAllowed: '' };
+    fireEvent.dragStart(rows[0] as HTMLElement, { dataTransfer });
+    fireEvent.dragOver(rows[2] as HTMLElement, { dataTransfer });
+
+    expect(rows[2]?.textContent).toContain(t('ruleList.dropIndicator', { index: 3 }));
+  });
+
+  it('dragging and dropping a row onto itself does not call onApplyFix', () => {
+    const onApplyFix = vi.fn<(fix: IssueFix) => Promise<void>>().mockResolvedValue(undefined);
+    render(
+      <RuleListPage
+        {...baseProps({
+          rules: THREE_RULES,
+          rowHeight: ROW_HEIGHT,
+          containerHeight: CONTAINER_HEIGHT,
+          onApplyFix,
+        })}
+      />,
+    );
+    const rows = screen.getAllByRole('row');
+    const dataTransfer = { effectAllowed: '' };
+    fireEvent.dragStart(rows[0] as HTMLElement, { dataTransfer });
+    fireEvent.dragOver(rows[0] as HTMLElement, { dataTransfer });
+    fireEvent.drop(rows[0] as HTMLElement, { dataTransfer });
+
+    expect(onApplyFix).not.toHaveBeenCalled();
+  });
+});

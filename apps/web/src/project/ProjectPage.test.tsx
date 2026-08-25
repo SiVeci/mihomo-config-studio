@@ -1168,3 +1168,59 @@ describe('ProjectPage / rule editor wiring (v0.4.0 #8, FR-RULE-01/05)', () => {
     expect(editorTextarea.value).toContain('MATCH,PROXY');
   });
 });
+
+describe('ProjectPage / drag and keyboard reorder (v0.4.0 #9, FR-RULE-02, NFR-A11Y)', () => {
+  const REORDER_YAML = ['mode: rule', 'rules:', '  - MATCH,A', '  - MATCH,B', '  - MATCH,C'].join(
+    '\n',
+  );
+
+  async function setUpOnRulesTab(yaml: string) {
+    const adapter = new MemoryStorageAdapter();
+    const client = new WorkerClient(new RealWorker());
+    render(<ProjectPage client={client} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+    const editorTextarea = screen.getByLabelText<HTMLTextAreaElement>(t('editor.title'));
+    await waitFor(() => expect(editorTextarea.value).toBe(DEFAULT_PROJECT_CONFIG_TEXT));
+    fireEvent.change(editorTextarea, { target: { value: yaml } });
+    fireEvent.click(await screen.findByRole('tab', { name: t('project.rulesViewTab') }));
+    await screen.findByRole('grid', { name: t('ruleList.label') });
+    return { editorTextarea };
+  }
+
+  it('keyboard and drag reorder produce byte-identical document text for the same move', async () => {
+    const { editorTextarea: keyboardEditor } = await setUpOnRulesTab(REORDER_YAML);
+    fireEvent.click(screen.getAllByRole('row')[0] as HTMLElement);
+    fireEvent.keyDown(screen.getByRole('grid'), { key: 'End', altKey: true });
+    await waitFor(() => {
+      expect(keyboardEditor.value).toContain('MATCH,B\n  - MATCH,C\n  - MATCH,A');
+    });
+    const keyboardResultText = keyboardEditor.value;
+    cleanup();
+
+    const { editorTextarea: dragEditor } = await setUpOnRulesTab(REORDER_YAML);
+    const rows = screen.getAllByRole('row');
+    const dataTransfer = { effectAllowed: '' };
+    fireEvent.dragStart(rows[0] as HTMLElement, { dataTransfer });
+    fireEvent.dragOver(rows[2] as HTMLElement, { dataTransfer });
+    fireEvent.drop(rows[2] as HTMLElement, { dataTransfer });
+    await waitFor(() => {
+      expect(dragEditor.value).toContain('MATCH,B\n  - MATCH,C\n  - MATCH,A');
+    });
+
+    expect(dragEditor.value).toBe(keyboardResultText);
+  });
+
+  it('a completed keyboard move is announced through the aria-live region in the real app', async () => {
+    await setUpOnRulesTab(REORDER_YAML);
+    fireEvent.click(screen.getAllByRole('row')[0] as HTMLElement);
+    fireEvent.keyDown(screen.getByRole('grid'), { key: 'ArrowDown', altKey: true });
+
+    const status = await screen.findByRole('status');
+    await waitFor(() => {
+      expect(status.textContent).toBe(t('ruleList.movedAnnouncement', { index: 2 }));
+    });
+  });
+});
