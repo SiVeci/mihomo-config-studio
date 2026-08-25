@@ -109,5 +109,17 @@
   "project.formViewTab": "表单",
   "project.rulesViewTab": "规则",
   "ruleList.label": "路由规则列表",
-  "ruleList.emptyState": "还没有规则，切换到「表单」视图或直接编辑 YAML 添加"
+  "ruleList.emptyState": "还没有规则，切换到「表单」视图或直接编辑 YAML 添加",
+  "ruleList.addButton": "新建规则",
+  "ruleList.editButton": "编辑第 {index} 条规则",
+  "ruleEditor.createTitle": "新建规则",
+  "ruleEditor.editTitle": "编辑规则",
+  "ruleEditor.typeLabel": "规则类型",
+  "ruleEditor.payloadLabel": "匹配内容",
+  "ruleEditor.targetLabel": "策略",
+  "ruleEditor.paramsLabel": "附加参数",
+  "ruleEditor.rawTextLabel": "原始文本",
+  "ruleEditor.rawTextHint": "无法识别此规则类型，按原始文本保留并编辑，不会丢失或改变结构",
+  "ruleEditor.saveButton": "保存",
+  "ruleEditor.cancelButton": "取消"
 }

@@ -109,5 +109,17 @@
   "project.formViewTab": "Form",
   "project.rulesViewTab": "Rules",
   "ruleList.label": "Routing rules list",
-  "ruleList.emptyState": "No rules yet — switch to the Form view or edit the YAML directly to add some"
+  "ruleList.emptyState": "No rules yet — switch to the Form view or edit the YAML directly to add some",
+  "ruleList.addButton": "New rule",
+  "ruleList.editButton": "Edit rule {index}",
+  "ruleEditor.createTitle": "New rule",
+  "ruleEditor.editTitle": "Edit rule",
+  "ruleEditor.typeLabel": "Rule type",
+  "ruleEditor.payloadLabel": "Match value",
+  "ruleEditor.targetLabel": "Policy",
+  "ruleEditor.paramsLabel": "Extra parameters",
+  "ruleEditor.rawTextLabel": "Raw text",
+  "ruleEditor.rawTextHint": "This rule type isn't recognised — it's kept and edited as raw text so nothing is lost or restructured",
+  "ruleEditor.saveButton": "Save",
+  "ruleEditor.cancelButton": "Cancel"
 }

@@ -1078,3 +1078,93 @@ describe('ProjectPage / main view switching (E3, v0.4.0 #7)', () => {
     expect(document.querySelector('[data-module-section="general"]')).not.toBeNull();
   });
 });
+
+describe('ProjectPage / rule editor wiring (v0.4.0 #8, FR-RULE-01/05)', () => {
+  async function setUpWithRealDocument(yaml: string) {
+    const adapter = new MemoryStorageAdapter();
+    const client = new WorkerClient(new RealWorker());
+    render(<ProjectPage client={client} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+    const editorTextarea = screen.getByLabelText<HTMLTextAreaElement>(t('editor.title'));
+    await waitFor(() => expect(editorTextarea.value).toBe(DEFAULT_PROJECT_CONFIG_TEXT));
+    fireEvent.change(editorTextarea, { target: { value: yaml } });
+    await waitFor(
+      () => {
+        expect(document.querySelector('[data-module-section="general"]')).not.toBeNull();
+      },
+      { timeout: 2000 },
+    );
+    fireEvent.click(screen.getByRole('tab', { name: t('project.rulesViewTab') }));
+    await screen.findByRole('button', { name: t('ruleList.addButton') });
+    return { editorTextarea };
+  }
+
+  it('creating a rule through the dialog round-trips through the real Worker into the raw YAML text', async () => {
+    const { editorTextarea } = await setUpWithRealDocument(
+      'mode: rule\nrules:\n  - MATCH,DIRECT\n',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: t('ruleList.addButton') }));
+    // The real catalog's default-selected (first) entry is not
+    // DOMAIN-SUFFIX — select it explicitly rather than relying on catalog
+    // order, the same way a real user picks a type from the dropdown.
+    fireEvent.change(screen.getByLabelText(t('ruleEditor.typeLabel')), {
+      target: { value: 'DOMAIN-SUFFIX' },
+    });
+    fireEvent.change(screen.getByLabelText(t('ruleEditor.payloadLabel')), {
+      target: { value: 'example.com' },
+    });
+    fireEvent.change(screen.getByLabelText(t('ruleEditor.targetLabel')), {
+      target: { value: 'PROXY' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: t('ruleEditor.saveButton') }));
+
+    await waitFor(() => {
+      expect(editorTextarea.value).toContain('DOMAIN-SUFFIX,example.com,PROXY');
+    });
+    // The dialog closes and the new row is visible with its real sequence number.
+    expect(screen.queryByRole('dialog')).toBeNull();
+    const rows = screen.getAllByRole('row');
+    expect(rows[rows.length - 1]?.textContent).toContain('DOMAIN-SUFFIX,example.com,PROXY');
+  });
+
+  it('creating the first rule when rules: is absent writes a new one-item array through the real Worker', async () => {
+    const { editorTextarea } = await setUpWithRealDocument('mode: rule\n');
+
+    fireEvent.click(screen.getByRole('button', { name: t('ruleList.addButton') }));
+    fireEvent.change(screen.getByLabelText(t('ruleEditor.typeLabel')), {
+      target: { value: 'MATCH' },
+    });
+    fireEvent.change(screen.getByLabelText(t('ruleEditor.targetLabel')), {
+      target: { value: 'DIRECT' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: t('ruleEditor.saveButton') }));
+
+    await waitFor(() => {
+      expect(editorTextarea.value).toContain('MATCH,DIRECT');
+    });
+  });
+
+  it('editing an existing rule through the dialog replaces that line, byte-exact, through the real Worker', async () => {
+    const { editorTextarea } = await setUpWithRealDocument(
+      ['mode: rule', 'rules:', '  - DOMAIN-SUFFIX,old.example.com,DIRECT', '  - MATCH,PROXY'].join(
+        '\n',
+      ),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: t('ruleList.editButton', { index: 1 }) }));
+    fireEvent.change(screen.getByLabelText(t('ruleEditor.payloadLabel')), {
+      target: { value: 'new.example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: t('ruleEditor.saveButton') }));
+
+    await waitFor(() => {
+      expect(editorTextarea.value).toContain('DOMAIN-SUFFIX,new.example.com,DIRECT');
+    });
+    expect(editorTextarea.value).not.toContain('old.example.com');
+    expect(editorTextarea.value).toContain('MATCH,PROXY');
+  });
+});

@@ -1,4 +1,9 @@
-import { collectUnknownFields, type FormMode, type SchemaModule } from '@mcs/schema-core';
+import {
+  collectUnknownFields,
+  type FormMode,
+  type RuleTypeSpec,
+  type SchemaModule,
+} from '@mcs/schema-core';
 import { builtinAsStoredBundle, createRegistry } from '@mcs/schema-registry';
 import { AutoSaver } from '@mcs/storage';
 import type { StorageAdapter } from '@mcs/storage';
@@ -26,6 +31,7 @@ import { t } from '../i18n/index.js';
 import { IssuePanel } from '../issues/IssuePanel.js';
 import type { IssuePanelWorkerClient } from '../issues/IssuePanel.js';
 import { AppShell } from '../layout/AppShell.js';
+import { collectRuleEntityNames } from '../rules/entity-names.js';
 import { RuleListPage } from '../rules/RuleListPage.js';
 import type {
   ApplyPatchResponse,
@@ -157,6 +163,15 @@ export function ProjectPage({
     const raw = (documentValue as Record<string, unknown>).rules;
     return Array.isArray(raw) ? raw.filter((item): item is string => typeof item === 'string') : [];
   }, [documentValue]);
+
+  // Static alongside `modules` (v0.4.0 #8): the `rules` module's declarative
+  // catalog (ADR-021) drives every control `RuleEditor` renders — no rule
+  // *type* name is ever hardcoded in that component, only read from here.
+  const ruleCatalog: readonly RuleTypeSpec[] = useMemo(
+    () => modules.find((module) => module.manifest.id === 'rules')?.ruleTypes ?? [],
+    [modules],
+  );
+  const ruleEntityNames = useMemo(() => collectRuleEntityNames(documentValue), [documentValue]);
 
   const projectsRef = useRef(projects);
   projectsRef.current = projects;
@@ -419,21 +434,15 @@ export function ProjectPage({
   }
 
   /**
-   * A `ModuleFormPage` field edit — distinct from `handleFieldChange` above,
-   * which is project *metadata* (name/description/targetProfile), not
-   * document content. Always the `'set'` `IssueFix` kind (v0.3.0 #14):
-   * unlike a validator-suggested fix, a form edit's value is never
-   * schema-constant-shaped alone (a `tags`/`key-value` control edits an
-   * array/object), so `set-scalar` cannot carry every case this needs.
-   *
-   * `configText`/`documentValue` both refresh from the Worker afterward
-   * rather than being derived locally — the main thread never holds a
-   * `MihomoYamlDocument` to serialize or read a value from itself (v0.2.0's
-   * Worker boundary, reconfirmed by `schema-registry-boundary.test.ts` and
-   * `worker/client.test.ts`'s structural fences).
+   * Applies any `IssueFix` and refreshes every piece of state that depends
+   * on the document afterward. `configText`/`documentValue` both refresh
+   * from the Worker rather than being derived locally — the main thread
+   * never holds a `MihomoYamlDocument` to serialize or read a value from
+   * itself (v0.2.0's Worker boundary, reconfirmed by
+   * `schema-registry-boundary.test.ts` and `worker/client.test.ts`'s
+   * structural fences).
    */
-  async function handleDocumentFieldChange(path: ConfigPath, value: unknown): Promise<void> {
-    const patch: IssueFix = { kind: 'set', path, value };
+  async function applyFixAndRefresh(patch: IssueFix): Promise<void> {
     const patchResponse = await client.applyPatch(patch);
     setCanUndo(patchResponse.canUndo);
     setCanRedo(patchResponse.canRedo);
@@ -445,6 +454,18 @@ export function ProjectPage({
     configTextRef.current = serializeResponse.text;
     setConfigText(serializeResponse.text);
     configAutoSaverRef.current?.touch(now());
+  }
+
+  /**
+   * A `ModuleFormPage` field edit — distinct from `handleFieldChange` above,
+   * which is project *metadata* (name/description/targetProfile), not
+   * document content. Always the `'set'` `IssueFix` kind (v0.3.0 #14):
+   * unlike a validator-suggested fix, a form edit's value is never
+   * schema-constant-shaped alone (a `tags`/`key-value` control edits an
+   * array/object), so `set-scalar` cannot carry every case this needs.
+   */
+  async function handleDocumentFieldChange(path: ConfigPath, value: unknown): Promise<void> {
+    await applyFixAndRefresh({ kind: 'set', path, value });
   }
 
   async function handleConfirmDelete(id: string): Promise<void> {
@@ -567,7 +588,16 @@ export function ProjectPage({
                   onFieldChange={(path, value) => void handleDocumentFieldChange(path, value)}
                 />
               )}
-              {mainView === 'rules' && <RuleListPage rules={rules} />}
+              {mainView === 'rules' && (
+                <RuleListPage
+                  rules={rules}
+                  catalog={ruleCatalog}
+                  proxyTargetNames={ruleEntityNames.proxyTargetNames}
+                  ruleProviderNames={ruleEntityNames.ruleProviderNames}
+                  subRuleGroupNames={ruleEntityNames.subRuleGroupNames}
+                  onApplyFix={applyFixAndRefresh}
+                />
+              )}
             </div>
           </div>
           <DiffPanel

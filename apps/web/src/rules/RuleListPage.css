@@ -1,3 +1,15 @@
+.rule-list-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mcs-spacing-sm);
+  height: 100%;
+}
+
+.rule-list-page__toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .rule-list {
   overflow-y: auto;
   height: 100%;
@@ -30,6 +42,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+}
+
+.rule-list__edit-button {
+  flex-shrink: 0;
 }
 
 .rule-list__empty {

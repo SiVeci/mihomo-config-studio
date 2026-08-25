@@ -1,0 +1,51 @@
+.rule-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mcs-spacing-sm);
+  max-width: 480px;
+  border: 1px solid var(--mcs-color-hairline);
+  border-radius: var(--mcs-rounded-sm);
+  padding: var(--mcs-spacing-sm);
+  background-color: var(--mcs-color-surface-card);
+}
+
+.rule-editor__title {
+  font-family: var(--mcs-font-family-title-sm);
+  font-size: var(--mcs-font-size-title-sm);
+  margin: 0;
+}
+
+.rule-editor__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mcs-spacing-xxs);
+}
+
+.rule-editor__hint {
+  color: var(--mcs-color-text-muted);
+  font-size: var(--mcs-font-size-body-sm);
+  margin: 0;
+}
+
+.rule-editor__params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mcs-spacing-sm);
+  border: 1px solid var(--mcs-color-hairline);
+  border-radius: var(--mcs-rounded-xs);
+  padding: var(--mcs-spacing-xs) var(--mcs-spacing-sm);
+}
+
+.rule-editor__param {
+  display: flex;
+  align-items: center;
+  gap: var(--mcs-spacing-xxs);
+  font-family: monospace;
+  font-size: var(--mcs-font-size-body-sm);
+}
+
+.rule-editor__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mcs-spacing-xs);
+}
