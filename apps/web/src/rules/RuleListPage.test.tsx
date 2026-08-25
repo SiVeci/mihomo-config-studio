@@ -36,6 +36,7 @@ function baseProps(overrides: Partial<RuleListPageProps> = {}): RuleListPageProp
     ruleProviderNames: [],
     subRuleGroupNames: [],
     onApplyFix: vi.fn().mockResolvedValue(undefined),
+    onApplyBatch: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -492,5 +493,189 @@ describe('RuleListPage / drag and keyboard reorder (v0.4.0 #9, FR-RULE-02, NFR-A
     fireEvent.drop(rows[0] as HTMLElement, { dataTransfer });
 
     expect(onApplyFix).not.toHaveBeenCalled();
+  });
+});
+
+describe('RuleListPage / batch actions (v0.4.0 #10, FR-RULE-03, ADR-023)', () => {
+  const FOUR_RULES = ['MATCH,A', 'MATCH,B', 'MATCH,C', 'MATCH,D'];
+
+  it('shows no batch action bar until at least one row is checked', () => {
+    render(
+      <RuleListPage
+        {...baseProps({
+          rules: FOUR_RULES,
+          rowHeight: ROW_HEIGHT,
+          containerHeight: CONTAINER_HEIGHT,
+        })}
+      />,
+    );
+    expect(screen.queryByRole('toolbar')).toBeNull();
+  });
+
+  it('checking a row shows the batch bar with the correct selected count', () => {
+    render(
+      <RuleListPage
+        {...baseProps({
+          rules: FOUR_RULES,
+          rowHeight: ROW_HEIGHT,
+          containerHeight: CONTAINER_HEIGHT,
+        })}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: t('ruleList.batchCheckboxLabel', { index: 1 }) }),
+    );
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: t('ruleList.batchCheckboxLabel', { index: 3 }) }),
+    );
+
+    expect(screen.getByRole('toolbar')).not.toBeNull();
+    expect(screen.getByText(t('ruleList.batchSelectedCount', { count: 2 }))).not.toBeNull();
+  });
+
+  it('checking a checkbox does not also select the row for keyboard reorder', () => {
+    render(
+      <RuleListPage
+        {...baseProps({
+          rules: FOUR_RULES,
+          rowHeight: ROW_HEIGHT,
+          containerHeight: CONTAINER_HEIGHT,
+        })}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: t('ruleList.batchCheckboxLabel', { index: 1 }) }),
+    );
+
+    expect(screen.getAllByRole('row')[0]?.getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('batch move up sends a single move patch for the checked block via onApplyBatch, then clears the selection', async () => {
+    const onApplyBatch = vi
+      .fn<(patches: IssueFix[]) => Promise<void>>()
+      .mockResolvedValue(undefined);
+    render(
+      <RuleListPage
+        {...baseProps({
+          rules: FOUR_RULES,
+          rowHeight: ROW_HEIGHT,
+          containerHeight: CONTAINER_HEIGHT,
+          onApplyBatch,
+        })}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: t('ruleList.batchCheckboxLabel', { index: 2 }) }),
+    );
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: t('ruleList.batchCheckboxLabel', { index: 3 }) }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: t('ruleList.batchMoveUpButton') }));
+
+    await vi.waitFor(() => {
+      expect(onApplyBatch).toHaveBeenCalledExactlyOnceWith([
+        { kind: 'move', path: ['rules'], from: 0, to: 2 },
+      ]);
+    });
+    await vi.waitFor(() => {
+      expect(screen.queryByRole('toolbar')).toBeNull();
+    });
+  });
+
+  it('batch delete sends descending-order remove patches for the checked rows', async () => {
+    const onApplyBatch = vi
+      .fn<(patches: IssueFix[]) => Promise<void>>()
+      .mockResolvedValue(undefined);
+    render(
+      <RuleListPage
+        {...baseProps({
+          rules: FOUR_RULES,
+          rowHeight: ROW_HEIGHT,
+          containerHeight: CONTAINER_HEIGHT,
+          onApplyBatch,
+        })}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: t('ruleList.batchCheckboxLabel', { index: 1 }) }),
+    );
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: t('ruleList.batchCheckboxLabel', { index: 3 }) }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: t('ruleList.batchDeleteButton') }));
+
+    await vi.waitFor(() => {
+      expect(onApplyBatch).toHaveBeenCalledExactlyOnceWith([
+        { kind: 'remove', path: ['rules', 2] },
+        { kind: 'remove', path: ['rules', 0] },
+      ]);
+    });
+  });
+
+  it('batch copy sends append + move patches for the checked rows', async () => {
+    const onApplyBatch = vi
+      .fn<(patches: IssueFix[]) => Promise<void>>()
+      .mockResolvedValue(undefined);
+    render(
+      <RuleListPage
+        {...baseProps({
+          rules: FOUR_RULES,
+          rowHeight: ROW_HEIGHT,
+          containerHeight: CONTAINER_HEIGHT,
+          onApplyBatch,
+        })}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: t('ruleList.batchCheckboxLabel', { index: 1 }) }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: t('ruleList.batchCopyButton') }));
+
+    await vi.waitFor(() => {
+      expect(onApplyBatch).toHaveBeenCalledExactlyOnceWith([
+        { kind: 'append', path: ['rules'], value: 'MATCH,A' },
+        { kind: 'move', path: ['rules'], from: 4, to: 1 },
+      ]);
+    });
+  });
+
+  it('batch replace target is disabled until a target is typed, then sends set patches for the checked rows', async () => {
+    const onApplyBatch = vi
+      .fn<(patches: IssueFix[]) => Promise<void>>()
+      .mockResolvedValue(undefined);
+    render(
+      <RuleListPage
+        {...baseProps({
+          rules: FOUR_RULES,
+          rowHeight: ROW_HEIGHT,
+          containerHeight: CONTAINER_HEIGHT,
+          onApplyBatch,
+        })}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: t('ruleList.batchCheckboxLabel', { index: 1 }) }),
+    );
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: t('ruleList.batchCheckboxLabel', { index: 2 }) }),
+    );
+
+    const applyButton = screen.getByRole('button', {
+      name: t('ruleList.batchReplaceTargetApplyButton'),
+    });
+    expect(applyButton).toHaveProperty('disabled', true);
+
+    fireEvent.change(screen.getByLabelText(t('ruleList.batchReplaceTargetLabel')), {
+      target: { value: 'PROXY' },
+    });
+    expect(applyButton).toHaveProperty('disabled', false);
+    fireEvent.click(applyButton);
+
+    await vi.waitFor(() => {
+      expect(onApplyBatch).toHaveBeenCalledExactlyOnceWith([
+        { kind: 'set', path: ['rules', 0], value: 'MATCH,PROXY' },
+        { kind: 'set', path: ['rules', 1], value: 'MATCH,PROXY' },
+      ]);
+    });
   });
 });

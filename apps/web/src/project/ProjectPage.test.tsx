@@ -55,6 +55,12 @@ const FAKE_CLIENT: FakeClient = {
     canUndo: false,
     canRedo: false,
   }),
+  applyBatch: async (_patches) => ({
+    type: 'applyBatch',
+    requestId: 'fake',
+    canUndo: false,
+    canRedo: false,
+  }),
   value: async () => ({ type: 'value', requestId: 'fake', value: {} }),
   undo: async () => ({
     type: 'undo',
@@ -1221,6 +1227,96 @@ describe('ProjectPage / drag and keyboard reorder (v0.4.0 #9, FR-RULE-02, NFR-A1
     const status = await screen.findByRole('status');
     await waitFor(() => {
       expect(status.textContent).toBe(t('ruleList.movedAnnouncement', { index: 2 }));
+    });
+  });
+});
+
+describe('ProjectPage / batch actions (v0.4.0 #10, FR-RULE-03, ADR-023, exit condition 4)', () => {
+  const BATCH_YAML = [
+    'mode: rule',
+    'rules:',
+    '  - DOMAIN-SUFFIX,a.com,DIRECT',
+    '  - DOMAIN-SUFFIX,b.com,DIRECT',
+    '  - DOMAIN-SUFFIX,c.com,DIRECT',
+  ].join('\n');
+
+  async function setUpOnRulesTab(yaml: string) {
+    const adapter = new MemoryStorageAdapter();
+    const client = new WorkerClient(new RealWorker());
+    render(<ProjectPage client={client} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+    const editorTextarea = screen.getByLabelText<HTMLTextAreaElement>(t('editor.title'));
+    await waitFor(() => expect(editorTextarea.value).toBe(DEFAULT_PROJECT_CONFIG_TEXT));
+    fireEvent.change(editorTextarea, { target: { value: yaml } });
+    fireEvent.click(await screen.findByRole('tab', { name: t('project.rulesViewTab') }));
+    await screen.findByRole('grid', { name: t('ruleList.label') });
+    return { editorTextarea };
+  }
+
+  it('selecting 3 rules, batch-replacing their target, one undo restores the pre-batch text byte-exact, and redo reapplies it byte-exact', async () => {
+    const { editorTextarea } = await setUpOnRulesTab(BATCH_YAML);
+    const beforeText = editorTextarea.value;
+
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: t('ruleList.batchCheckboxLabel', { index: 1 }) }),
+    );
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: t('ruleList.batchCheckboxLabel', { index: 2 }) }),
+    );
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: t('ruleList.batchCheckboxLabel', { index: 3 }) }),
+    );
+    fireEvent.change(screen.getByLabelText(t('ruleList.batchReplaceTargetLabel')), {
+      target: { value: 'PROXY' },
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: t('ruleList.batchReplaceTargetApplyButton') }),
+    );
+
+    await waitFor(() => {
+      expect(editorTextarea.value).toContain('DOMAIN-SUFFIX,a.com,PROXY');
+    });
+    const afterText = editorTextarea.value;
+    expect(afterText).toContain('DOMAIN-SUFFIX,b.com,PROXY');
+    expect(afterText).toContain('DOMAIN-SUFFIX,c.com,PROXY');
+    expect(afterText).not.toBe(beforeText);
+
+    // One undo — not three — reverts the whole batch.
+    fireEvent.click(screen.getByRole('button', { name: t('project.undoButton') }));
+    await waitFor(() => {
+      expect(editorTextarea.value).toBe(beforeText);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: t('project.redoButton') }));
+    await waitFor(() => {
+      expect(editorTextarea.value).toBe(afterText);
+    });
+  });
+
+  it('batch-deleting 2 of 3 rows through the real UI removes both in one step, and one undo restores all three byte-exact', async () => {
+    const { editorTextarea } = await setUpOnRulesTab(BATCH_YAML);
+    const beforeText = editorTextarea.value;
+
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: t('ruleList.batchCheckboxLabel', { index: 1 }) }),
+    );
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: t('ruleList.batchCheckboxLabel', { index: 3 }) }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: t('ruleList.batchDeleteButton') }));
+
+    await waitFor(() => {
+      expect(editorTextarea.value).not.toContain('a.com');
+    });
+    expect(editorTextarea.value).not.toContain('c.com');
+    expect(editorTextarea.value).toContain('b.com');
+
+    fireEvent.click(screen.getByRole('button', { name: t('project.undoButton') }));
+    await waitFor(() => {
+      expect(editorTextarea.value).toBe(beforeText);
     });
   });
 });

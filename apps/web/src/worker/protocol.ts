@@ -54,6 +54,17 @@ export interface ApplyPatchRequest {
   requestId: string;
   patch: IssueFix;
 }
+/**
+ * A batch of patches applied as one atomic, single-undo-step edit (v0.4.0
+ * #10, ADR-023) — never merged with an adjacent edit (`historyStack.record`
+ * gets no `mergeKey`) and never partially applied (a failing patch restores
+ * the document to its pre-batch text before the error surfaces).
+ */
+export interface ApplyBatchRequest {
+  type: 'applyBatch';
+  requestId: string;
+  patches: IssueFix[];
+}
 export interface ValidateRequest {
   type: 'validate';
   requestId: string;
@@ -100,6 +111,7 @@ export interface PreviewProviderRequest {
 export type WorkerRequest =
   | ParseRequest
   | ApplyPatchRequest
+  | ApplyBatchRequest
   | ValidateRequest
   | DiffRequest
   | SerializeRequest
@@ -120,6 +132,13 @@ export interface ApplyPatchResponse {
   type: 'applyPatch';
   requestId: string;
   /** So the caller can drive undo/redo button disabled state without a separate round trip (v0.3.0 #15). */
+  canUndo: boolean;
+  canRedo: boolean;
+}
+/** Same shape as `ApplyPatchResponse` — one document-write response either way, batch or single (v0.4.0 #10). */
+export interface ApplyBatchResponse {
+  type: 'applyBatch';
+  requestId: string;
   canUndo: boolean;
   canRedo: boolean;
 }
@@ -207,6 +226,7 @@ export interface WorkerErrorResponse {
 export type WorkerResponse =
   | ParseResponse
   | ApplyPatchResponse
+  | ApplyBatchResponse
   | ValidateResponse
   | DiffResponse
   | SerializeResponse
@@ -245,6 +265,8 @@ export function handleWorkerRequest(state: WorkerState, request: WorkerRequest):
       return handleParse(state, request);
     case 'applyPatch':
       return handleApplyPatch(state, request);
+    case 'applyBatch':
+      return handleApplyBatch(state, request);
     case 'validate':
       return handleValidate(state, request);
     case 'diff':
@@ -308,6 +330,52 @@ function handleApplyPatch(
     );
     return {
       type: 'applyPatch',
+      requestId: request.requestId,
+      canUndo: state.historyStack.canUndo,
+      canRedo: state.historyStack.canRedo,
+    };
+  } catch (error) {
+    return errorResponseFrom(request.requestId, error);
+  }
+}
+
+/**
+ * All-or-nothing (ADR-023): if any patch in the batch throws, the live
+ * document must not keep whatever prefix of the batch already applied —
+ * `historyStack.record()` on its own only guarantees no *history entry* gets
+ * recorded on a throw (see its own doc comment), it does not undo partial
+ * mutation of the `MihomoYamlDocument` instance itself. The inner
+ * try/catch here restores `state.parseResult` to a fresh re-parse of the
+ * pre-batch text — the same "restore by re-parsing a known-good text
+ * snapshot" approach `handleUndo`/`handleRedo` already use — before
+ * re-throwing, so `record()` still sees the exception (and correctly
+ * records nothing) while the live document ends up untouched either way.
+ *
+ * No `mergeKey` is passed to `record()`: a batch must never merge with an
+ * adjacent edit, or "one undo reverts the whole batch" would stop being true.
+ */
+function handleApplyBatch(
+  state: WorkerState,
+  request: ApplyBatchRequest,
+): ApplyBatchResponse | WorkerErrorResponse {
+  const document = state.parseResult?.document;
+  if (!document) return noDocumentError(request.requestId);
+  const beforeText = document.toText();
+  try {
+    state.historyStack.record(
+      document,
+      `batch:${request.patches.map((patch) => patch.kind).join(',')}`,
+      () => {
+        try {
+          for (const patch of request.patches) applyIssueFix(document, patch);
+        } catch (error) {
+          state.parseResult = MihomoYamlDocument.parse(beforeText);
+          throw error;
+        }
+      },
+    );
+    return {
+      type: 'applyBatch',
       requestId: request.requestId,
       canUndo: state.historyStack.canUndo,
       canRedo: state.historyStack.canRedo,

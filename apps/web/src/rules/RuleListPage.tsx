@@ -12,6 +12,12 @@ import {
 
 import { t } from '../i18n/index.js';
 import type { IssueFix } from '../worker/protocol.js';
+import {
+  buildBatchCopyPatches,
+  buildBatchDeletePatches,
+  buildBatchMovePatches,
+  buildBatchReplaceTargetPatches,
+} from './batch.js';
 import { RuleEditor } from './RuleEditor.js';
 import { computeReorderTarget, type ReorderOperation } from './reorder.js';
 import './RuleListPage.css';
@@ -49,6 +55,8 @@ export interface RuleListPageProps {
   readonly subRuleGroupNames: readonly string[];
   /** Same "apply then refetch value+serialize" contract `ProjectPage.handleDocumentFieldChange` already uses for form edits — rule create/edit reuses it rather than adding a parallel write path. */
   readonly onApplyFix: (fix: IssueFix) => Promise<void>;
+  /** One atomic, single-undo-step write for a whole batch of patches (v0.4.0 #10, ADR-023) — the multi-select action bar's only write path. */
+  readonly onApplyBatch: (patches: IssueFix[]) => Promise<void>;
 }
 
 /**
@@ -74,6 +82,7 @@ export function RuleListPage({
   ruleProviderNames,
   subRuleGroupNames,
   onApplyFix,
+  onApplyBatch,
 }: RuleListPageProps): ReactNode {
   const containerRef = useRef<HTMLDivElement>(null);
   const [measuredHeight, setMeasuredHeight] = useState(0);
@@ -84,6 +93,8 @@ export function RuleListPage({
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [announcement, setAnnouncement] = useState('');
+  const [checkedIndices, setCheckedIndices] = useState<ReadonlySet<number>>(new Set());
+  const [replaceTargetInput, setReplaceTargetInput] = useState('');
 
   useEffect(() => {
     if (containerHeightProp !== undefined) return;
@@ -213,6 +224,46 @@ export function RuleListPage({
     setDragOverIndex(null);
   }
 
+  function toggleChecked(index: number): void {
+    setCheckedIndices((previous) => {
+      const next = new Set(previous);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
+
+  /**
+   * Every batch action clears the selection afterward: a batch can change
+   * array length (copy) or shift positions (move, delete), so whatever the
+   * checked indices meant before no longer reliably names the same rows —
+   * clearing is safer than trying to remap them.
+   */
+  async function runBatch(patches: IssueFix[]): Promise<void> {
+    if (patches.length === 0) return;
+    await onApplyBatch(patches);
+    setCheckedIndices(new Set());
+  }
+
+  async function handleBatchMove(direction: 'up' | 'down'): Promise<void> {
+    await runBatch(buildBatchMovePatches([...checkedIndices], rules.length, direction));
+  }
+
+  async function handleBatchCopy(): Promise<void> {
+    await runBatch(buildBatchCopyPatches([...checkedIndices], rules));
+  }
+
+  async function handleBatchDelete(): Promise<void> {
+    await runBatch(buildBatchDeletePatches([...checkedIndices]));
+  }
+
+  async function handleBatchReplaceTarget(): Promise<void> {
+    const newTarget = replaceTargetInput.trim();
+    if (!newTarget) return;
+    await runBatch(buildBatchReplaceTargetPatches([...checkedIndices], rules, catalog, newTarget));
+    setReplaceTargetInput('');
+  }
+
   const visibleRules = rules.slice(window_.startIndex, window_.endIndex);
   const editingText = editingIndex !== null ? rules[editingIndex] : undefined;
 
@@ -223,6 +274,51 @@ export function RuleListPage({
           {t('ruleList.addButton')}
         </button>
       </div>
+
+      {checkedIndices.size > 0 && (
+        <div
+          className="rule-list-page__batch-bar"
+          role="toolbar"
+          aria-label={t('ruleList.batchToolbarLabel')}
+        >
+          <span className="rule-list-page__batch-count">
+            {t('ruleList.batchSelectedCount', { count: checkedIndices.size })}
+          </span>
+          <button type="button" onClick={() => void handleBatchMove('up')}>
+            {t('ruleList.batchMoveUpButton')}
+          </button>
+          <button type="button" onClick={() => void handleBatchMove('down')}>
+            {t('ruleList.batchMoveDownButton')}
+          </button>
+          <button type="button" onClick={() => void handleBatchCopy()}>
+            {t('ruleList.batchCopyButton')}
+          </button>
+          <button type="button" onClick={() => void handleBatchDelete()}>
+            {t('ruleList.batchDeleteButton')}
+          </button>
+          <label className="rule-list-page__batch-replace">
+            {t('ruleList.batchReplaceTargetLabel')}
+            <input
+              type="text"
+              list="rule-list-batch-targets"
+              value={replaceTargetInput}
+              onChange={(event) => setReplaceTargetInput(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={replaceTargetInput.trim() === ''}
+            onClick={() => void handleBatchReplaceTarget()}
+          >
+            {t('ruleList.batchReplaceTargetApplyButton')}
+          </button>
+          <datalist id="rule-list-batch-targets">
+            {proxyTargetNames.map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
+        </div>
+      )}
 
       {rules.length === 0 ? (
         <p className="rule-list__empty">{t('ruleList.emptyState')}</p>
@@ -271,6 +367,14 @@ export function RuleListPage({
                 onDrop={handleDrop(index)}
                 onDragEnd={handleDragEnd}
               >
+                <input
+                  type="checkbox"
+                  className="rule-list__checkbox"
+                  aria-label={t('ruleList.batchCheckboxLabel', { index: index + 1 })}
+                  checked={checkedIndices.has(index)}
+                  onChange={() => toggleChecked(index)}
+                  onClick={(event) => event.stopPropagation()}
+                />
                 <span className="rule-list__index">{index + 1}</span>
                 <span className="rule-list__text">{rule}</span>
                 {isDragTarget && (

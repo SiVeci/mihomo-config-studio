@@ -82,6 +82,28 @@ describe('WorkerClient request/response correlation', () => {
     expect(valued.value).toMatchObject({ port: 7891 });
   });
 
+  it('round-trips applyBatch as one atomic write (v0.4.0 #10)', async () => {
+    const worker = new FakeWorker();
+    const client = new WorkerClient(worker);
+    await client.parse('mode: rule\nrules:\n  - MATCH,A\n  - MATCH,B\n');
+
+    const batched = await client.applyBatch([
+      { kind: 'set', path: ['rules', 0], value: 'MATCH,A2' },
+      { kind: 'set', path: ['rules', 1], value: 'MATCH,B2' },
+    ]);
+    expect(batched).toMatchObject({ type: 'applyBatch', canUndo: true, canRedo: false });
+
+    const serialized = await client.serialize();
+    expect(serialized.text).toContain('MATCH,A2');
+    expect(serialized.text).toContain('MATCH,B2');
+
+    // One undo reverts the whole batch in a single step, not one step per patch.
+    const undone = await client.undo();
+    expect(undone.text).toContain('MATCH,A\n');
+    expect(undone.text).toContain('MATCH,B\n');
+    expect(undone.canUndo).toBe(false);
+  });
+
   it('round-trips undo / redo against a parsed document, real HistoryStack included (v0.3.0 #15)', async () => {
     const worker = new FakeWorker();
     const client = new WorkerClient(worker);

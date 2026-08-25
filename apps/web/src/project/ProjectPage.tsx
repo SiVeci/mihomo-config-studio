@@ -34,6 +34,7 @@ import { AppShell } from '../layout/AppShell.js';
 import { collectRuleEntityNames } from '../rules/entity-names.js';
 import { RuleListPage } from '../rules/RuleListPage.js';
 import type {
+  ApplyBatchResponse,
   ApplyPatchResponse,
   ConfigPath,
   IssueFix,
@@ -81,6 +82,7 @@ const MAIN_VIEW_TAB_LABEL_KEYS: Record<MainView, 'project.formViewTab' | 'projec
  */
 export interface ModuleFormWorkerClient {
   applyPatch(patch: IssueFix): Promise<ApplyPatchResponse>;
+  applyBatch(patches: IssueFix[]): Promise<ApplyBatchResponse>;
   value(): Promise<ValueResponse>;
   undo(): Promise<UndoResponse>;
   redo(): Promise<RedoResponse>;
@@ -434,18 +436,17 @@ export function ProjectPage({
   }
 
   /**
-   * Applies any `IssueFix` and refreshes every piece of state that depends
-   * on the document afterward. `configText`/`documentValue` both refresh
-   * from the Worker rather than being derived locally — the main thread
-   * never holds a `MihomoYamlDocument` to serialize or read a value from
-   * itself (v0.2.0's Worker boundary, reconfirmed by
+   * Refreshes every piece of state that depends on the document, after any
+   * write (`applyPatch` or `applyBatch`). `configText`/`documentValue` both
+   * refresh from the Worker rather than being derived locally — the main
+   * thread never holds a `MihomoYamlDocument` to serialize or read a value
+   * from itself (v0.2.0's Worker boundary, reconfirmed by
    * `schema-registry-boundary.test.ts` and `worker/client.test.ts`'s
    * structural fences).
    */
-  async function applyFixAndRefresh(patch: IssueFix): Promise<void> {
-    const patchResponse = await client.applyPatch(patch);
-    setCanUndo(patchResponse.canUndo);
-    setCanRedo(patchResponse.canRedo);
+  async function refreshAfterWrite(canUndo: boolean, canRedo: boolean): Promise<void> {
+    setCanUndo(canUndo);
+    setCanRedo(canRedo);
     const [valueResponse, serializeResponse] = await Promise.all([
       client.value(),
       client.serialize(),
@@ -454,6 +455,17 @@ export function ProjectPage({
     configTextRef.current = serializeResponse.text;
     setConfigText(serializeResponse.text);
     configAutoSaverRef.current?.touch(now());
+  }
+
+  async function applyFixAndRefresh(patch: IssueFix): Promise<void> {
+    const response = await client.applyPatch(patch);
+    await refreshAfterWrite(response.canUndo, response.canRedo);
+  }
+
+  /** One atomic, single-undo-step write for a whole batch of patches (v0.4.0 #10, ADR-023) — see `client.applyBatch`'s own doc comment. */
+  async function applyBatchAndRefresh(patches: IssueFix[]): Promise<void> {
+    const response = await client.applyBatch(patches);
+    await refreshAfterWrite(response.canUndo, response.canRedo);
   }
 
   /**
@@ -596,6 +608,7 @@ export function ProjectPage({
                   ruleProviderNames={ruleEntityNames.ruleProviderNames}
                   subRuleGroupNames={ruleEntityNames.subRuleGroupNames}
                   onApplyFix={applyFixAndRefresh}
+                  onApplyBatch={applyBatchAndRefresh}
                 />
               )}
             </div>

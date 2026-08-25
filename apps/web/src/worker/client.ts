@@ -1,5 +1,6 @@
 import { VALIDATION_DEBOUNCE_MS } from './protocol.js';
 import type {
+  ApplyBatchResponse,
   ApplyPatchResponse,
   ConfigPath,
   DiffResponse,
@@ -87,6 +88,15 @@ export class WorkerClient {
       requestId: this.#makeRequestId(),
       patch,
     }) as Promise<ApplyPatchResponse>;
+  }
+
+  /** One atomic, single-undo-step edit for the whole batch (v0.4.0 #10, ADR-023) — never partially applied, never merged with an adjacent edit. */
+  applyBatch(patches: IssueFix[]): Promise<ApplyBatchResponse> {
+    return this.#send({
+      type: 'applyBatch',
+      requestId: this.#makeRequestId(),
+      patches,
+    }) as Promise<ApplyBatchResponse>;
   }
 
   validate(): Promise<ValidateResponse> {

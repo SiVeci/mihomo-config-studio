@@ -293,6 +293,121 @@ rules:
   });
 });
 
+describe('handleWorkerRequest / applyBatch (v0.4.0 #10, ADR-023)', () => {
+  it('reports NO_DOCUMENT before any successful parse', () => {
+    const state = createWorkerState();
+    const response = handleWorkerRequest(state, {
+      type: 'applyBatch',
+      requestId: 'r1',
+      patches: [{ kind: 'set-scalar', path: ['port'], value: 1 }],
+    });
+
+    expect(response).toEqual({
+      type: 'error',
+      requestId: 'r1',
+      code: 'NO_DOCUMENT',
+      messageKey: 'worker.error.noDocument',
+    });
+  });
+
+  it('applies every patch in the batch and records exactly one history entry (one undo reverts all of them)', () => {
+    const state = parsed(`mode: rule
+rules:
+  - MATCH,A
+  - MATCH,B
+  - MATCH,C
+`);
+    const response = handleWorkerRequest(state, {
+      type: 'applyBatch',
+      requestId: 'r1',
+      patches: [
+        { kind: 'set', path: ['rules', 0], value: 'MATCH,A2' },
+        { kind: 'set', path: ['rules', 1], value: 'MATCH,B2' },
+        { kind: 'set', path: ['rules', 2], value: 'MATCH,C2' },
+      ],
+    });
+
+    expect(response).toEqual({
+      type: 'applyBatch',
+      requestId: 'r1',
+      canUndo: true,
+      canRedo: false,
+    });
+
+    const serialized = handleWorkerRequest(state, { type: 'serialize', requestId: 'r2' });
+    if (serialized.type !== 'serialize') throw new Error('unreachable');
+    expect(serialized.text).toContain('MATCH,A2');
+    expect(serialized.text).toContain('MATCH,B2');
+    expect(serialized.text).toContain('MATCH,C2');
+
+    const undone = handleWorkerRequest(state, { type: 'undo', requestId: 'r3' });
+    if (undone.type !== 'undo') throw new Error('unreachable');
+    // A single undo restores every one of the three patches at once — this is
+    // the whole point of a batch: not three history entries collapsing into
+    // three undo presses, but one.
+    expect(undone.canUndo).toBe(false);
+    expect(undone.text).toContain('MATCH,A\n');
+    expect(undone.text).toContain('MATCH,B\n');
+    expect(undone.text).toContain('MATCH,C\n');
+  });
+
+  it('never merges a batch into an adjacent single-patch edit, even inside the same merge window', () => {
+    const state = parsed(`mode: rule
+rules:
+  - MATCH,A
+  - MATCH,B
+`);
+    handleWorkerRequest(state, {
+      type: 'applyPatch',
+      requestId: 'r1',
+      patch: { kind: 'set', path: ['rules', 0], value: 'MATCH,A2' },
+    });
+    handleWorkerRequest(state, {
+      type: 'applyBatch',
+      requestId: 'r2',
+      patches: [{ kind: 'set', path: ['rules', 1], value: 'MATCH,B2' }],
+    });
+
+    // Two separate history entries, not one merged entry: undoing once must
+    // only revert the batch, leaving the earlier single-patch edit intact.
+    const undone = handleWorkerRequest(state, { type: 'undo', requestId: 'r3' });
+    if (undone.type !== 'undo') throw new Error('unreachable');
+    expect(undone.canUndo).toBe(true);
+    expect(undone.text).toContain('MATCH,A2');
+    expect(undone.text).toContain('MATCH,B\n');
+  });
+
+  it('is all-or-nothing: a failing patch mid-batch leaves the document byte-identical to before the batch, with no history entry recorded', () => {
+    const state = parsed(`mode: rule
+rules:
+  - MATCH,A
+  - MATCH,B
+`);
+    const beforeSerialize = handleWorkerRequest(state, { type: 'serialize', requestId: 'r0' });
+    if (beforeSerialize.type !== 'serialize') throw new Error('unreachable');
+    const beforeText = beforeSerialize.text;
+    const canUndoBefore = state.historyStack.canUndo;
+
+    const response = handleWorkerRequest(state, {
+      type: 'applyBatch',
+      requestId: 'r1',
+      patches: [
+        { kind: 'set', path: ['rules', 0], value: 'MATCH,A2' }, // succeeds
+        { kind: 'set-scalar', path: ['does', 'not', 'exist'], value: 1 }, // fails
+        { kind: 'set', path: ['rules', 1], value: 'MATCH,B2' }, // never reached
+      ],
+    });
+
+    expect(response).toMatchObject({ type: 'error', code: 'YAML_PATH_NOT_FOUND' });
+
+    const afterSerialize = handleWorkerRequest(state, { type: 'serialize', requestId: 'r2' });
+    if (afterSerialize.type !== 'serialize') throw new Error('unreachable');
+    expect(afterSerialize.text).toBe(beforeText);
+    expect(afterSerialize.text).not.toContain('MATCH,A2');
+    expect(state.historyStack.canUndo).toBe(canUndoBefore);
+  });
+});
+
 describe('handleWorkerRequest / undo, redo (FR-PROJ-04, v0.3.0 #15)', () => {
   it('undo reports NO_DOCUMENT before any successful parse', () => {
     const state = createWorkerState();

@@ -10,6 +10,31 @@
   justify-content: flex-end;
 }
 
+.rule-list-page__batch-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mcs-spacing-sm);
+  border: 1px solid var(--mcs-color-primary-active);
+  border-radius: var(--mcs-rounded-xs);
+  padding: var(--mcs-spacing-xs) var(--mcs-spacing-sm);
+  background-color: var(--mcs-color-primary-disabled);
+}
+
+.rule-list-page__batch-count {
+  font-weight: 500;
+}
+
+.rule-list-page__batch-replace {
+  display: flex;
+  align-items: center;
+  gap: var(--mcs-spacing-xxs);
+}
+
+.rule-list__checkbox {
+  flex-shrink: 0;
+}
+
 .rule-list {
   overflow-y: auto;
   height: 100%;
