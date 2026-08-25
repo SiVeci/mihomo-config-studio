@@ -235,6 +235,47 @@ export interface ModuleExample {
   path: string;
 }
 
+/**
+ * The closed vocabulary a rule-type catalog entry's payload can be — drives
+ * which control the rule editor renders (#8), the same way `ControlType`
+ * drives ordinary field rendering. A payload kind names a *shape*, never a
+ * specific rule type: adding a new rule type with an existing shape (e.g. a
+ * hypothetical future domain-matching variant) needs no new kind and no
+ * application code change (ADR-021, FR-SCHEMA-06 applied to rules).
+ */
+export type RulePayloadKind =
+  | 'domain'
+  | 'domain-suffix'
+  | 'ipcidr'
+  | 'port'
+  | 'process'
+  | 'geo'
+  | 'rule-set'
+  | 'sub-rule'
+  | 'none';
+
+/**
+ * One entry in a declarative rule-type catalog (ADR-021): data describing
+ * how a rule line's TYPE token (`config-model/src/rule-line.ts`'s
+ * `ParsedRuleLine.type`) should be edited, never a parser — the line itself
+ * is already split into fragments by `parseRuleLine`, this only says what
+ * those fragments *mean*. A type this app's catalog does not list is not an
+ * error: `buildRulePlan` falls back to raw-string editing for it (FR-RULE-05).
+ */
+export interface RuleTypeSpec {
+  /** Upper-case, matching `ParsedRuleLine.type` exactly (e.g. `DOMAIN-SUFFIX`). */
+  type: string;
+  payloadKind: RulePayloadKind;
+  /** False only for types that can be a bare target with no payload segment at all (MATCH, SUB-RULE). */
+  needsPayload: boolean;
+  /** Documented optional trailing parameters this type accepts (e.g. `no-resolve`, `src`) — empty when none apply. */
+  params: string[];
+  /** Official documentation URL (FR-SCHEMA-04's rule-side counterpart). */
+  docsUrl?: string;
+  since?: string;
+  safety?: SafetyLevel;
+}
+
 /** Locale codes a module's own i18n resources may provide (mirrors ADR-016's fixed set). */
 export type ModuleLocale = 'zh-CN' | 'en';
 
@@ -260,4 +301,6 @@ export interface SchemaModule {
   rules?: ValidationRule[];
   examples?: ModuleExample[];
   i18n?: ModuleI18n;
+  /** A declarative rule-type catalog (ADR-021, v0.4.0 #3) — only `rules`/`sub-rules` carry this. */
+  ruleTypes?: RuleTypeSpec[];
 }

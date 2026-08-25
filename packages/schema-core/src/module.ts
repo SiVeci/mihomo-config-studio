@@ -1,6 +1,12 @@
 import type { MessageParams } from '@mcs/yaml-engine';
 
-import type { ModuleExample, ModuleI18n, SchemaModule, ValidationRule } from './types.js';
+import type {
+  ModuleExample,
+  ModuleI18n,
+  RuleTypeSpec,
+  SchemaModule,
+  ValidationRule,
+} from './types.js';
 
 /**
  * A problem found in a `SchemaModule`'s own structure — not in a Mihomo
@@ -21,11 +27,23 @@ export interface ModuleShapeIssue {
 }
 
 const EXAMPLE_KINDS = ['valid', 'invalid', 'edge', 'unknown-fields'] as const;
+const RULE_PAYLOAD_KINDS = [
+  'domain',
+  'domain-suffix',
+  'ipcidr',
+  'port',
+  'process',
+  'geo',
+  'rule-set',
+  'sub-rule',
+  'none',
+] as const;
 
 /**
- * Check the three optional v0.3.0 additions (`rules`, `examples`, `i18n`).
- * The original `{ manifest, schema, ui }` shape is unchecked here: it is
- * already TS-required, and nothing about it changed in this slice.
+ * Check the optional additions (`rules`/`examples`/`i18n` from v0.3.0,
+ * `ruleTypes` from v0.4.0 #3). The original `{ manifest, schema, ui }` shape
+ * is unchecked here: it is already TS-required, and nothing about it
+ * changed in this slice.
  */
 export function validateModuleShape(module: SchemaModule): ModuleShapeIssue[] {
   const issues: ModuleShapeIssue[] = [];
@@ -33,6 +51,7 @@ export function validateModuleShape(module: SchemaModule): ModuleShapeIssue[] {
   if (module.rules) checkRules(module.rules, issues);
   if (module.examples) checkExamples(module.examples, issues);
   if (module.i18n) checkI18n(module.i18n, issues);
+  if (module.ruleTypes) checkRuleTypes(module.ruleTypes, issues);
 
   return issues;
 }
@@ -99,6 +118,49 @@ function checkExamples(examples: ModuleExample[], issues: ModuleShapeIssue[]): v
         code: 'module.example.emptyPath',
         location: `${location}.path`,
         messageKey: 'module.example.emptyPath',
+      });
+    }
+  });
+}
+
+/**
+ * A malformed Bundle's `rule-types.json` is untrusted JSON at runtime, same
+ * as `examples[].kind` — `payloadKind` is checked against the closed set
+ * here rather than trusted from the TS type, which only guards
+ * hand-authored `SchemaModule` literals, not what a downloaded Bundle
+ * actually deserialises to (ADR-002).
+ */
+function checkRuleTypes(ruleTypes: RuleTypeSpec[], issues: ModuleShapeIssue[]): void {
+  const seenTypes = new Set<string>();
+
+  ruleTypes.forEach((entry, index) => {
+    const location = `ruleTypes[${index}]`;
+
+    if (entry.type === '') {
+      issues.push({
+        severity: 'error',
+        code: 'module.ruleType.emptyType',
+        location: `${location}.type`,
+        messageKey: 'module.ruleType.emptyType',
+      });
+    } else if (seenTypes.has(entry.type)) {
+      issues.push({
+        severity: 'error',
+        code: 'module.ruleType.duplicateType',
+        location: `${location}.type`,
+        messageKey: 'module.ruleType.duplicateType',
+        messageParams: { type: entry.type },
+      });
+    } else {
+      seenTypes.add(entry.type);
+    }
+
+    if (!(RULE_PAYLOAD_KINDS as readonly string[]).includes(entry.payloadKind)) {
+      issues.push({
+        severity: 'error',
+        code: 'module.ruleType.invalidPayloadKind',
+        location: `${location}.payloadKind`,
+        messageKey: 'module.ruleType.invalidPayloadKind',
       });
     }
   });

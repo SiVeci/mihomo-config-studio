@@ -1,0 +1,6 @@
+sub-rule-name1:
+  - DOMAIN,google.com,PROXY
+  - DOMAIN,baidu.com,DIRECT
+sub-rule-name2:
+  - IP-CIDR,1.1.1.1/32,REJECT
+  - MATCH,DIRECT

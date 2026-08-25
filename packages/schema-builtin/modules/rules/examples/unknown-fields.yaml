@@ -1,0 +1,8 @@
+# "unknown-fields" for an array-of-strings module means a rule TYPE the
+# catalog (rule-types.json) does not list, not a missing object key — AND
+# is a real, documented Mihomo type (逻辑规则, explicitly P1/P2 this
+# version). buildRulePlan() must fall back to { kind: 'raw' } for it, not
+# drop or corrupt the line (FR-RULE-05).
+- DOMAIN-SUFFIX,example.com,DIRECT
+- AND,((DOMAIN,a.com),(NETWORK,UDP)),DIRECT
+- MATCH,PROXY

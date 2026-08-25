@@ -4,14 +4,16 @@ import { fileURLToPath } from 'node:url';
 
 import {
   buildFormPlan,
+  buildRulePlan,
   evaluateRules,
   isRiskyPattern,
   validateModuleShape,
   validateValue,
   type JsonSchema,
+  type RuleTypeSpec,
   type SchemaModule,
 } from '@mcs/schema-core';
-import { UPSTREAM_P0_FIELDS, type P0ModuleId } from '@mcs/test-fixtures';
+import { UPSTREAM_P0_FIELDS, UPSTREAM_RULE_TYPES, type P0ModuleId } from '@mcs/test-fixtures';
 import { MihomoYamlDocument } from '@mcs/yaml-engine';
 import { describe, expect, it } from 'vitest';
 
@@ -23,7 +25,9 @@ import {
   PROXY_GROUPS_MODULE,
   PROXY_PROVIDERS_MODULE,
   RULE_PROVIDERS_MODULE,
+  RULES_MODULE,
   SNIFFER_MODULE,
+  SUB_RULES_MODULE,
 } from './index.js';
 
 const MODULES_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', 'modules');
@@ -1128,6 +1132,143 @@ describe('rule-providers module (v0.4.0 #2 — discriminated union: http/file/in
     });
     expect(issue?.messageParams).toBeUndefined();
     expect(JSON.stringify(issue)).not.toContain(secretUrl);
+  });
+});
+
+/**
+ * Every entry a module's own `ruleTypes` declares as P0, checked against
+ * `UPSTREAM_RULE_TYPES` in both directions — the rule-catalog counterpart
+ * to `collectSchemaPaths`'s field-path comparison above (ADR-021).
+ */
+function expectRuleTypesMatchUpstreamP0(ruleTypes: readonly RuleTypeSpec[]): void {
+  const declared = new Set(ruleTypes.map((entry) => entry.type));
+  const upstreamP0 = new Set(
+    UPSTREAM_RULE_TYPES.filter((rule) => rule.p0).map((rule) => rule.type),
+  );
+
+  const declaredNotUpstreamP0 = [...declared].filter((type) => !upstreamP0.has(type));
+  const upstreamP0NotDeclared = [...upstreamP0].filter((type) => !declared.has(type));
+
+  expect(declaredNotUpstreamP0).toEqual([]);
+  expect(upstreamP0NotDeclared).toEqual([]);
+}
+
+describe('rules module (v0.4.0 #3 — declarative rule-type catalog, ADR-021)', () => {
+  it('has no shape issues (ruleTypes/examples/i18n)', () => {
+    expect(validateModuleShape(RULES_MODULE)).toEqual([]);
+  });
+
+  it('declares exactly the P0 rule types UPSTREAM_RULE_TYPES lists — no more, no less', () => {
+    expectRuleTypesMatchUpstreamP0(RULES_MODULE.ruleTypes ?? []);
+  });
+
+  it('lists all four example kinds with a path that exists on disk', () => {
+    const kinds = RULES_MODULE.examples?.map((example) => example.kind).sort();
+    expect(kinds).toEqual(['edge', 'invalid', 'unknown-fields', 'valid']);
+    for (const example of RULES_MODULE.examples ?? []) {
+      expect(() => readExample(RULES_MODULE, example.path)).not.toThrow();
+    }
+  });
+
+  it('valid.yaml and edge.yaml have no schema violations (rules: is an array of strings)', () => {
+    for (const kind of ['valid', 'edge'] as const) {
+      const example = RULES_MODULE.examples?.find((candidate) => candidate.kind === kind);
+      if (!example) throw new Error(`no ${kind} example declared`);
+      const value = parseExample(RULES_MODULE, example.path);
+      expect(validateValue(value, RULES_MODULE.schema), example.path).toEqual([]);
+    }
+  });
+
+  it('invalid.yaml has at least one schema violation (a non-string array entry)', () => {
+    const value = parseExample(RULES_MODULE, 'examples/invalid.yaml');
+    expect(validateValue(value, RULES_MODULE.schema).length).toBeGreaterThan(0);
+  });
+
+  it('aligns every real line in valid.yaml with a catalog entry via buildRulePlan — none fall back to raw', () => {
+    const lines = parseExample(RULES_MODULE, 'examples/valid.yaml') as string[];
+    for (const line of lines) {
+      expect(buildRulePlan(RULES_MODULE.ruleTypes ?? [], line).kind, line).toBe('structured');
+    }
+  });
+
+  it('falls back to raw text for the P1/P2 logic rule in unknown-fields.yaml, without dropping or corrupting it (FR-RULE-05)', () => {
+    const lines = parseExample(RULES_MODULE, 'examples/unknown-fields.yaml') as string[];
+    const logicLine = lines.find((line) => line.startsWith('AND,'));
+    expect(logicLine).toBeDefined();
+    expect(buildRulePlan(RULES_MODULE.ruleTypes ?? [], logicLine as string)).toEqual({
+      kind: 'raw',
+      text: logicLine,
+    });
+  });
+
+  it('recognises an eleventh, entirely synthetic catalog entry with zero code changes (FR-SCHEMA-06 applied to rules)', () => {
+    const synthetic: RuleTypeSpec = {
+      type: 'SYNTHETIC-RULE-TYPE',
+      payloadKind: 'domain',
+      needsPayload: true,
+      params: [],
+    };
+    const extended = [...(RULES_MODULE.ruleTypes ?? []), synthetic];
+    const plan = buildRulePlan(extended, 'SYNTHETIC-RULE-TYPE,example.com,PROXY');
+    expect(plan).toEqual({
+      kind: 'structured',
+      spec: synthetic,
+      payload: { value: 'example.com', start: 20, end: 31 },
+      target: { value: 'PROXY', start: 32, end: 37 },
+      params: [],
+    });
+  });
+
+  it('every docs URL on a catalog entry is on the official wiki domain and carries no query string (NFR-SEC-03 boundary)', () => {
+    const offenders: string[] = [];
+    for (const entry of RULES_MODULE.ruleTypes ?? []) {
+      if (!entry.docsUrl) continue;
+      const url = new URL(entry.docsUrl);
+      if (url.hostname !== 'wiki.metacubex.one' || url.search !== '') offenders.push(entry.type);
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('sub-rules module (v0.4.0 #3 — name -> rule-line[] map, same catalog as rules)', () => {
+  it('has no shape issues (ruleTypes/examples/i18n)', () => {
+    expect(validateModuleShape(SUB_RULES_MODULE)).toEqual([]);
+  });
+
+  it('declares exactly the same P0 rule types as the rules module (identical catalog content, independent Bundle files)', () => {
+    expectRuleTypesMatchUpstreamP0(SUB_RULES_MODULE.ruleTypes ?? []);
+    expect(SUB_RULES_MODULE.ruleTypes).toEqual(RULES_MODULE.ruleTypes);
+  });
+
+  it('lists all four example kinds with a path that exists on disk', () => {
+    const kinds = SUB_RULES_MODULE.examples?.map((example) => example.kind).sort();
+    expect(kinds).toEqual(['edge', 'invalid', 'unknown-fields', 'valid']);
+    for (const example of SUB_RULES_MODULE.examples ?? []) {
+      expect(() => readExample(SUB_RULES_MODULE, example.path)).not.toThrow();
+    }
+  });
+
+  it('valid.yaml and edge.yaml have no schema violations (sub-rules: is name -> array of strings)', () => {
+    for (const kind of ['valid', 'edge'] as const) {
+      const example = SUB_RULES_MODULE.examples?.find((candidate) => candidate.kind === kind);
+      if (!example) throw new Error(`no ${kind} example declared`);
+      const value = parseExample(SUB_RULES_MODULE, example.path);
+      expect(validateValue(value, SUB_RULES_MODULE.schema), example.path).toEqual([]);
+    }
+  });
+
+  it('invalid.yaml has at least one schema violation (a sub-rule body that is not an array)', () => {
+    const value = parseExample(SUB_RULES_MODULE, 'examples/invalid.yaml');
+    expect(validateValue(value, SUB_RULES_MODULE.schema).length).toBeGreaterThan(0);
+  });
+
+  it("aligns every real line inside valid.yaml's sub-rule bodies with a catalog entry", () => {
+    const value = parseExample(SUB_RULES_MODULE, 'examples/valid.yaml') as Record<string, string[]>;
+    for (const lines of Object.values(value)) {
+      for (const line of lines) {
+        expect(buildRulePlan(SUB_RULES_MODULE.ruleTypes ?? [], line).kind, line).toBe('structured');
+      }
+    }
   });
 });
 

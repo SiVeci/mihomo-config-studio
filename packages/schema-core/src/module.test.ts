@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { validateModuleShape } from './module.js';
 import { sampleModule } from './testing/sample-module.js';
-import type { ModuleExample, ModuleI18n, SchemaModule, ValidationRule } from './types.js';
+import type {
+  ModuleExample,
+  ModuleI18n,
+  RuleTypeSpec,
+  SchemaModule,
+  ValidationRule,
+} from './types.js';
 
 describe('backward compatibility (v0.3.0 #2)', () => {
   it('validates a module with none of the three new optional fields as shape-clean', () => {
@@ -112,6 +118,73 @@ describe('examples shape', () => {
       const module: SchemaModule = {
         ...sampleModule,
         examples: [{ ...baseExample, kind }],
+      };
+      expect(validateModuleShape(module)).toEqual([]);
+    }
+  });
+});
+
+describe('ruleTypes shape (ADR-021, v0.4.0 #3)', () => {
+  const baseType: RuleTypeSpec = {
+    type: 'DOMAIN-SUFFIX',
+    payloadKind: 'domain-suffix',
+    needsPayload: true,
+    params: [],
+  };
+
+  it('accepts a well-formed catalog', () => {
+    const module: SchemaModule = { ...sampleModule, ruleTypes: [baseType] };
+    expect(validateModuleShape(module)).toEqual([]);
+  });
+
+  it('flags an empty type', () => {
+    const module: SchemaModule = { ...sampleModule, ruleTypes: [{ ...baseType, type: '' }] };
+    expect(validateModuleShape(module)).toEqual([
+      expect.objectContaining({ code: 'module.ruleType.emptyType', location: 'ruleTypes[0].type' }),
+    ]);
+  });
+
+  it('flags a duplicate type but not the first occurrence', () => {
+    const module: SchemaModule = {
+      ...sampleModule,
+      ruleTypes: [baseType, { ...baseType, payloadKind: 'domain' }],
+    };
+    expect(validateModuleShape(module)).toEqual([
+      expect.objectContaining({
+        code: 'module.ruleType.duplicateType',
+        location: 'ruleTypes[1].type',
+        messageParams: { type: 'DOMAIN-SUFFIX' },
+      }),
+    ]);
+  });
+
+  it('flags a payloadKind outside the closed set (a bundle bypassing the type system)', () => {
+    const bad = { ...baseType, payloadKind: 'regex' } as unknown as RuleTypeSpec;
+    const module: SchemaModule = { ...sampleModule, ruleTypes: [bad] };
+    expect(validateModuleShape(module)).toEqual([
+      expect.objectContaining({
+        code: 'module.ruleType.invalidPayloadKind',
+        location: 'ruleTypes[0].payloadKind',
+      }),
+    ]);
+  });
+
+  it('accepts every closed payloadKind value', () => {
+    const kinds: RuleTypeSpec['payloadKind'][] = [
+      'domain',
+      'domain-suffix',
+      'ipcidr',
+      'port',
+      'process',
+      'geo',
+      'rule-set',
+      'sub-rule',
+      'none',
+    ];
+    for (const payloadKind of kinds) {
+      const module: SchemaModule = {
+        ...sampleModule,
+        ruleTypes: [{ ...baseType, type: `TYPE-${payloadKind}`, payloadKind }],
       };
       expect(validateModuleShape(module)).toEqual([]);
     }

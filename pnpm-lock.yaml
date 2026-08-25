@@ -178,6 +178,9 @@ importers:
 
   packages/schema-core:
     dependencies:
+      '@mcs/config-model':
+        specifier: workspace:*
+        version: link:../config-model
       '@mcs/yaml-engine':
         specifier: workspace:*
         version: link:../yaml-engine

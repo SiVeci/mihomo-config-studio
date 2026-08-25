@@ -1,0 +1,3 @@
+# Boundary-valid: a single sub-rule with the smallest meaningful body.
+sub-rule-name1:
+  - MATCH,DIRECT

@@ -1,0 +1,7 @@
+# A rule TYPE the catalog (rule-types.json) does not list, inside a
+# sub-rule's own body — a real, documented Mihomo type (逻辑规则,
+# explicitly P1/P2 this version). buildRulePlan() must fall back to
+# { kind: 'raw' } for it, not drop or corrupt the line (FR-RULE-05).
+sub-rule-name1:
+  - DOMAIN,google.com,PROXY
+  - NOT,((DOMAIN,baidu.com)),PROXY

@@ -3,6 +3,7 @@ import type {
   ModuleExample,
   ModuleI18n,
   ModuleManifest,
+  RuleTypeSpec,
   SchemaModule,
   UiSchema,
   ValidationRule,
@@ -50,12 +51,20 @@ import ruleProvidersZhCN from '../modules/rule-providers/i18n/zh-CN.json';
 import ruleProvidersManifest from '../modules/rule-providers/module.manifest.json';
 import ruleProvidersUiSchema from '../modules/rule-providers/ui.schema.json';
 import ruleProvidersRules from '../modules/rule-providers/validation.rules.json';
+import rulesEn from '../modules/rules/i18n/en.json';
+import rulesZhCN from '../modules/rules/i18n/zh-CN.json';
+import rulesManifest from '../modules/rules/module.manifest.json';
+import rulesRuleTypes from '../modules/rules/rule-types.json';
 import snifferConfigSchema from '../modules/sniffer/config.schema.json';
 import snifferEn from '../modules/sniffer/i18n/en.json';
 import snifferZhCN from '../modules/sniffer/i18n/zh-CN.json';
 import snifferManifest from '../modules/sniffer/module.manifest.json';
 import snifferUiSchema from '../modules/sniffer/ui.schema.json';
 import snifferRules from '../modules/sniffer/validation.rules.json';
+import subRulesEn from '../modules/sub-rules/i18n/en.json';
+import subRulesZhCN from '../modules/sub-rules/i18n/zh-CN.json';
+import subRulesManifest from '../modules/sub-rules/module.manifest.json';
+import subRulesRuleTypes from '../modules/sub-rules/rule-types.json';
 
 /**
  * Every module lives on disk as the same seven-file set `schema-cli pack`
@@ -239,6 +248,64 @@ export const RULE_PROVIDERS_MODULE: SchemaModule = {
   i18n: { 'zh-CN': ruleProvidersZhCN, en: ruleProvidersEn } as ModuleI18n,
 };
 
+const RULES_EXAMPLES: ModuleExample[] = [
+  { name: 'valid', kind: 'valid', path: 'examples/valid.yaml' },
+  { name: 'invalid', kind: 'invalid', path: 'examples/invalid.yaml' },
+  { name: 'edge', kind: 'edge', path: 'examples/edge.yaml' },
+  { name: 'unknown-fields', kind: 'unknown-fields', path: 'examples/unknown-fields.yaml' },
+];
+
+/**
+ * `rules:` is a declarative rule-type catalog (ADR-021), not a JSON-Schema
+ * form: a rule line's structure comes from `@mcs/schema-core`'s
+ * `buildRulePlan` reading `ruleTypes` below, never from `schema`/`ui`. Those
+ * two fields still need *some* value (`SchemaModule` requires them) — kept
+ * deliberately minimal and inline rather than their own
+ * `config.schema.json`/`ui.schema.json` files, since there is no per-field
+ * UI metadata to describe here (that lives in each `ruleTypes[]` entry
+ * instead). The schema is still real enough to let `schemaStage` do one
+ * useful structural check for free: `rules:` must actually be an array of
+ * strings.
+ */
+export const RULES_MODULE: SchemaModule = {
+  manifest: rulesManifest as ModuleManifest,
+  schema: { type: 'array', items: { type: 'string' } },
+  ui: {},
+  ruleTypes: rulesRuleTypes as RuleTypeSpec[],
+  examples: RULES_EXAMPLES,
+  i18n: { 'zh-CN': rulesZhCN, en: rulesEn } as ModuleI18n,
+};
+
+const SUB_RULES_EXAMPLES: ModuleExample[] = [
+  { name: 'valid', kind: 'valid', path: 'examples/valid.yaml' },
+  { name: 'invalid', kind: 'invalid', path: 'examples/invalid.yaml' },
+  { name: 'edge', kind: 'edge', path: 'examples/edge.yaml' },
+  { name: 'unknown-fields', kind: 'unknown-fields', path: 'examples/unknown-fields.yaml' },
+];
+
+/**
+ * `sub-rules:` is `name -> rule-line[]` — a *map*, unlike `rules:`'s list —
+ * so it is its own module (plan #3: merging the two would make every
+ * consumer branch on which shape it got back). Same rationale as
+ * `RULES_MODULE` for the minimal inline `schema`/`ui`, and the same
+ * `ruleTypes` catalog content (the rule-line DSL inside a sub-rule's body is
+ * identical to `rules:`'s own) — duplicated as its own
+ * `modules/sub-rules/rule-types.json` rather than imported cross-module,
+ * because each Bundle module file is meant to stand alone (ADR-020),
+ * not reach into a sibling module's own files.
+ */
+export const SUB_RULES_MODULE: SchemaModule = {
+  manifest: subRulesManifest as ModuleManifest,
+  schema: {
+    type: 'object',
+    additionalProperties: { type: 'array', items: { type: 'string' } },
+  },
+  ui: {},
+  ruleTypes: subRulesRuleTypes as RuleTypeSpec[],
+  examples: SUB_RULES_EXAMPLES,
+  i18n: { 'zh-CN': subRulesZhCN, en: subRulesEn } as ModuleI18n,
+};
+
 /** Every module this package currently ships, keyed by the bundle file path `schema-registry`'s `StoredBundle.files` will use. */
 export const BUILTIN_MODULE_FILES: Readonly<Record<string, SchemaModule>> = {
   'modules/general.json': GENERAL_MODULE,
@@ -249,4 +316,6 @@ export const BUILTIN_MODULE_FILES: Readonly<Record<string, SchemaModule>> = {
   'modules/proxy-providers.json': PROXY_PROVIDERS_MODULE,
   'modules/proxy-groups.json': PROXY_GROUPS_MODULE,
   'modules/rule-providers.json': RULE_PROVIDERS_MODULE,
+  'modules/rules.json': RULES_MODULE,
+  'modules/sub-rules.json': SUB_RULES_MODULE,
 };

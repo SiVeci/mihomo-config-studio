@@ -1,0 +1,18 @@
+{
+  "ruleType.DOMAIN.label": "精确域名",
+  "ruleType.DOMAIN-SUFFIX.label": "域名后缀",
+  "ruleType.DOMAIN-KEYWORD.label": "域名关键字",
+  "ruleType.DOMAIN-WILDCARD.label": "域名通配符",
+  "ruleType.DOMAIN-REGEX.label": "域名正则",
+  "ruleType.GEOSITE.label": "GEO 站点分类",
+  "ruleType.IP-CIDR.label": "IP 段（IPv4）",
+  "ruleType.IP-CIDR6.label": "IP 段（IPv6）",
+  "ruleType.IP-ASN.label": "IP 所属 ASN",
+  "ruleType.GEOIP.label": "GEO 国家代码",
+  "ruleType.DST-PORT.label": "目标端口",
+  "ruleType.PROCESS-NAME.label": "进程名称",
+  "ruleType.PROCESS-PATH.label": "进程路径",
+  "ruleType.RULE-SET.label": "引用规则集合",
+  "ruleType.SUB-RULE.label": "引用子规则",
+  "ruleType.MATCH.label": "匹配全部（兜底）"
+}

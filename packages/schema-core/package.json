@@ -9,6 +9,7 @@
     "./testing": "./src/testing/index.ts"
   },
   "dependencies": {
+    "@mcs/config-model": "workspace:*",
     "@mcs/yaml-engine": "workspace:*"
   }
 }

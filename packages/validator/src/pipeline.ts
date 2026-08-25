@@ -5,6 +5,7 @@ import {
   flattenFields,
   isArrayEntryModule,
   validateValue,
+  type JsonSchema,
   type SchemaModule,
 } from '@mcs/schema-core';
 import type { ConfigPath, ParseResult } from '@mcs/yaml-engine';
@@ -109,7 +110,9 @@ export const schemaStage: ValidationStage = {
             }
           }
           for (const flattened of flattenFields([field])) {
-            if (!flattened.unknown) knownPaths.add(serializePath(flattened.path));
+            if (!flattened.unknown) {
+              registerKnownPath(knownPaths, flattened.path, flattened.schema, flattened.value);
+            }
           }
           // The discriminator itself (e.g. `type`) is deliberately excluded
           // from `.children` by `planVariantChildren` — it is represented by
@@ -139,9 +142,13 @@ export const schemaStage: ValidationStage = {
         }
       }
 
+      if (scope !== undefined && scope !== null) {
+        registerDictionaryKnownPaths(knownPaths, module.manifest.root, module.schema, scope);
+      }
+
       const plan = buildFormPlan(module, fullValue, { mode: 'advanced' });
       for (const field of plan.fields) {
-        if (!field.unknown) knownPaths.add(serializePath(field.path));
+        if (!field.unknown) registerKnownPath(knownPaths, field.path, field.schema, field.value);
       }
     }
 
@@ -165,6 +172,91 @@ export const schemaStage: ValidationStage = {
 
 function serializePath(path: ConfigPath): string {
   return JSON.stringify(path);
+}
+
+const SCALAR_ITEM_TYPES = new Set(['string', 'number', 'integer', 'boolean', 'null']);
+
+/**
+ * Registers a known field's own path and, when it is a scalar-item array
+ * (e.g. `dns.nameserver: string[]`), every element's path too.
+ *
+ * `buildFormPlan`/`buildArrayFormPlan` only ever produce one `PlannedField`
+ * per *array-valued* property — array items are a single field's value, not
+ * individually planned children, unlike an object field's own nested
+ * properties (each of *those* already gets its own `knownPaths` entry via
+ * `planObject`'s recursion). But `document.leafPaths()` walks *into* every
+ * sequence node regardless, producing one leaf per array element
+ * (`['dns','nameserver',0]`, `['dns','nameserver',1]`, ...) — an exact-match
+ * lookup against `knownPaths` (which only ever held `['dns','nameserver']`)
+ * therefore flagged every element of every scalar-array field as
+ * `unknown-field`, pre-existing since `schemaStage` first shipped (v0.3.0
+ * #12) and only caught here because a 10,000-entry `rules:` array (v0.4.0
+ * #3) makes the gap impossible to miss instead of a one-or-two-item false
+ * positive most real configs would never surface loudly.
+ *
+ * Deliberately scoped to *scalar* item types only, not a blanket "cover
+ * every descendant of a known path" rule: an `isArrayEntryModule` module's
+ * own per-entry path (e.g. `['proxies', 1]`) is also "known" in the sense
+ * used here, but its *children* still need independent unknown-field
+ * checking when the entry matches no discriminator branch (a P1/P2
+ * protocol, v0.3.0 #17) — covering descendants unconditionally would wrongly
+ * suppress that. An array of scalars has no such nested structure to check.
+ */
+function registerKnownPath(
+  knownPaths: Set<string>,
+  path: ConfigPath,
+  schema: JsonSchema,
+  value: unknown,
+): void {
+  knownPaths.add(serializePath(path));
+  const itemType = schema.type === 'array' ? schema.items?.type : undefined;
+  const isScalarArray =
+    itemType !== undefined &&
+    (Array.isArray(itemType)
+      ? itemType.every((t) => SCALAR_ITEM_TYPES.has(t))
+      : SCALAR_ITEM_TYPES.has(itemType));
+  if (isScalarArray && Array.isArray(value)) {
+    value.forEach((_, index) => knownPaths.add(serializePath([...path, index])));
+  }
+}
+
+/**
+ * `planObject` (via `buildFormPlan`) only ever recognises *named*
+ * `schema.properties` — a root schema shaped as an arbitrary-key dictionary
+ * (`{type:'object', additionalProperties: {...}}`, no `.properties` at all,
+ * e.g. `sub-rules:`'s `name -> rule-line[]` map, v0.4.0 #3) has no named
+ * property for any real key to match, so every single key in the document
+ * reads as "undeclared" and falls through `planObject`'s own unknown-key
+ * loop — the dictionary-shaped counterpart to `registerKnownPath`'s
+ * scalar-array gap above, same root cause (a collection form `form-plan.ts`
+ * was never taught to recognise), same fix shape: register what the schema
+ * *does* promise to own before asking whether anything was actually
+ * covered.
+ */
+function registerDictionaryKnownPaths(
+  knownPaths: Set<string>,
+  root: ConfigPath,
+  schema: JsonSchema,
+  scope: unknown,
+): void {
+  const additionalProperties = schema.additionalProperties;
+  const hasNamedProperties = Object.keys(schema.properties ?? {}).length > 0;
+  if (
+    schema.type !== 'object' ||
+    hasNamedProperties ||
+    typeof additionalProperties !== 'object' ||
+    additionalProperties === null ||
+    !isPlainObject(scope)
+  ) {
+    return;
+  }
+  for (const [key, value] of Object.entries(scope)) {
+    registerKnownPath(knownPaths, [...root, key], additionalProperties, value);
+  }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 export const DEFAULT_STAGES: readonly ValidationStage[] = [syntaxStage, schemaStage, securityStage];

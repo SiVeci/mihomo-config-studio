@@ -39,10 +39,12 @@ export const BUILTIN_MODULE: SchemaModule = GENERAL_MODULE;
  * added `modules/proxy-groups.json`, the seventh module, and bumped
  * `version` to `0.4.0` (the bundle-content version tracks the release arc
  * it ships with, not the individual slice); #2 added
- * `modules/rule-providers.json`, the eighth module.
+ * `modules/rule-providers.json`, the eighth module; #3 added
+ * `modules/rules.json` and `modules/sub-rules.json`, the ninth and tenth
+ * (and last — PRD §8.3 names ten P0 modules total).
  */
 export const BUILTIN_TRUST_ANCHOR_PUBLIC_KEY_HEX =
-  'd011aa41bd1a231bb12e8854a8f1af1f3e4127e67f82373e4f873bfc8ca76499';
+  'cb9b7d5404553029d789b56101e2df9d5d6afd66078487342580b2e34445ee3c';
 
 export const BUILTIN_MANIFEST: BundleManifest = {
   bundleId: 'builtin',
@@ -83,9 +85,17 @@ export const BUILTIN_MANIFEST: BundleManifest = {
       path: 'modules/rule-providers.json',
       sha256: '9c35ee2f6c8386d8f3995c9ee994f378319295340d39bdfdb49dc749dedafe93',
     },
+    {
+      path: 'modules/rules.json',
+      sha256: 'db06492fec86b366c992c14a5d69e5a4a171251f302438d8c68ae3ab44400061',
+    },
+    {
+      path: 'modules/sub-rules.json',
+      sha256: 'db7168db853643f84222c91c9c9636dbb610c144497f83830fe550fc75a51ed4',
+    },
   ],
   signature:
-    '1418786b972408989b08b554edd394502d9e4afe84fdaa6d031b337857d2f10bdb570375d9bd0305aafd19b28b04aba266dbec388cdd6ba655bed6d177d4bb08',
+    '7416e9d21e1163b39c2274f05c3ea9cf85b061a29809c419ffe541fa414c5ce23ea0d84ea4cc6344c69053d24571b0e0bb0e53c3df291c86a1165a922f63340e',
   signedAt: '2026-08-26T00:00:00Z',
 };
 

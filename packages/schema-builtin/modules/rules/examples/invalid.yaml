@@ -1,0 +1,4 @@
+# Violates config.schema.json: "rules:" is an array of strings (one rule
+# line per entry) — a bare number is not a string.
+- DOMAIN-SUFFIX,example.com,DIRECT
+- 12345

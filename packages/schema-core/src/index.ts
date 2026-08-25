@@ -24,6 +24,8 @@ export type {
   VariantOption,
 } from './form-plan.js';
 export { SchemaRefError, resolveRef } from './ref.js';
+export { buildRulePlan } from './rule-catalog.js';
+export type { RawRulePlan, RulePlan, StructuredRulePlan } from './rule-catalog.js';
 export { KNOWN_FORMATS } from './types.js';
 export type {
   Condition,
@@ -38,6 +40,8 @@ export type {
   ModuleManifest,
   Platform,
   RuleFix,
+  RulePayloadKind,
+  RuleTypeSpec,
   SafetyLevel,
   SchemaModule,
   UiFieldSpec,

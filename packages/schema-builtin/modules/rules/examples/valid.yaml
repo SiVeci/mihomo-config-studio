@@ -1,0 +1,5 @@
+- RULE-SET,cn-domain,DIRECT
+- DOMAIN-SUFFIX,example.com,PROXY
+- IP-CIDR,198.18.0.0/16,DIRECT,no-resolve
+- GEOIP,CN,DIRECT
+- MATCH,PROXY

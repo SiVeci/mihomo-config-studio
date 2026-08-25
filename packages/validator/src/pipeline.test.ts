@@ -114,6 +114,14 @@ describe('schemaStage (FR-VAL-01, FR-VAL-05, v0.3.0 #12)', () => {
     expect(hasBlockingIssues(issues)).toBe(false);
   });
 
+  it('does not flag the elements of a real, declared array-valued field as unknown (v0.4.0 #3 regression: only the array itself is a planned field, never its items individually)', () => {
+    const parse = MihomoYamlDocument.parse(
+      'dns:\n  enable: true\n  nameserver:\n    - 1.1.1.1\n    - 8.8.8.8\n',
+    );
+    const issues = schemaStage.run({ parse, modules: [DNS_MODULE] });
+    expect(issues.filter((issue) => issue.code === 'unknown-field')).toEqual([]);
+  });
+
   it('never blocks on unknown fields no matter how many — a config full of real P1/P2 protocol fields stays fully non-blocking', () => {
     const parse = MihomoYamlDocument.parse(
       [
@@ -137,6 +145,22 @@ describe('schemaStage (FR-VAL-01, FR-VAL-05, v0.3.0 #12)', () => {
     expect(issues.length).toBeGreaterThan(0);
     expect(issues.every((issue) => issue.severity === 'info')).toBe(true);
     expect(hasBlockingIssues(issues)).toBe(false);
+  });
+
+  it('does not flag the keys of a real, declared arbitrary-key dictionary field as unknown (v0.4.0 #3 regression: sub-rules-shaped modules — an object with additionalProperties and no named properties)', () => {
+    const dictionaryModule: SchemaModule = {
+      manifest: { id: 'probe-dictionary', root: ['sub-rules'], version: '1.0.0' },
+      schema: {
+        type: 'object',
+        additionalProperties: { type: 'array', items: { type: 'string' } },
+      },
+      ui: {},
+    };
+    const parse = MihomoYamlDocument.parse(
+      ['sub-rules:', '  block-ads:', '    - DOMAIN-SUFFIX,ads.example.com,REJECT'].join('\n'),
+    );
+    const issues = schemaStage.run({ parse, modules: [dictionaryModule] });
+    expect(issues.filter((issue) => issue.code === 'unknown-field')).toEqual([]);
   });
 
   it("does not let two modules sharing a document root (general/inbound, both root: []) falsely flag each other's fields as unknown", () => {
@@ -388,7 +412,7 @@ describe('runPipeline with real schema-registry-resolved modules (FR-VAL-01, FR-
   // wiring works end to end, not just schemaStage in isolation.
   const modules = createRegistry(builtinAsStoredBundle()).modules();
 
-  it('resolves all eight built-in P0 modules with no registry issues', () => {
+  it('resolves all ten built-in P0 modules with no registry issues', () => {
     expect(modules.map((module) => module.manifest.id).sort()).toEqual([
       'dns',
       'general',
@@ -397,7 +421,9 @@ describe('runPipeline with real schema-registry-resolved modules (FR-VAL-01, FR-
       'proxy-groups',
       'proxy-providers',
       'rule-providers',
+      'rules',
       'sniffer',
+      'sub-rules',
     ]);
   });
 

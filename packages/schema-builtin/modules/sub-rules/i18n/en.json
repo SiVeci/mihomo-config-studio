@@ -1,0 +1,18 @@
+{
+  "ruleType.DOMAIN.label": "Exact domain",
+  "ruleType.DOMAIN-SUFFIX.label": "Domain suffix",
+  "ruleType.DOMAIN-KEYWORD.label": "Domain keyword",
+  "ruleType.DOMAIN-WILDCARD.label": "Domain wildcard",
+  "ruleType.DOMAIN-REGEX.label": "Domain regex",
+  "ruleType.GEOSITE.label": "GEO site category",
+  "ruleType.IP-CIDR.label": "IP range (IPv4)",
+  "ruleType.IP-CIDR6.label": "IP range (IPv6)",
+  "ruleType.IP-ASN.label": "IP ASN",
+  "ruleType.GEOIP.label": "GEO country code",
+  "ruleType.DST-PORT.label": "Destination port",
+  "ruleType.PROCESS-NAME.label": "Process name",
+  "ruleType.PROCESS-PATH.label": "Process path",
+  "ruleType.RULE-SET.label": "Rule set reference",
+  "ruleType.SUB-RULE.label": "Sub-rule reference",
+  "ruleType.MATCH.label": "Match all (fallback)"
+}

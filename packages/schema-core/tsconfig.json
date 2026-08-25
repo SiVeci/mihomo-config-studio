@@ -6,5 +6,9 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts"],
-  "references": [{ "path": "../yaml-engine" }, { "path": "../test-fixtures" }]
+  "references": [
+    { "path": "../yaml-engine" },
+    { "path": "../test-fixtures" },
+    { "path": "../config-model" }
+  ]
 }

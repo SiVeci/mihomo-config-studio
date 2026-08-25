@@ -1,0 +1,130 @@
+[
+  {
+    "type": "DOMAIN",
+    "payloadKind": "domain",
+    "needsPayload": true,
+    "params": [],
+    "docsUrl": "https://wiki.metacubex.one/config/rules/",
+    "safety": "safe"
+  },
+  {
+    "type": "DOMAIN-SUFFIX",
+    "payloadKind": "domain-suffix",
+    "needsPayload": true,
+    "params": [],
+    "docsUrl": "https://wiki.metacubex.one/config/rules/",
+    "safety": "safe"
+  },
+  {
+    "type": "DOMAIN-KEYWORD",
+    "payloadKind": "domain",
+    "needsPayload": true,
+    "params": [],
+    "docsUrl": "https://wiki.metacubex.one/config/rules/",
+    "safety": "safe"
+  },
+  {
+    "type": "DOMAIN-WILDCARD",
+    "payloadKind": "domain",
+    "needsPayload": true,
+    "params": [],
+    "docsUrl": "https://wiki.metacubex.one/config/rules/",
+    "safety": "safe"
+  },
+  {
+    "type": "DOMAIN-REGEX",
+    "payloadKind": "domain",
+    "needsPayload": true,
+    "params": [],
+    "docsUrl": "https://wiki.metacubex.one/config/rules/",
+    "safety": "safe"
+  },
+  {
+    "type": "GEOSITE",
+    "payloadKind": "geo",
+    "needsPayload": true,
+    "params": [],
+    "docsUrl": "https://wiki.metacubex.one/config/rules/",
+    "safety": "safe"
+  },
+  {
+    "type": "IP-CIDR",
+    "payloadKind": "ipcidr",
+    "needsPayload": true,
+    "params": ["no-resolve", "src"],
+    "docsUrl": "https://wiki.metacubex.one/config/rules/",
+    "safety": "safe"
+  },
+  {
+    "type": "IP-CIDR6",
+    "payloadKind": "ipcidr",
+    "needsPayload": true,
+    "params": ["no-resolve", "src"],
+    "docsUrl": "https://wiki.metacubex.one/config/rules/",
+    "safety": "safe"
+  },
+  {
+    "type": "IP-ASN",
+    "payloadKind": "geo",
+    "needsPayload": true,
+    "params": ["no-resolve", "src"],
+    "docsUrl": "https://wiki.metacubex.one/config/rules/",
+    "safety": "safe"
+  },
+  {
+    "type": "GEOIP",
+    "payloadKind": "geo",
+    "needsPayload": true,
+    "params": ["no-resolve", "src"],
+    "docsUrl": "https://wiki.metacubex.one/config/rules/",
+    "safety": "safe"
+  },
+  {
+    "type": "DST-PORT",
+    "payloadKind": "port",
+    "needsPayload": true,
+    "params": [],
+    "docsUrl": "https://wiki.metacubex.one/config/rules/",
+    "safety": "safe"
+  },
+  {
+    "type": "PROCESS-NAME",
+    "payloadKind": "process",
+    "needsPayload": true,
+    "params": [],
+    "docsUrl": "https://wiki.metacubex.one/config/rules/",
+    "safety": "safe"
+  },
+  {
+    "type": "PROCESS-PATH",
+    "payloadKind": "process",
+    "needsPayload": true,
+    "params": [],
+    "docsUrl": "https://wiki.metacubex.one/config/rules/",
+    "safety": "safe"
+  },
+  {
+    "type": "RULE-SET",
+    "payloadKind": "rule-set",
+    "needsPayload": true,
+    "params": [],
+    "docsUrl": "https://wiki.metacubex.one/config/rules/",
+    "safety": "safe"
+  },
+  {
+    "type": "SUB-RULE",
+    "payloadKind": "sub-rule",
+    "needsPayload": false,
+    "params": [],
+    "docsUrl": "https://wiki.metacubex.one/config/rules/",
+    "safety": "safe"
+  },
+  {
+    "type": "MATCH",
+    "payloadKind": "none",
+    "needsPayload": false,
+    "params": [],
+    "docsUrl": "https://wiki.metacubex.one/config/rules/",
+    "safety": "safe"
+  }
+]
