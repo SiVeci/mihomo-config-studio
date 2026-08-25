@@ -1,3 +1,4 @@
+import { isRiskyPattern } from '@mcs/schema-core';
 import type { MihomoYamlDocument } from '@mcs/yaml-engine';
 
 import type { ValidationIssue } from './issue.js';
@@ -22,6 +23,17 @@ export const SECURITY_STAGE_ID = 'security';
  * planning for array/map-shaped modules a solved problem — not needed for
  * these three, already-concrete checks.
  *
+ * v0.4.0 #6 adds two more, same technique, covering the two modules that
+ * landed after this stage first shipped (#1 `proxy-groups`, #2
+ * `rule-providers`): a plaintext `rule-providers` download URL, and a
+ * catastrophic-backtracking `proxy-groups` filter/exclude-filter pattern.
+ * Deliberately **not** added: `proxy-groups[].url` (the health-check probe
+ * address) in plain `http://` — real upstream samples themselves use
+ * `http://cp.cloudflare.com/generate_204` as the canonical probe endpoint
+ * (vendored v1.19.29 sample, `packages/schema-builtin/modules/proxy-groups/`
+ * examples), so flagging it would be a false positive on the single most
+ * common value the field ever holds, not a real risk surface.
+ *
  * Severity is always `warning`: a security concern must never force a user
  * into the invalid-draft export path just to get past it (FR-YAML-07 would
  * otherwise turn a warning into a worse outcome than the risk itself).
@@ -36,6 +48,8 @@ export const securityStage: ValidationStage = {
       ...checkAllowLanWildcardBind(document),
       ...checkControllerWithoutSecret(document),
       ...checkSkipCertVerify(document),
+      ...checkRuleProviderPlaintextUrl(document),
+      ...checkGroupRiskyFilterPattern(document),
     ];
   },
 };
@@ -96,6 +110,60 @@ function checkSkipCertVerify(document: MihomoYamlDocument): ValidationIssue[] {
     }
   }
 
+  return issues;
+}
+
+/**
+ * `type: http` rule-providers fetch a rule file over the network — that file
+ * directly drives routing decisions, so a `http://` (not `https://`) URL is
+ * a real man-in-the-middle surface: a tampered rule file can silently
+ * redirect traffic. Mirrors the `type: file`/`type: inline` exclusion
+ * `checkSkipCertVerify`'s own precedent already sets for provider-shaped
+ * modules — those two source types have no URL to check at all.
+ */
+function checkRuleProviderPlaintextUrl(document: MihomoYamlDocument): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const providers = document.getIn(['rule-providers']);
+  if (!isRecord(providers)) return issues;
+
+  for (const [name, provider] of Object.entries(providers)) {
+    if (!isRecord(provider) || provider.type !== 'http') continue;
+    if (typeof provider.url !== 'string' || !provider.url.startsWith('http://')) continue;
+    issues.push(
+      securityIssue(document, 'security.ruleProviderPlaintextUrl', ['rule-providers', name, 'url']),
+    );
+  }
+  return issues;
+}
+
+/**
+ * `filter`/`exclude-filter` are regular expressions the Mihomo *kernel*
+ * evaluates against every candidate node name — this app never evaluates
+ * them itself (NFR-SEC-05), the same boundary `proxy-providers`' own filter
+ * fields already established (v0.3.0 #11). `isRiskyPattern()` is a cheap
+ * shape heuristic (nested quantifiers/alternation), not a real regex
+ * engine, so calling it here carries none of the risk it is warning about.
+ */
+function checkGroupRiskyFilterPattern(document: MihomoYamlDocument): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const groups = document.getIn(['proxy-groups']);
+  if (!Array.isArray(groups)) return issues;
+
+  groups.forEach((group, index) => {
+    if (!isRecord(group)) return;
+    for (const field of ['filter', 'exclude-filter'] as const) {
+      const pattern = group[field];
+      if (typeof pattern === 'string' && isRiskyPattern(pattern)) {
+        issues.push(
+          securityIssue(document, 'security.groupRiskyFilterPattern', [
+            'proxy-groups',
+            index,
+            field,
+          ]),
+        );
+      }
+    }
+  });
   return issues;
 }
 

@@ -203,6 +203,179 @@ describe('securityStage — skip-cert-verify on a real proxy/provider entry (FR-
   });
 });
 
+describe('securityStage — plaintext rule-provider download URL (FR-VAL-04, v0.4.0 #6)', () => {
+  it('fires for a type: http rule-provider whose url is plain http://', () => {
+    const issues = run(
+      [
+        'rule-providers:',
+        '  cn-domain:',
+        '    type: http',
+        '    url: "http://example.com/cn.yaml"',
+        '    behavior: classical',
+      ].join('\n'),
+    );
+    expect(issues).toEqual([
+      expect.objectContaining({
+        severity: 'warning',
+        code: 'security.ruleProviderPlaintextUrl',
+        module: 'security',
+        path: ['rule-providers', 'cn-domain', 'url'],
+        blocking: false,
+      }),
+    ]);
+  });
+
+  it('does not fire for https://', () => {
+    const issues = run(
+      [
+        'rule-providers:',
+        '  cn-domain:',
+        '    type: http',
+        '    url: "https://example.com/cn.yaml"',
+        '    behavior: classical',
+      ].join('\n'),
+    );
+    expect(issues.some((issue) => issue.code === 'security.ruleProviderPlaintextUrl')).toBe(false);
+  });
+
+  it('does not fire for type: file or type: inline, which have no url to check', () => {
+    const issues = run(
+      [
+        'rule-providers:',
+        '  local:',
+        '    type: file',
+        '    path: ./local.yaml',
+        '    behavior: classical',
+        '  literal:',
+        '    type: inline',
+        '    behavior: domain',
+        '    payload:',
+        '      - example.com',
+      ].join('\n'),
+    );
+    expect(issues.some((issue) => issue.code === 'security.ruleProviderPlaintextUrl')).toBe(false);
+  });
+
+  it('fires once per offending entry, addressed by its own map key', () => {
+    const issues = run(
+      [
+        'rule-providers:',
+        '  a:',
+        '    type: http',
+        '    url: "http://a.example.com/a.yaml"',
+        '    behavior: classical',
+        '  b:',
+        '    type: http',
+        '    url: "http://b.example.com/b.yaml"',
+        '    behavior: classical',
+      ].join('\n'),
+    );
+    const paths = issues
+      .filter((issue) => issue.code === 'security.ruleProviderPlaintextUrl')
+      .map((issue) => issue.path);
+    expect(paths).toEqual([
+      ['rule-providers', 'a', 'url'],
+      ['rule-providers', 'b', 'url'],
+    ]);
+  });
+
+  it('does not fire when rule-providers is absent, and does not throw on a malformed shape', () => {
+    expect(() => run('mode: rule\nrule-providers: not-a-map\n')).not.toThrow();
+    expect(run('mode: rule\n').some((i) => i.code === 'security.ruleProviderPlaintextUrl')).toBe(
+      false,
+    );
+  });
+
+  it('never echoes the real URL anywhere in the issue (NFR-SEC-03)', () => {
+    const issues = run(
+      [
+        'rule-providers:',
+        '  cn-domain:',
+        '    type: http',
+        '    url: "http://secret-internal-mirror.example.com/cn.yaml"',
+        '    behavior: classical',
+      ].join('\n'),
+    );
+    expect(JSON.stringify(issues)).not.toContain('secret-internal-mirror.example.com');
+  });
+});
+
+describe('securityStage — proxy-groups health-check url is deliberately never flagged (v0.4.0 #6)', () => {
+  it('does not fire for a proxy-group whose url (health-check probe) is plain http://, even though rule-providers.url and proxies use https-preferring checks — this is a real, intentional exception, not an oversight', () => {
+    const issues = run(
+      [
+        'proxy-groups:',
+        '  - {name: g, type: url-test, proxies: [DIRECT], url: "http://cp.cloudflare.com/generate_204", interval: 300}',
+      ].join('\n'),
+    );
+    expect(issues).toEqual([]);
+  });
+});
+
+describe('securityStage — proxy-groups filter/exclude-filter catastrophic backtracking (FR-VAL-04, v0.4.0 #6, NFR-SEC-05)', () => {
+  const CATASTROPHIC = '(a+)+$';
+
+  it('fires for a risky filter pattern on a real proxy-group entry', () => {
+    const issues = run(
+      ['proxy-groups:', `  - {name: g, type: select, use: [p1], filter: "${CATASTROPHIC}"}`].join(
+        '\n',
+      ),
+    );
+    expect(issues).toEqual([
+      expect.objectContaining({
+        severity: 'warning',
+        code: 'security.groupRiskyFilterPattern',
+        module: 'security',
+        path: ['proxy-groups', 0, 'filter'],
+        blocking: false,
+      }),
+    ]);
+  });
+
+  it('fires for exclude-filter the same way', () => {
+    const issues = run(
+      [
+        'proxy-groups:',
+        `  - {name: g, type: select, use: [p1], exclude-filter: "${CATASTROPHIC}"}`,
+      ].join('\n'),
+    );
+    expect(issues.some((i) => i.code === 'security.groupRiskyFilterPattern')).toBe(true);
+  });
+
+  it('does not fire for an ordinary, non-catastrophic filter pattern', () => {
+    const issues = run(
+      ['proxy-groups:', '  - {name: g, type: select, use: [p1], filter: "(?i)hk|tw"}'].join('\n'),
+    );
+    expect(issues.some((i) => i.code === 'security.groupRiskyFilterPattern')).toBe(false);
+  });
+
+  it('never evaluates the pattern as a regex — completes well under 50ms on a real catastrophic shape', () => {
+    const start = performance.now();
+    run(
+      ['proxy-groups:', `  - {name: g, type: select, use: [p1], filter: "${CATASTROPHIC}"}`].join(
+        '\n',
+      ),
+    );
+    expect(performance.now() - start).toBeLessThan(50);
+  });
+
+  it('does not fire when proxy-groups is absent, and does not throw on a malformed shape', () => {
+    expect(() => run('mode: rule\nproxy-groups: not-a-list\n')).not.toThrow();
+    expect(run('mode: rule\n').some((i) => i.code === 'security.groupRiskyFilterPattern')).toBe(
+      false,
+    );
+  });
+
+  it('never echoes the real pattern text anywhere in the issue (NFR-SEC-03)', () => {
+    const issues = run(
+      ['proxy-groups:', `  - {name: g, type: select, use: [p1], filter: "${CATASTROPHIC}"}`].join(
+        '\n',
+      ),
+    );
+    expect(JSON.stringify(issues)).not.toContain(CATASTROPHIC);
+  });
+});
+
 describe('securityStage general behavior', () => {
   it('produces nothing when the document failed to compose at all (document: null)', () => {
     const trulyUnparseable = { document: null, issues: [] };
