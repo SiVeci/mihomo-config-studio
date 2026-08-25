@@ -88,6 +88,10 @@
   "form.module.inbound": "Inbound & TUN",
   "form.module.proxies": "Proxy nodes",
   "form.module.proxy-providers": "Proxy subscriptions",
+  "form.module.proxy-groups": "Proxy groups",
+  "form.module.rule-providers": "Rule sets",
+  "form.module.rules": "Routing rules",
+  "form.module.sub-rules": "Sub-rules",
   "field.reveal": "Show",
   "field.hide": "Hide",
   "field.copy": "Copy",
@@ -100,5 +104,10 @@
   "providerPreview.unnamedNode": "(unnamed)",
   "providerPreview.unknownType": "(unknown type)",
   "providerPreview.fieldsLabel": "Fields present:",
-  "providerPreview.notAppliedNotice": "Structural preview only — nothing is written to the current project."
+  "providerPreview.notAppliedNotice": "Structural preview only — nothing is written to the current project.",
+  "project.mainViewTabListLabel": "View switcher",
+  "project.formViewTab": "Form",
+  "project.rulesViewTab": "Rules",
+  "ruleList.label": "Routing rules list",
+  "ruleList.emptyState": "No rules yet — switch to the Form view or edit the YAML directly to add some"
 }

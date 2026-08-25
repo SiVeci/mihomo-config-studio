@@ -967,3 +967,114 @@ describe('ProjectPage / module form wiring (FR-SCHEMA-01, PRD §7.4, v0.3.0 #14)
     expect(editorTextarea.value).toContain('enable: true');
   });
 });
+
+describe('ProjectPage / main view switching (E3, v0.4.0 #7)', () => {
+  async function setUpWithRealDocument(yaml: string) {
+    const adapter = new MemoryStorageAdapter();
+    const client = new WorkerClient(new RealWorker());
+    render(<ProjectPage client={client} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+    const editorTextarea = screen.getByLabelText<HTMLTextAreaElement>(t('editor.title'));
+    await waitFor(() => expect(editorTextarea.value).toBe(DEFAULT_PROJECT_CONFIG_TEXT));
+    fireEvent.change(editorTextarea, { target: { value: yaml } });
+    await waitFor(
+      () => {
+        expect(document.querySelector('[data-module-section="general"]')).not.toBeNull();
+      },
+      { timeout: 2000 },
+    );
+    return { adapter, editorTextarea };
+  }
+
+  it('defaults to the form view, with the rules view not mounted at all', async () => {
+    await setUpWithRealDocument('mode: rule\nrules:\n  - MATCH,DIRECT\n');
+
+    expect(document.querySelector('[data-module-section="general"]')).not.toBeNull();
+    expect(screen.queryByRole('grid', { name: t('ruleList.label') })).toBeNull();
+
+    const formTab = screen.getByRole('tab', { name: t('project.formViewTab') });
+    const rulesTab = screen.getByRole('tab', { name: t('project.rulesViewTab') });
+    expect(formTab.getAttribute('aria-selected')).toBe('true');
+    expect(rulesTab.getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('clicking the rules tab shows the real rules from the document and lazily unmounts the form (E3)', async () => {
+    await setUpWithRealDocument(
+      ['mode: rule', 'rules:', '  - DOMAIN-SUFFIX,example.com,DIRECT', '  - MATCH,PROXY'].join(
+        '\n',
+      ),
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: t('project.rulesViewTab') }));
+
+    const grid = await screen.findByRole('grid', { name: t('ruleList.label') });
+    expect(grid.getAttribute('aria-rowcount')).toBe('2');
+    const rows = screen.getAllByRole('row');
+    expect(rows[0]?.textContent).toContain('DOMAIN-SUFFIX,example.com,DIRECT');
+    expect(rows[1]?.textContent).toContain('MATCH,PROXY');
+
+    // Lazy-mounted (E3): switching away unmounts the form view's own DOM,
+    // not just hides it.
+    expect(document.querySelector('[data-module-section="general"]')).toBeNull();
+
+    const formTab = screen.getByRole('tab', { name: t('project.formViewTab') });
+    const rulesTab = screen.getByRole('tab', { name: t('project.rulesViewTab') });
+    expect(rulesTab.getAttribute('aria-selected')).toBe('true');
+    expect(formTab.getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('switching back to the form view remounts it and unmounts the rules view', async () => {
+    await setUpWithRealDocument('mode: rule\nrules:\n  - MATCH,DIRECT\n');
+
+    fireEvent.click(screen.getByRole('tab', { name: t('project.rulesViewTab') }));
+    await screen.findByRole('grid', { name: t('ruleList.label') });
+
+    fireEvent.click(screen.getByRole('tab', { name: t('project.formViewTab') }));
+    await waitFor(() => {
+      expect(document.querySelector('[data-module-section="general"]')).not.toBeNull();
+    });
+    expect(screen.queryByRole('grid', { name: t('ruleList.label') })).toBeNull();
+  });
+
+  it('ArrowRight/ArrowLeft on the tablist moves focus and switches the active view in one step (PRD §11.6)', async () => {
+    await setUpWithRealDocument('mode: rule\nrules:\n  - MATCH,DIRECT\n');
+
+    const formTab = screen.getByRole('tab', { name: t('project.formViewTab') });
+    const rulesTab = screen.getByRole('tab', { name: t('project.rulesViewTab') });
+    formTab.focus();
+
+    fireEvent.keyDown(formTab, { key: 'ArrowRight' });
+    await screen.findByRole('grid', { name: t('ruleList.label') });
+    expect(rulesTab.getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(rulesTab);
+
+    fireEvent.keyDown(rulesTab, { key: 'ArrowLeft' });
+    await waitFor(() => expect(formTab.getAttribute('aria-selected')).toBe('true'));
+    expect(document.activeElement).toBe(formTab);
+  });
+
+  it('wraps from the last tab back to the first on ArrowRight', async () => {
+    await setUpWithRealDocument('mode: rule\nrules:\n  - MATCH,DIRECT\n');
+
+    const formTab = screen.getByRole('tab', { name: t('project.formViewTab') });
+    const rulesTab = screen.getByRole('tab', { name: t('project.rulesViewTab') });
+    rulesTab.focus();
+
+    fireEvent.keyDown(rulesTab, { key: 'ArrowRight' });
+    await waitFor(() => expect(formTab.getAttribute('aria-selected')).toBe('true'));
+    expect(document.activeElement).toBe(formTab);
+  });
+
+  it('a key other than ArrowLeft/ArrowRight does not switch views', async () => {
+    await setUpWithRealDocument('mode: rule\nrules:\n  - MATCH,DIRECT\n');
+
+    const formTab = screen.getByRole('tab', { name: t('project.formViewTab') });
+    fireEvent.keyDown(formTab, { key: 'Enter' });
+
+    expect(formTab.getAttribute('aria-selected')).toBe('true');
+    expect(document.querySelector('[data-module-section="general"]')).not.toBeNull();
+  });
+});

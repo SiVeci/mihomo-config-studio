@@ -6,8 +6,12 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
  * deployment simple. This is deliberately minimal — exact-path matching
  * only, no nested routes or params — matching the same "small and
  * self-contained beats a dependency for something this size" posture as
- * this app's own i18n module. If v0.3.0/v0.4.0's route count outgrows exact
- * matching, that is the point to reconsider, not before.
+ * this app's own i18n module. v0.4.0 confirmed this still holds (E3): the
+ * main column's 表单/规则/关系图 view switch (#7) is component-internal
+ * `useState`, not a route — those views are cheap to swap and irrelevant to
+ * browser history, so the route count this router handles did not grow.
+ * Revisit if a future version actually needs deep-linkable/bookmarkable
+ * views, not before.
  */
 
 export interface Route {

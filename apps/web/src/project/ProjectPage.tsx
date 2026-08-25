@@ -2,7 +2,14 @@ import { collectUnknownFields, type FormMode, type SchemaModule } from '@mcs/sch
 import { builtinAsStoredBundle, createRegistry } from '@mcs/schema-registry';
 import { AutoSaver } from '@mcs/storage';
 import type { StorageAdapter } from '@mcs/storage';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from 'react';
 
 import { DiffPanel } from '../diff/DiffPanel.js';
 import type { DiffPanelWorkerClient } from '../diff/DiffPanel.js';
@@ -19,6 +26,7 @@ import { t } from '../i18n/index.js';
 import { IssuePanel } from '../issues/IssuePanel.js';
 import type { IssuePanelWorkerClient } from '../issues/IssuePanel.js';
 import { AppShell } from '../layout/AppShell.js';
+import { RuleListPage } from '../rules/RuleListPage.js';
 import type {
   ApplyPatchResponse,
   ConfigPath,
@@ -44,6 +52,19 @@ import type { ProjectRecord } from './model.js';
 import './ProjectPage.css';
 
 type ProjectField = 'name' | 'description' | 'targetProfile';
+
+/**
+ * PRD §7.2's middle column: "图形化表单、列表、拖拽排序和关系图". `graph`
+ * joins this list once #13 builds `GraphView` — deliberately not stubbed in
+ * here ahead of that, since a tab with no real content behind it would just
+ * be dead UI between now and then (E3, v0.4.0 #7).
+ */
+const MAIN_VIEWS = ['form', 'rules'] as const;
+type MainView = (typeof MAIN_VIEWS)[number];
+const MAIN_VIEW_TAB_LABEL_KEYS: Record<MainView, 'project.formViewTab' | 'project.rulesViewTab'> = {
+  form: 'project.formViewTab',
+  rules: 'project.rulesViewTab',
+};
 
 /**
  * Document-editing operations `ProjectPage` itself calls directly rather
@@ -104,6 +125,10 @@ export function ProjectPage({
   const [canRedo, setCanRedo] = useState(false);
   const [documentValue, setDocumentValue] = useState<unknown>(null);
   const [formMode, setFormMode] = useState<FormMode>('basic');
+  // Component-internal state, not a route (E3, v0.4.0 #7): the main column's
+  // three PRD §7.2 views ("图形化表单、列表、拖拽排序和关系图") are cheap to
+  // switch between and irrelevant to browser history/deep-linking.
+  const [mainView, setMainView] = useState<MainView>('form');
   // Static for the process lifetime: v0.3.0 has no Bundle-install UI yet, so
   // the built-in bundle is the only one that can ever be active (see
   // `builtinAsStoredBundle`'s own doc comment).
@@ -122,6 +147,17 @@ export function ProjectPage({
     [modules, documentValue],
   );
 
+  // `rules:` read directly out of the already-fetched document value — this
+  // page never re-parses or re-fetches anything of its own to build the list
+  // `RuleListPage` renders (v0.4.0 #7). Filtered defensively rather than
+  // trusting the shape: a document mid-edit into something schema-invalid
+  // (e.g. `rules: "not-a-list"`) must never crash the view switch itself.
+  const rules = useMemo<readonly string[]>(() => {
+    if (documentValue === null || typeof documentValue !== 'object') return [];
+    const raw = (documentValue as Record<string, unknown>).rules;
+    return Array.isArray(raw) ? raw.filter((item): item is string => typeof item === 'string') : [];
+  }, [documentValue]);
+
   const projectsRef = useRef(projects);
   projectsRef.current = projects;
   const configTextRef = useRef(configText);
@@ -130,6 +166,7 @@ export function ProjectPage({
   const configAutoSaverRef = useRef<AutoSaver | null>(null);
   const editorRef = useRef<YamlEditorHandle>(null);
   const moduleFormRef = useRef<ModuleFormPageHandle>(null);
+  const mainViewTabRefs = useRef<Partial<Record<MainView, HTMLButtonElement | null>>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -357,6 +394,31 @@ export function ProjectPage({
   }
 
   /**
+   * Standard tablist keyboard pattern (WAI-ARIA APG): Left/Right moves
+   * *and* activates in one step (no separate Enter/Space needed) — E3/PRD
+   * §11.6 asks for arrow-key switching, not just arrow-key focus. Focus is
+   * moved synchronously via the ref map rather than waiting a render: the
+   * target button already exists in the DOM (both tabs are always mounted,
+   * only their *panel* content lazy-mounts), so there is nothing to wait for.
+   */
+  function handleMainViewTabKeyDown(
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    current: MainView,
+  ): void {
+    const currentIndex = MAIN_VIEWS.indexOf(current);
+    let nextIndex: number | null = null;
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % MAIN_VIEWS.length;
+    else if (event.key === 'ArrowLeft') {
+      nextIndex = (currentIndex - 1 + MAIN_VIEWS.length) % MAIN_VIEWS.length;
+    }
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const nextView = MAIN_VIEWS[nextIndex] as MainView;
+    setMainView(nextView);
+    mainViewTabRefs.current[nextView]?.focus();
+  }
+
+  /**
    * A `ModuleFormPage` field edit — distinct from `handleFieldChange` above,
    * which is project *metadata* (name/description/targetProfile), not
    * document content. Always the `'set'` `IssueFix` kind (v0.3.0 #14):
@@ -459,14 +521,55 @@ export function ProjectPage({
             onIssuesChange={setIssues}
             onValueChange={setDocumentValue}
           />
-          <ModuleFormPage
-            ref={moduleFormRef}
-            modules={modules}
-            value={documentValue}
-            mode={formMode}
-            onModeChange={setFormMode}
-            onFieldChange={(path, value) => void handleDocumentFieldChange(path, value)}
-          />
+          <div className="project-main-view">
+            <div
+              className="project-main-view__tablist"
+              role="tablist"
+              aria-label={t('project.mainViewTabListLabel')}
+            >
+              {MAIN_VIEWS.map((view) => (
+                <button
+                  key={view}
+                  ref={(element) => {
+                    mainViewTabRefs.current[view] = element;
+                  }}
+                  type="button"
+                  role="tab"
+                  id={`main-view-tab-${view}`}
+                  aria-selected={mainView === view}
+                  aria-controls={`main-view-panel-${view}`}
+                  tabIndex={mainView === view ? 0 : -1}
+                  className="project-main-view__tab"
+                  onClick={() => setMainView(view)}
+                  onKeyDown={(event) => handleMainViewTabKeyDown(event, view)}
+                >
+                  {t(MAIN_VIEW_TAB_LABEL_KEYS[view])}
+                </button>
+              ))}
+            </div>
+            <div
+              className="project-main-view__panel"
+              role="tabpanel"
+              id={`main-view-panel-${mainView}`}
+              aria-labelledby={`main-view-tab-${mainView}`}
+            >
+              {/* Lazy-mounted (E3): only the selected view's component ever
+                  renders — a 10,000-row rule list or a future relationship
+                  graph costs nothing while the user is looking at the other
+                  one. */}
+              {mainView === 'form' && (
+                <ModuleFormPage
+                  ref={moduleFormRef}
+                  modules={modules}
+                  value={documentValue}
+                  mode={formMode}
+                  onModeChange={setFormMode}
+                  onFieldChange={(path, value) => void handleDocumentFieldChange(path, value)}
+                />
+              )}
+              {mainView === 'rules' && <RuleListPage rules={rules} />}
+            </div>
+          </div>
           <DiffPanel
             importBaseline={importBaseline}
             savedBaseline={savedBaseline}

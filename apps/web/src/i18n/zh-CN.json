@@ -88,6 +88,10 @@
   "form.module.inbound": "入站与 TUN",
   "form.module.proxies": "代理节点",
   "form.module.proxy-providers": "代理订阅",
+  "form.module.proxy-groups": "代理组",
+  "form.module.rule-providers": "规则集合",
+  "form.module.rules": "路由规则",
+  "form.module.sub-rules": "子规则",
   "field.reveal": "显示",
   "field.hide": "隐藏",
   "field.copy": "复制",
@@ -100,5 +104,10 @@
   "providerPreview.unnamedNode": "（未命名）",
   "providerPreview.unknownType": "（未知类型）",
   "providerPreview.fieldsLabel": "包含字段：",
-  "providerPreview.notAppliedNotice": "仅结构预览，不会写入当前项目配置。"
+  "providerPreview.notAppliedNotice": "仅结构预览，不会写入当前项目配置。",
+  "project.mainViewTabListLabel": "视图切换",
+  "project.formViewTab": "表单",
+  "project.rulesViewTab": "规则",
+  "ruleList.label": "路由规则列表",
+  "ruleList.emptyState": "还没有规则，切换到「表单」视图或直接编辑 YAML 添加"
 }
