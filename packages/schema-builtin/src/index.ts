@@ -32,6 +32,12 @@ import proxiesZhCN from '../modules/proxies/i18n/zh-CN.json';
 import proxiesManifest from '../modules/proxies/module.manifest.json';
 import proxiesUiSchema from '../modules/proxies/ui.schema.json';
 import proxiesRules from '../modules/proxies/validation.rules.json';
+import proxyGroupsConfigSchema from '../modules/proxy-groups/config.schema.json';
+import proxyGroupsEn from '../modules/proxy-groups/i18n/en.json';
+import proxyGroupsZhCN from '../modules/proxy-groups/i18n/zh-CN.json';
+import proxyGroupsManifest from '../modules/proxy-groups/module.manifest.json';
+import proxyGroupsUiSchema from '../modules/proxy-groups/ui.schema.json';
+import proxyGroupsRules from '../modules/proxy-groups/validation.rules.json';
 import proxyProvidersConfigSchema from '../modules/proxy-providers/config.schema.json';
 import proxyProvidersEn from '../modules/proxy-providers/i18n/en.json';
 import proxyProvidersZhCN from '../modules/proxy-providers/i18n/zh-CN.json';
@@ -176,6 +182,32 @@ export const PROXY_PROVIDERS_MODULE: SchemaModule = {
   i18n: { 'zh-CN': proxyProvidersZhCN, en: proxyProvidersEn } as ModuleI18n,
 };
 
+const PROXY_GROUPS_EXAMPLES: ModuleExample[] = [
+  { name: 'valid', kind: 'valid', path: 'examples/valid.yaml' },
+  { name: 'invalid', kind: 'invalid', path: 'examples/invalid.yaml' },
+  { name: 'edge', kind: 'edge', path: 'examples/edge.yaml' },
+  { name: 'unknown-fields', kind: 'unknown-fields', path: 'examples/unknown-fields.yaml' },
+];
+
+/**
+ * Same structural situation as `PROXIES_MODULE`/`PROXY_PROVIDERS_MODULE`:
+ * `proxy-groups:` is a real document *list* (not a map — groups are keyed by
+ * their own `name` field, not a document key), so `config.schema.json`
+ * describes ONE group entry's discriminated union (`type: select | url-test
+ * | fallback | load-balance`) at its own root. `manifest.root:
+ * ['proxy-groups']` still records the path this module owns; turning "one
+ * entry's plan" into "N rendered forms" is #7's concern (v0.4.0), same as
+ * how #14 did it for `proxies`/`proxy-providers` in v0.3.0.
+ */
+export const PROXY_GROUPS_MODULE: SchemaModule = {
+  manifest: proxyGroupsManifest as ModuleManifest,
+  schema: proxyGroupsConfigSchema as JsonSchema,
+  ui: proxyGroupsUiSchema as UiSchema,
+  rules: proxyGroupsRules as ValidationRule[],
+  examples: PROXY_GROUPS_EXAMPLES,
+  i18n: { 'zh-CN': proxyGroupsZhCN, en: proxyGroupsEn } as ModuleI18n,
+};
+
 /** Every module this package currently ships, keyed by the bundle file path `schema-registry`'s `StoredBundle.files` will use. */
 export const BUILTIN_MODULE_FILES: Readonly<Record<string, SchemaModule>> = {
   'modules/general.json': GENERAL_MODULE,
@@ -184,4 +216,5 @@ export const BUILTIN_MODULE_FILES: Readonly<Record<string, SchemaModule>> = {
   'modules/inbound.json': INBOUND_MODULE,
   'modules/proxies.json': PROXIES_MODULE,
   'modules/proxy-providers.json': PROXY_PROVIDERS_MODULE,
+  'modules/proxy-groups.json': PROXY_GROUPS_MODULE,
 };

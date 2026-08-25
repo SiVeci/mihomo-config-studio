@@ -1,0 +1,9 @@
+# "name"/"type"/"url"/"interval" are declared; "disable-udp" is a real,
+# documented Mihomo field (disables UDP relay for this group) that is
+# deliberately out of P0 scope — it must surface as unknown, not be
+# silently dropped.
+name: "auto"
+type: url-test
+url: "https://cp.cloudflare.com/generate_204"
+interval: 300
+disable-udp: true

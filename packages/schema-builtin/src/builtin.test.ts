@@ -20,6 +20,7 @@ import {
   GENERAL_MODULE,
   INBOUND_MODULE,
   PROXIES_MODULE,
+  PROXY_GROUPS_MODULE,
   PROXY_PROVIDERS_MODULE,
   SNIFFER_MODULE,
 } from './index.js';
@@ -810,6 +811,160 @@ describe('proxy-providers module (v0.3.0 #11 — discriminated union: http/file/
         'exclude-filter': catastrophic,
       },
       PROXY_PROVIDERS_MODULE.schema,
+    );
+    const elapsedMs = performance.now() - start;
+
+    expect(issues).toEqual([]);
+    expect(elapsedMs).toBeLessThan(50);
+  });
+});
+
+describe('proxy-groups module (v0.4.0 #1 — discriminated union: select/url-test/fallback/load-balance)', () => {
+  it('has no shape issues (rules/examples/i18n)', () => {
+    expect(validateModuleShape(PROXY_GROUPS_MODULE)).toEqual([]);
+  });
+
+  it('declares exactly the P0 fields UPSTREAM_P0_FIELDS lists — no more, no less', () => {
+    const declared = collectUnionFieldPaths(PROXY_GROUPS_MODULE.schema);
+    const upstream = new Set(
+      UPSTREAM_P0_FIELDS['proxy-groups']
+        .map((record) => record.path)
+        .filter((path) => path.includes('.')),
+    );
+
+    const declaredNotUpstream = [...declared].filter((path) => !upstream.has(path));
+    const upstreamNotDeclared = [...upstream].filter((path) => !declared.has(path));
+
+    expect(declaredNotUpstream).toEqual([]);
+    expect(upstreamNotDeclared).toEqual([]);
+  });
+
+  it('gives every declared field a UI entry with docs + safety metadata', () => {
+    const missing: string[] = [];
+    for (const path of collectUnionFieldPaths(PROXY_GROUPS_MODULE.schema)) {
+      const segments = path.split('.').slice(1);
+      let fields = PROXY_GROUPS_MODULE.ui.fields ?? {};
+      let spec: (typeof fields)[string] | undefined;
+      for (const segment of segments) {
+        spec = fields[segment];
+        if (!spec) break;
+        fields = spec.fields ?? {};
+      }
+      if (!spec?.docs || !spec.safety) missing.push(path);
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it('lists all four example kinds with a path that exists on disk', () => {
+    const kinds = PROXY_GROUPS_MODULE.examples?.map((example) => example.kind).sort();
+    expect(kinds).toEqual(['edge', 'invalid', 'unknown-fields', 'valid']);
+    for (const example of PROXY_GROUPS_MODULE.examples ?? []) {
+      expect(() => readExample(PROXY_GROUPS_MODULE, example.path)).not.toThrow();
+    }
+  });
+
+  it('valid.yaml and edge.yaml have no schema violations', () => {
+    for (const kind of ['valid', 'edge'] as const) {
+      const example = PROXY_GROUPS_MODULE.examples?.find((candidate) => candidate.kind === kind);
+      if (!example) throw new Error(`no ${kind} example declared`);
+      const value = parseExample(PROXY_GROUPS_MODULE, example.path);
+      expect(validateValue(value, PROXY_GROUPS_MODULE.schema), example.path).toEqual([]);
+    }
+  });
+
+  it('invalid.yaml has at least one schema violation', () => {
+    const value = parseExample(PROXY_GROUPS_MODULE, 'examples/invalid.yaml');
+    expect(validateValue(value, PROXY_GROUPS_MODULE.schema).length).toBeGreaterThan(0);
+  });
+
+  it('every docs URL is on the official wiki domain and carries no query string (NFR-SEC-03 boundary)', () => {
+    const offenders: string[] = [];
+    for (const [key, spec] of Object.entries(PROXY_GROUPS_MODULE.ui.fields ?? {})) {
+      if (!spec.docs) continue;
+      const url = new URL(spec.docs);
+      const onOfficialDomain = url.hostname === 'wiki.metacubex.one';
+      const hasNoQuery = url.search === '';
+      if (!onOfficialDomain || !hasNoQuery) offenders.push(key);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('unknown-fields.yaml plans its undeclared field as unknown instead of dropping it', () => {
+    const value = parseExample(PROXY_GROUPS_MODULE, 'examples/unknown-fields.yaml');
+    const plan = planOneUnionItem(PROXY_GROUPS_MODULE, value);
+    const item = plan.fields.find((field) => field.key === 'item');
+    expect(item?.children?.some((child) => child.unknown)).toBe(true);
+    expect(plan.unknownFields.length).toBeGreaterThan(0);
+  });
+
+  it('plans each of the four group types as a variant, discriminated on "type"', () => {
+    const cases: Array<{
+      value: Record<string, unknown>;
+      type: string;
+      ownField?: string;
+    }> = [
+      { value: { name: 'g', type: 'select', proxies: ['a'] }, type: 'select' },
+      {
+        value: { name: 'g', type: 'url-test', url: 'https://cp.cloudflare.com/generate_204' },
+        type: 'url-test',
+        ownField: 'url',
+      },
+      {
+        value: { name: 'g', type: 'fallback', interval: 300 },
+        type: 'fallback',
+        ownField: 'interval',
+      },
+      {
+        value: { name: 'g', type: 'load-balance', strategy: 'round-robin' },
+        type: 'load-balance',
+        ownField: 'strategy',
+      },
+    ];
+
+    for (const { value, type, ownField } of cases) {
+      const plan = planOneUnionItem(PROXY_GROUPS_MODULE, value);
+      const item = plan.fields.find((field) => field.key === 'item');
+      expect(item?.control, type).toBe('variant');
+      expect(item?.variant, type).toMatchObject({
+        discriminatorKey: 'type',
+        selected: type,
+        matched: true,
+      });
+      // "name" is shared, present on every branch regardless of type.
+      expect(
+        item?.children?.some((child) => child.key === 'name'),
+        type,
+      ).toBe(true);
+      if (ownField) {
+        expect(
+          item?.children?.some((child) => child.key === ownField),
+          type,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('does not mark the health-check "url" as sensitive — same field name as proxy-providers.url (a subscription address), different meaning here (plan #1)', () => {
+    const plan = planOneUnionItem(PROXY_GROUPS_MODULE, {
+      name: 'auto',
+      type: 'url-test',
+      url: 'https://cp.cloudflare.com/generate_204',
+    });
+    const item = plan.fields.find((field) => field.key === 'item');
+    const url = item?.children?.find((child) => child.key === 'url');
+    expect(url?.control).not.toBe('subscription-url');
+    expect(url?.control).not.toBe('secret');
+    expect(url?.sensitive).toBe(false);
+  });
+
+  it('never evaluates "filter"/"exclude-filter" as a regex during validation — a classic catastrophic-backtracking pattern is just an opaque string (NFR-SEC-05)', () => {
+    const catastrophic = '(a+)+$';
+    expect(isRiskyPattern(catastrophic)).toBe(true);
+
+    const start = performance.now();
+    const issues = validateValue(
+      { name: 'g', type: 'select', filter: catastrophic, 'exclude-filter': catastrophic },
+      PROXY_GROUPS_MODULE.schema,
     );
     const elapsedMs = performance.now() - start;
 

@@ -1,0 +1,5 @@
+# Violates config.schema.json in two independent ways:
+# - "name" is required on every branch (shared) and missing here
+# - "interval" is not a valid integer
+type: fallback
+interval: soon

@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "shared": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "proxies": { "type": "array", "items": { "type": "string" } },
+        "use": { "type": "array", "items": { "type": "string" } },
+        "filter": { "type": "string" },
+        "exclude-filter": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "select": {
+      "allOf": [
+        { "$ref": "#/$defs/shared" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "select" }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "url-test": {
+      "allOf": [
+        { "$ref": "#/$defs/shared" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "url-test" },
+            "url": { "type": "string", "format": "uri" },
+            "interval": { "type": "integer", "minimum": 1 },
+            "tolerance": { "type": "integer", "minimum": 0 },
+            "lazy": { "type": "boolean", "default": true }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "fallback": {
+      "allOf": [
+        { "$ref": "#/$defs/shared" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "fallback" },
+            "url": { "type": "string", "format": "uri" },
+            "interval": { "type": "integer", "minimum": 1 }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "load-balance": {
+      "allOf": [
+        { "$ref": "#/$defs/shared" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "load-balance" },
+            "url": { "type": "string", "format": "uri" },
+            "interval": { "type": "integer", "minimum": 1 },
+            "strategy": {
+              "type": "string",
+              "enum": ["consistent-hashing", "round-robin", "sticky-sessions"]
+            }
+          },
+          "required": ["type"]
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/select" },
+    { "$ref": "#/$defs/url-test" },
+    { "$ref": "#/$defs/fallback" },
+    { "$ref": "#/$defs/load-balance" }
+  ]
+}

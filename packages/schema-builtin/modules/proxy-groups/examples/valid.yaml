@@ -1,0 +1,8 @@
+name: "auto"
+type: url-test
+proxies:
+  - ss1
+  - ss2
+url: "https://cp.cloudflare.com/generate_204"
+interval: 300
+tolerance: 150

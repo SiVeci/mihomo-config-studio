@@ -1,0 +1,27 @@
+{
+  "group.general": "General",
+  "group.check": "Health check",
+  "group.processing": "Selection & filtering",
+
+  "field.name": "Group name",
+  "field.type": "Group type",
+  "field.proxies": "Member nodes / groups",
+  "field.use": "Pull members from proxy set",
+  "field.url": "Health check test URL",
+  "field.interval": "Health check interval (s)",
+  "field.tolerance": "Switch tolerance (ms)",
+  "field.lazy": "Lazy (only probe once selected)",
+  "field.strategy": "Load-balance strategy",
+  "field.filter": "Include members matching this pattern",
+  "field.exclude-filter": "Exclude members matching this pattern",
+
+  "help.type": "select: pick manually. url-test: auto-picks the lowest-latency member. fallback: tries members in order, falling back on failure. load-balance: distributes across members by the chosen strategy.",
+  "help.proxies": "Outbound nodes or other policy groups to include directly, by name.",
+  "help.use": "Pulls in every member from one or more proxy sets (proxy-providers), by name — combined with any names listed under \"proxies\" above.",
+  "help.url": "The health-check probe address (e.g. https://cp.cloudflare.com/generate_204). Only checks members listed under \"proxies\", not ones pulled in via \"use\".",
+  "help.tolerance": "url-test only: a member is only switched to if it beats the current one by more than this many milliseconds.",
+  "help.lazy": "When on, this group's members are only probed once the group is actually selected/used, cutting down on unnecessary probe traffic.",
+  "help.strategy": "load-balance only: how traffic is distributed across members.",
+  "help.filter": "Only keeps members (from \"use\") whose name matches this pattern; the pattern itself is configuration content executed by the Mihomo core — this tool never evaluates it.",
+  "help.exclude-filter": "Excludes members (from \"use\") whose name matches this pattern; the pattern itself is configuration content executed by the Mihomo core — this tool never evaluates it."
+}

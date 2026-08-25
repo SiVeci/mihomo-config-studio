@@ -274,12 +274,12 @@ describe('resolveActiveBundle (FR-UPD-01, FR-UPD-04)', () => {
 });
 
 describe('builtinAsStoredBundle (v0.3.0 #14)', () => {
-  it('resolves directly through createRegistry into all six real P0 modules, with no registry issues', () => {
+  it('resolves directly through createRegistry into all seven real P0 modules, with no registry issues', () => {
     const registry = createRegistry(builtinAsStoredBundle());
     const ids = registry.modules().map((module) => module.manifest.id);
 
     expect(ids.sort()).toEqual(
-      ['dns', 'general', 'inbound', 'proxies', 'proxy-providers', 'sniffer'].sort(),
+      ['dns', 'general', 'inbound', 'proxies', 'proxy-groups', 'proxy-providers', 'sniffer'].sort(),
     );
     expect(registry.issues()).toEqual([]);
   });

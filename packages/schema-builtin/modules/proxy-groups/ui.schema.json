@@ -1,0 +1,95 @@
+{
+  "groups": [
+    { "id": "general", "label": "group.general", "order": 0 },
+    { "id": "check", "label": "group.check", "order": 10, "advanced": true },
+    { "id": "processing", "label": "group.processing", "order": 20, "advanced": true }
+  ],
+  "fields": {
+    "name": {
+      "label": "field.name",
+      "group": "general",
+      "order": 1,
+      "docs": "https://wiki.metacubex.one/config/proxy-groups/",
+      "safety": "safe"
+    },
+    "type": {
+      "label": "field.type",
+      "help": "help.type",
+      "group": "general",
+      "order": 2,
+      "docs": "https://wiki.metacubex.one/config/proxy-groups/",
+      "safety": "safe"
+    },
+    "proxies": {
+      "label": "field.proxies",
+      "help": "help.proxies",
+      "group": "general",
+      "order": 3,
+      "docs": "https://wiki.metacubex.one/config/proxy-groups/",
+      "safety": "safe"
+    },
+    "use": {
+      "label": "field.use",
+      "help": "help.use",
+      "group": "general",
+      "order": 4,
+      "docs": "https://wiki.metacubex.one/config/proxy-groups/",
+      "safety": "safe"
+    },
+    "url": {
+      "label": "field.url",
+      "help": "help.url",
+      "group": "check",
+      "order": 1,
+      "docs": "https://wiki.metacubex.one/config/proxy-groups/",
+      "safety": "safe"
+    },
+    "interval": {
+      "label": "field.interval",
+      "group": "check",
+      "order": 2,
+      "docs": "https://wiki.metacubex.one/config/proxy-groups/",
+      "safety": "safe"
+    },
+    "tolerance": {
+      "label": "field.tolerance",
+      "help": "help.tolerance",
+      "group": "check",
+      "order": 3,
+      "docs": "https://wiki.metacubex.one/config/proxy-groups/",
+      "safety": "safe"
+    },
+    "lazy": {
+      "label": "field.lazy",
+      "help": "help.lazy",
+      "group": "check",
+      "order": 4,
+      "docs": "https://wiki.metacubex.one/config/proxy-groups/",
+      "safety": "safe"
+    },
+    "strategy": {
+      "label": "field.strategy",
+      "help": "help.strategy",
+      "group": "processing",
+      "order": 1,
+      "docs": "https://wiki.metacubex.one/config/proxy-groups/",
+      "safety": "safe"
+    },
+    "filter": {
+      "label": "field.filter",
+      "help": "help.filter",
+      "group": "processing",
+      "order": 2,
+      "docs": "https://wiki.metacubex.one/config/proxy-groups/",
+      "safety": "safe"
+    },
+    "exclude-filter": {
+      "label": "field.exclude-filter",
+      "help": "help.exclude-filter",
+      "group": "processing",
+      "order": 3,
+      "docs": "https://wiki.metacubex.one/config/proxy-groups/",
+      "safety": "safe"
+    }
+  }
+}

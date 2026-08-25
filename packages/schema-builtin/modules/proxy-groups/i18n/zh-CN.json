@@ -1,0 +1,27 @@
+{
+  "group.general": "常规",
+  "group.check": "健康检查",
+  "group.processing": "筛选",
+
+  "field.name": "策略组名称",
+  "field.type": "策略组类型",
+  "field.proxies": "成员节点/策略组",
+  "field.use": "从代理集合引入成员",
+  "field.url": "健康检查测试地址",
+  "field.interval": "健康检查间隔（秒）",
+  "field.tolerance": "切换容差（毫秒）",
+  "field.lazy": "懒惰模式（仅在被选中时探测）",
+  "field.strategy": "负载均衡策略",
+  "field.filter": "按正则筛选成员",
+  "field.exclude-filter": "按正则排除成员",
+
+  "help.type": "select：手动选择；url-test：自动选用延迟最低的成员；fallback：按顺序尝试，失败则切换下一个；load-balance：按所选策略在成员间分流。",
+  "help.proxies": "直接按名称列出的出站节点或其他策略组。",
+  "help.use": "按名称引入一个或多个代理集合（proxy-providers）的全部成员，与上方 proxies 列出的名称合并使用。",
+  "help.url": "健康检查探测地址（如 https://cp.cloudflare.com/generate_204）。只会检查 proxies 字段列出的成员，不检查通过 use 引入的成员。",
+  "help.tolerance": "仅 url-test：只有当某成员的延迟优于当前所选成员超过该毫秒数时才会切换。",
+  "help.lazy": "开启后仅在该策略组被实际选中/使用时才探测其成员，减少不必要的探测流量。",
+  "help.strategy": "仅 load-balance：在成员间分配流量所采用的算法。",
+  "help.filter": "只保留（通过 use 引入的）名称匹配该正则表达式的成员；正则本身是配置内容，由 Mihomo 内核执行匹配，本工具不会对它求值。",
+  "help.exclude-filter": "排除（通过 use 引入的）名称匹配该正则表达式的成员；正则本身是配置内容，由 Mihomo 内核执行匹配，本工具不会对它求值。"
+}

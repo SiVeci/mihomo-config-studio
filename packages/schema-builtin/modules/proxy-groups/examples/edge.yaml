@@ -1,0 +1,6 @@
+# Boundary-valid: the "select" branch only strictly needs "name" and "type"
+# — every optional shared/branch field (proxies/use/filter/url/interval) is
+# intentionally absent to prove the minimal-required-fields case is
+# schema-valid.
+name: "Proxy"
+type: select
