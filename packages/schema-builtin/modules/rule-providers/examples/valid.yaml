@@ -1,0 +1,6 @@
+type: http
+behavior: domain
+format: yaml
+url: "https://example.com/rules/cn-domain.yaml"
+interval: 259200
+path: ./rule1.yaml

@@ -1,0 +1,10 @@
+# format: mrs only supports domain/ipcidr behavior, not classical (the
+# closed prerequisite from #0 — vendored sample lines 1860-1870 + Meta-Docs,
+# cross-checked). This is the schema-valid boundary case for that
+# constraint, reused by #16/#17's "规则集合分流配置" template and #5's rule
+# order/shadowing corpus.
+type: http
+url: "https://example.com/rules/cn-ipcidr.mrs"
+format: mrs
+behavior: ipcidr
+path: ./cn-ipcidr.mrs

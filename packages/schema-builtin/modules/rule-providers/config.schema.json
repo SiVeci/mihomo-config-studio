@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "shared": {
+      "type": "object",
+      "properties": {
+        "behavior": { "type": "string", "enum": ["domain", "ipcidr", "classical"] }
+      }
+    },
+    "http": {
+      "allOf": [
+        { "$ref": "#/$defs/shared" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "http" },
+            "url": { "type": "string", "format": "uri" },
+            "format": { "type": "string", "enum": ["yaml", "text", "mrs"], "default": "yaml" },
+            "interval": { "type": "integer", "minimum": 1 },
+            "path": { "type": "string" },
+            "size-limit": { "type": "integer", "minimum": 0 },
+            "proxy": { "type": "string" }
+          },
+          "required": ["type", "url"]
+        }
+      ]
+    },
+    "file": {
+      "allOf": [
+        { "$ref": "#/$defs/shared" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "file" },
+            "format": { "type": "string", "enum": ["yaml", "text", "mrs"], "default": "yaml" },
+            "interval": { "type": "integer", "minimum": 1 },
+            "path": { "type": "string" }
+          },
+          "required": ["type", "path"]
+        }
+      ]
+    },
+    "inline": {
+      "allOf": [
+        { "$ref": "#/$defs/shared" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "inline" },
+            "payload": { "type": "array", "items": { "type": "string" } }
+          },
+          "required": ["type", "payload"]
+        }
+      ]
+    }
+  },
+  "oneOf": [{ "$ref": "#/$defs/http" }, { "$ref": "#/$defs/file" }, { "$ref": "#/$defs/inline" }]
+}

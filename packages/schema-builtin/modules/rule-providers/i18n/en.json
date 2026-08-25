@@ -1,0 +1,23 @@
+{
+  "group.general": "General",
+  "group.source": "Source",
+
+  "field.type": "Source type",
+  "field.behavior": "Rule behavior",
+  "field.format": "File format",
+  "field.url": "Rule file URL",
+  "field.interval": "Auto-update interval (s)",
+  "field.path": "Local path",
+  "field.size-limit": "Download size limit (bytes)",
+  "field.proxy": "Dialer for the download",
+  "field.payload": "Inline rule list",
+
+  "help.type": "http downloads a rule file from a URL; file reads a local file; inline writes the rule list directly into the config.",
+  "help.behavior": "domain: DOMAIN-SUFFIX-style entries. ipcidr: IP-CIDR-style entries. classical: any rule type, one per line. Not every (format, behavior) combination is supported — see \"format\" below.",
+  "help.format": "yaml/text: source formats, convertible with each other. mrs: Mihomo's compact binary format — only supports domain/ipcidr behavior, not classical.",
+  "help.path": "For type: http, the local cache file location (optional, auto-generated if left empty); for type: file, the actual source file — required.",
+  "help.proxy": "The node or policy group used to dial the rule file download itself; leave empty to download directly.",
+  "help.payload": "type: inline only; writes rule entries directly into the config, one string per line, interpreted according to \"behavior\".",
+
+  "rule.mrsFormatExcludesClassicalBehavior": "The mrs format only supports domain and ipcidr behavior, not classical — pick domain or ipcidr, or switch format to yaml/text."
+}

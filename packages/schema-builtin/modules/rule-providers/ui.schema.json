@@ -1,0 +1,79 @@
+{
+  "groups": [
+    { "id": "general", "label": "group.general", "order": 0 },
+    { "id": "source", "label": "group.source", "order": 10 }
+  ],
+  "fields": {
+    "type": {
+      "label": "field.type",
+      "help": "help.type",
+      "group": "general",
+      "order": 1,
+      "docs": "https://wiki.metacubex.one/config/rule-providers/",
+      "safety": "safe"
+    },
+    "behavior": {
+      "label": "field.behavior",
+      "help": "help.behavior",
+      "group": "general",
+      "order": 2,
+      "docs": "https://wiki.metacubex.one/config/rule-providers/",
+      "safety": "safe"
+    },
+    "format": {
+      "label": "field.format",
+      "help": "help.format",
+      "group": "general",
+      "order": 3,
+      "docs": "https://wiki.metacubex.one/config/rule-providers/",
+      "safety": "safe"
+    },
+    "url": {
+      "label": "field.url",
+      "group": "source",
+      "order": 1,
+      "docs": "https://wiki.metacubex.one/config/rule-providers/",
+      "safety": "safe"
+    },
+    "interval": {
+      "label": "field.interval",
+      "group": "source",
+      "order": 2,
+      "docs": "https://wiki.metacubex.one/config/rule-providers/",
+      "safety": "safe"
+    },
+    "path": {
+      "label": "field.path",
+      "help": "help.path",
+      "group": "source",
+      "order": 3,
+      "docs": "https://wiki.metacubex.one/config/rule-providers/",
+      "safety": "safe"
+    },
+    "size-limit": {
+      "label": "field.size-limit",
+      "group": "source",
+      "order": 4,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/rule-providers/",
+      "safety": "safe"
+    },
+    "proxy": {
+      "label": "field.proxy",
+      "help": "help.proxy",
+      "group": "source",
+      "order": 5,
+      "advanced": true,
+      "docs": "https://wiki.metacubex.one/config/rule-providers/",
+      "safety": "safe"
+    },
+    "payload": {
+      "label": "field.payload",
+      "help": "help.payload",
+      "group": "source",
+      "order": 6,
+      "docs": "https://wiki.metacubex.one/config/rule-providers/",
+      "safety": "safe"
+    }
+  }
+}

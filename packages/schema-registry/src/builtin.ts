@@ -38,10 +38,11 @@ export const BUILTIN_MODULE: SchemaModule = GENERAL_MODULE;
  * dedicated `subscription-url` control (PRD §8.11, ADR-005). v0.4.0 #1
  * added `modules/proxy-groups.json`, the seventh module, and bumped
  * `version` to `0.4.0` (the bundle-content version tracks the release arc
- * it ships with, not the individual slice).
+ * it ships with, not the individual slice); #2 added
+ * `modules/rule-providers.json`, the eighth module.
  */
 export const BUILTIN_TRUST_ANCHOR_PUBLIC_KEY_HEX =
-  'f5c7cc629af7fbdcbd1b1599819cbff05d69ee852353e68ddf8dddf414493a7b';
+  'd011aa41bd1a231bb12e8854a8f1af1f3e4127e67f82373e4f873bfc8ca76499';
 
 export const BUILTIN_MANIFEST: BundleManifest = {
   bundleId: 'builtin',
@@ -78,9 +79,13 @@ export const BUILTIN_MANIFEST: BundleManifest = {
       path: 'modules/proxy-groups.json',
       sha256: 'ed6d113b18f9da2e5b453c2d0549477efe8667225f04d671a70f7ad86ac320b0',
     },
+    {
+      path: 'modules/rule-providers.json',
+      sha256: '9c35ee2f6c8386d8f3995c9ee994f378319295340d39bdfdb49dc749dedafe93',
+    },
   ],
   signature:
-    'cf18af4753d8e084a3ffd7d93b2bd83453ecc80e802a00658fa89b588faa3eb4f4802a8555aa3ee0b90d227371bf20099f4736cc950861b6424a45aa3cfa010b',
+    '1418786b972408989b08b554edd394502d9e4afe84fdaa6d031b337857d2f10bdb570375d9bd0305aafd19b28b04aba266dbec388cdd6ba655bed6d177d4bb08',
   signedAt: '2026-08-26T00:00:00Z',
 };
 

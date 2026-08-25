@@ -22,6 +22,7 @@ import {
   PROXIES_MODULE,
   PROXY_GROUPS_MODULE,
   PROXY_PROVIDERS_MODULE,
+  RULE_PROVIDERS_MODULE,
   SNIFFER_MODULE,
 } from './index.js';
 
@@ -970,6 +971,163 @@ describe('proxy-groups module (v0.4.0 #1 — discriminated union: select/url-tes
 
     expect(issues).toEqual([]);
     expect(elapsedMs).toBeLessThan(50);
+  });
+});
+
+describe('rule-providers module (v0.4.0 #2 — discriminated union: http/file/inline)', () => {
+  it('has no shape issues (rules/examples/i18n)', () => {
+    expect(validateModuleShape(RULE_PROVIDERS_MODULE)).toEqual([]);
+  });
+
+  it('declares exactly the P0 fields UPSTREAM_P0_FIELDS lists — no more, no less', () => {
+    const declared = collectUnionFieldPaths(RULE_PROVIDERS_MODULE.schema);
+    const upstream = new Set(
+      UPSTREAM_P0_FIELDS['rule-providers']
+        .map((record) => record.path)
+        .filter((path) => path.includes('.')),
+    );
+
+    const declaredNotUpstream = [...declared].filter((path) => !upstream.has(path));
+    const upstreamNotDeclared = [...upstream].filter((path) => !declared.has(path));
+
+    expect(declaredNotUpstream).toEqual([]);
+    expect(upstreamNotDeclared).toEqual([]);
+  });
+
+  it('gives every declared field a UI entry with docs + safety metadata', () => {
+    const missing: string[] = [];
+    for (const path of collectUnionFieldPaths(RULE_PROVIDERS_MODULE.schema)) {
+      const segments = path.split('.').slice(1);
+      let fields = RULE_PROVIDERS_MODULE.ui.fields ?? {};
+      let spec: (typeof fields)[string] | undefined;
+      for (const segment of segments) {
+        spec = fields[segment];
+        if (!spec) break;
+        fields = spec.fields ?? {};
+      }
+      if (!spec?.docs || !spec.safety) missing.push(path);
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it('lists all four example kinds with a path that exists on disk', () => {
+    const kinds = RULE_PROVIDERS_MODULE.examples?.map((example) => example.kind).sort();
+    expect(kinds).toEqual(['edge', 'invalid', 'unknown-fields', 'valid']);
+    for (const example of RULE_PROVIDERS_MODULE.examples ?? []) {
+      expect(() => readExample(RULE_PROVIDERS_MODULE, example.path)).not.toThrow();
+    }
+  });
+
+  it('valid.yaml and edge.yaml have no schema violations', () => {
+    for (const kind of ['valid', 'edge'] as const) {
+      const example = RULE_PROVIDERS_MODULE.examples?.find((candidate) => candidate.kind === kind);
+      if (!example) throw new Error(`no ${kind} example declared`);
+      const value = parseExample(RULE_PROVIDERS_MODULE, example.path);
+      expect(validateValue(value, RULE_PROVIDERS_MODULE.schema), example.path).toEqual([]);
+    }
+  });
+
+  it('invalid.yaml has at least one schema violation', () => {
+    const value = parseExample(RULE_PROVIDERS_MODULE, 'examples/invalid.yaml');
+    expect(validateValue(value, RULE_PROVIDERS_MODULE.schema).length).toBeGreaterThan(0);
+  });
+
+  it('every docs URL is on the official wiki domain and carries no query string (NFR-SEC-03 boundary)', () => {
+    const offenders: string[] = [];
+    for (const [key, spec] of Object.entries(RULE_PROVIDERS_MODULE.ui.fields ?? {})) {
+      if (!spec.docs) continue;
+      const url = new URL(spec.docs);
+      const onOfficialDomain = url.hostname === 'wiki.metacubex.one';
+      const hasNoQuery = url.search === '';
+      if (!onOfficialDomain || !hasNoQuery) offenders.push(key);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('unknown-fields.yaml plans its undeclared field as unknown instead of dropping it', () => {
+    const value = parseExample(RULE_PROVIDERS_MODULE, 'examples/unknown-fields.yaml');
+    const plan = planOneUnionItem(RULE_PROVIDERS_MODULE, value);
+    const item = plan.fields.find((field) => field.key === 'item');
+    expect(item?.children?.some((child) => child.unknown)).toBe(true);
+    expect(plan.unknownFields.length).toBeGreaterThan(0);
+  });
+
+  it('plans each of the three source types as a variant, discriminated on "type", with that type\'s own required field as a child', () => {
+    const cases: Array<{ value: Record<string, unknown>; type: string; ownField: string }> = [
+      {
+        value: { type: 'http', url: 'https://example.com/rules/cn.yaml' },
+        type: 'http',
+        ownField: 'url',
+      },
+      { value: { type: 'file', path: './local-rules.yaml' }, type: 'file', ownField: 'path' },
+      {
+        value: { type: 'inline', payload: ['DOMAIN-SUFFIX,example.com'] },
+        type: 'inline',
+        ownField: 'payload',
+      },
+    ];
+
+    for (const { value, type, ownField } of cases) {
+      const plan = planOneUnionItem(RULE_PROVIDERS_MODULE, value);
+      const item = plan.fields.find((field) => field.key === 'item');
+      expect(item?.control, type).toBe('variant');
+      expect(item?.variant, type).toMatchObject({
+        discriminatorKey: 'type',
+        selected: type,
+        matched: true,
+      });
+      expect(
+        item?.children?.some((child) => child.key === ownField),
+        type,
+      ).toBe(true);
+    }
+  });
+
+  it('evaluates the real format:mrs -> behavior rule against real content, both ways (the #0 prerequisite closed)', () => {
+    // mrs + classical: the rule must fire (upstream does not support this combination).
+    const firing = evaluateRules(RULE_PROVIDERS_MODULE.rules ?? [], {
+      type: 'http',
+      url: 'https://example.com/rules/cn.mrs',
+      format: 'mrs',
+      behavior: 'classical',
+    });
+    expect(firing).toEqual([
+      expect.objectContaining({
+        ruleId: 'mrs-format-excludes-classical-behavior',
+        path: ['behavior'],
+        severity: 'warning',
+      }),
+    ]);
+
+    // mrs + domain: no complaint (a supported combination).
+    const quietDomain = evaluateRules(RULE_PROVIDERS_MODULE.rules ?? [], {
+      type: 'http',
+      url: 'https://example.com/rules/cn.mrs',
+      format: 'mrs',
+      behavior: 'domain',
+    });
+    expect(quietDomain).toEqual([]);
+
+    // classical + yaml (not mrs at all): no complaint.
+    const quietYaml = evaluateRules(RULE_PROVIDERS_MODULE.rules ?? [], {
+      type: 'http',
+      url: 'https://example.com/rules/cn.yaml',
+      format: 'yaml',
+      behavior: 'classical',
+    });
+    expect(quietYaml).toEqual([]);
+  });
+
+  it('never echoes any config value in the format:mrs/behavior issue (NFR-SEC-03)', () => {
+    const secretUrl = 'https://example.com/rules/do-not-leak-this-path.mrs';
+    const [issue] = evaluateRules(RULE_PROVIDERS_MODULE.rules ?? [], {
+      type: 'http',
+      url: secretUrl,
+      format: 'mrs',
+      behavior: 'classical',
+    });
+    expect(issue?.messageParams).toBeUndefined();
+    expect(JSON.stringify(issue)).not.toContain(secretUrl);
   });
 });
 

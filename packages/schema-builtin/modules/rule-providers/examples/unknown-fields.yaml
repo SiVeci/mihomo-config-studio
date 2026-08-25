@@ -1,0 +1,10 @@
+# "type"/"url"/"behavior" are declared; "header" is a real, documented
+# Mihomo field (custom HTTP request headers for the download) that is
+# deliberately out of P0 scope — it must surface as unknown, not be
+# silently dropped.
+type: http
+url: "https://example.com/rules/cn-domain.yaml"
+behavior: domain
+header:
+  User-Agent:
+    - "mihomo/1.18.3"

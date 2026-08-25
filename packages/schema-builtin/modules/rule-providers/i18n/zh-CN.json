@@ -1,0 +1,23 @@
+{
+  "group.general": "常规",
+  "group.source": "来源",
+
+  "field.type": "来源类型",
+  "field.behavior": "规则行为",
+  "field.format": "文件格式",
+  "field.url": "规则文件地址",
+  "field.interval": "自动更新间隔（秒）",
+  "field.path": "本地路径",
+  "field.size-limit": "下载大小限制（字节）",
+  "field.proxy": "下载时使用的节点",
+  "field.payload": "内联规则列表",
+
+  "help.type": "http：从地址下载规则文件；file：读取本地文件；inline：直接在配置中写入规则列表。",
+  "help.behavior": "domain：DOMAIN-SUFFIX 风格条目；ipcidr：IP-CIDR 风格条目；classical：任意规则类型，每行一条。并非所有 (format, behavior) 组合都受支持，见下方「文件格式」。",
+  "help.format": "yaml/text：源格式，二者可互相转换；mrs：Mihomo 的紧凑二进制格式，仅支持 domain/ipcidr 行为，不支持 classical。",
+  "help.path": "http 类型下用作本地缓存文件位置（可留空，默认自动生成）；file 类型下是规则数据的实际来源文件，必填。",
+  "help.proxy": "下载规则文件本身时经过的节点或策略组名称；留空则直连下载。",
+  "help.payload": "type: inline 专用；直接在配置文件里写入规则条目，每行一条字符串，按「规则行为」解释。",
+
+  "rule.mrsFormatExcludesClassicalBehavior": "mrs 格式仅支持 domain 和 ipcidr 行为，不支持 classical——请改为 domain 或 ipcidr，或将格式改为 yaml/text。"
+}

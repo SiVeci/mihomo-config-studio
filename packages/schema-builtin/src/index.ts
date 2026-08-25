@@ -44,6 +44,12 @@ import proxyProvidersZhCN from '../modules/proxy-providers/i18n/zh-CN.json';
 import proxyProvidersManifest from '../modules/proxy-providers/module.manifest.json';
 import proxyProvidersUiSchema from '../modules/proxy-providers/ui.schema.json';
 import proxyProvidersRules from '../modules/proxy-providers/validation.rules.json';
+import ruleProvidersConfigSchema from '../modules/rule-providers/config.schema.json';
+import ruleProvidersEn from '../modules/rule-providers/i18n/en.json';
+import ruleProvidersZhCN from '../modules/rule-providers/i18n/zh-CN.json';
+import ruleProvidersManifest from '../modules/rule-providers/module.manifest.json';
+import ruleProvidersUiSchema from '../modules/rule-providers/ui.schema.json';
+import ruleProvidersRules from '../modules/rule-providers/validation.rules.json';
 import snifferConfigSchema from '../modules/sniffer/config.schema.json';
 import snifferEn from '../modules/sniffer/i18n/en.json';
 import snifferZhCN from '../modules/sniffer/i18n/zh-CN.json';
@@ -208,6 +214,31 @@ export const PROXY_GROUPS_MODULE: SchemaModule = {
   i18n: { 'zh-CN': proxyGroupsZhCN, en: proxyGroupsEn } as ModuleI18n,
 };
 
+const RULE_PROVIDERS_EXAMPLES: ModuleExample[] = [
+  { name: 'valid', kind: 'valid', path: 'examples/valid.yaml' },
+  { name: 'invalid', kind: 'invalid', path: 'examples/invalid.yaml' },
+  { name: 'edge', kind: 'edge', path: 'examples/edge.yaml' },
+  { name: 'unknown-fields', kind: 'unknown-fields', path: 'examples/unknown-fields.yaml' },
+];
+
+/**
+ * Same structural situation as `PROXY_PROVIDERS_MODULE`: `rule-providers:` is
+ * a document map (keyed by arbitrary rule-set name, e.g. `rule1:`), so
+ * `config.schema.json` describes ONE entry's discriminated union (`type:
+ * http | file | inline`) at its own root. `manifest.root:
+ * ['rule-providers']` still records the path this module owns.
+ * `validation.rules.json` carries the `format: mrs` -> `behavior` prereq #0
+ * closed (docs/upstream-divergences.md, two independent sources).
+ */
+export const RULE_PROVIDERS_MODULE: SchemaModule = {
+  manifest: ruleProvidersManifest as ModuleManifest,
+  schema: ruleProvidersConfigSchema as JsonSchema,
+  ui: ruleProvidersUiSchema as UiSchema,
+  rules: ruleProvidersRules as ValidationRule[],
+  examples: RULE_PROVIDERS_EXAMPLES,
+  i18n: { 'zh-CN': ruleProvidersZhCN, en: ruleProvidersEn } as ModuleI18n,
+};
+
 /** Every module this package currently ships, keyed by the bundle file path `schema-registry`'s `StoredBundle.files` will use. */
 export const BUILTIN_MODULE_FILES: Readonly<Record<string, SchemaModule>> = {
   'modules/general.json': GENERAL_MODULE,
@@ -217,4 +248,5 @@ export const BUILTIN_MODULE_FILES: Readonly<Record<string, SchemaModule>> = {
   'modules/proxies.json': PROXIES_MODULE,
   'modules/proxy-providers.json': PROXY_PROVIDERS_MODULE,
   'modules/proxy-groups.json': PROXY_GROUPS_MODULE,
+  'modules/rule-providers.json': RULE_PROVIDERS_MODULE,
 };

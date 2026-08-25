@@ -388,7 +388,7 @@ describe('runPipeline with real schema-registry-resolved modules (FR-VAL-01, FR-
   // wiring works end to end, not just schemaStage in isolation.
   const modules = createRegistry(builtinAsStoredBundle()).modules();
 
-  it('resolves all seven built-in P0 modules with no registry issues', () => {
+  it('resolves all eight built-in P0 modules with no registry issues', () => {
     expect(modules.map((module) => module.manifest.id).sort()).toEqual([
       'dns',
       'general',
@@ -396,6 +396,7 @@ describe('runPipeline with real schema-registry-resolved modules (FR-VAL-01, FR-
       'proxies',
       'proxy-groups',
       'proxy-providers',
+      'rule-providers',
       'sniffer',
     ]);
   });

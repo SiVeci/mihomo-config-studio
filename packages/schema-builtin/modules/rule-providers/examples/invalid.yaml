@@ -1,0 +1,5 @@
+# Violates config.schema.json in two independent ways:
+# - the "http" branch requires "url", which is missing here
+# - "interval" is not a valid integer
+type: http
+interval: often
