@@ -17,4 +17,5 @@ export {
   VALIDATION_DEBOUNCE_MS,
 } from './pipeline.js';
 export type { PipelineContext, ValidationStage } from './pipeline.js';
+export { REFERENCE_STAGE_ID, referenceStage } from './reference.js';
 export { SECURITY_STAGE_ID, securityStage } from './security.js';

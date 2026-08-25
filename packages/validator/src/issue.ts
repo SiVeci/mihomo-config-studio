@@ -9,12 +9,11 @@ import type {
 
 /**
  * Kernel-level producers that are not a Schema module. A Schema module
- * instead reports its own `ModuleManifest.id` as `module`; `reference` and
- * `security` stages are wired up in v0.3.0/v0.4.0 (see the pipeline in
- * `pipeline.ts`), but the module id is reserved here so producers agree on it
- * from day one. `schema` was added in v0.3.0 #12 for `schemaStage`'s own
- * cross-module findings (an `unknown-field` issue belongs to no single
- * installed module — that is exactly what makes it unknown).
+ * instead reports its own `ModuleManifest.id` as `module`. `schema` was
+ * added in v0.3.0 #12 for `schemaStage`'s own cross-module findings (an
+ * `unknown-field` issue belongs to no single installed module — that is
+ * exactly what makes it unknown). `security` was wired up in v0.3.0 #13;
+ * `reference` in v0.4.0 #4 (see `referenceStage`, `pipeline.ts`).
  */
 export const KERNEL_MODULES = ['yaml', 'schema', 'reference', 'security'] as const;
 export type KernelModule = (typeof KERNEL_MODULES)[number];

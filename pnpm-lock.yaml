@@ -224,6 +224,12 @@ importers:
 
   packages/validator:
     dependencies:
+      '@mcs/config-model':
+        specifier: workspace:*
+        version: link:../config-model
+      '@mcs/graph':
+        specifier: workspace:*
+        version: link:../graph
       '@mcs/schema-core':
         specifier: workspace:*
         version: link:../schema-core

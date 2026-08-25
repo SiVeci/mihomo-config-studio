@@ -12,6 +12,7 @@ import type { ConfigPath, ParseResult } from '@mcs/yaml-engine';
 
 import { fromRuleIssue, fromSchemaIssue, fromYamlIssue } from './issue.js';
 import type { ValidationIssue } from './issue.js';
+import { referenceStage } from './reference.js';
 import { securityStage } from './security.js';
 
 /** The context every stage runs against. Grows as later stages need more (v0.3.0+). */
@@ -33,8 +34,8 @@ export interface PipelineContext {
 
 /**
  * One pluggable step in the validation pipeline. Stages are data, not
- * hardcoded branches: `reference` (v0.4.0) registers here later without this
- * file changing shape — the interface is fixed as of v0.2.0.
+ * hardcoded branches: `referenceStage` (v0.4.0 #4) registered without this
+ * interface changing shape — fixed as of v0.2.0.
  */
 export interface ValidationStage {
   id: string;
@@ -259,7 +260,12 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export const DEFAULT_STAGES: readonly ValidationStage[] = [syntaxStage, schemaStage, securityStage];
+export const DEFAULT_STAGES: readonly ValidationStage[] = [
+  syntaxStage,
+  schemaStage,
+  referenceStage,
+  securityStage,
+];
 
 /**
  * Run every stage in order and concatenate their issues, short-circuiting

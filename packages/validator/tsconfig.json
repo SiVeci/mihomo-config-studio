@@ -11,6 +11,8 @@
     { "path": "../schema-core" },
     { "path": "../schema-builtin" },
     { "path": "../schema-registry" },
-    { "path": "../test-fixtures" }
+    { "path": "../test-fixtures" },
+    { "path": "../config-model" },
+    { "path": "../graph" }
   ]
 }
