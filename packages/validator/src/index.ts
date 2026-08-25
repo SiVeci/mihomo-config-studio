@@ -18,4 +18,5 @@ export {
 } from './pipeline.js';
 export type { PipelineContext, ValidationStage } from './pipeline.js';
 export { REFERENCE_STAGE_ID, referenceStage } from './reference.js';
+export { RULE_ORDER_STAGE_ID, ruleOrderStage } from './rule-order.js';
 export { SECURITY_STAGE_ID, securityStage } from './security.js';

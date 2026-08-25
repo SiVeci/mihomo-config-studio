@@ -13,6 +13,7 @@ import type { ConfigPath, ParseResult } from '@mcs/yaml-engine';
 import { fromRuleIssue, fromSchemaIssue, fromYamlIssue } from './issue.js';
 import type { ValidationIssue } from './issue.js';
 import { referenceStage } from './reference.js';
+import { ruleOrderStage } from './rule-order.js';
 import { securityStage } from './security.js';
 
 /** The context every stage runs against. Grows as later stages need more (v0.3.0+). */
@@ -264,6 +265,7 @@ export const DEFAULT_STAGES: readonly ValidationStage[] = [
   syntaxStage,
   schemaStage,
   referenceStage,
+  ruleOrderStage,
   securityStage,
 ];
 

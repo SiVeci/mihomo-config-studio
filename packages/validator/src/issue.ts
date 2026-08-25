@@ -13,9 +13,10 @@ import type {
  * added in v0.3.0 #12 for `schemaStage`'s own cross-module findings (an
  * `unknown-field` issue belongs to no single installed module — that is
  * exactly what makes it unknown). `security` was wired up in v0.3.0 #13;
- * `reference` in v0.4.0 #4 (see `referenceStage`, `pipeline.ts`).
+ * `reference` in v0.4.0 #4; `rule-order` in v0.4.0 #5 (see `referenceStage`/
+ * `ruleOrderStage`, `pipeline.ts`).
  */
-export const KERNEL_MODULES = ['yaml', 'schema', 'reference', 'security'] as const;
+export const KERNEL_MODULES = ['yaml', 'schema', 'reference', 'security', 'rule-order'] as const;
 export type KernelModule = (typeof KERNEL_MODULES)[number];
 
 /**

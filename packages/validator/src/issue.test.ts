@@ -317,7 +317,7 @@ describe('fromRuleIssue (FR-VAL-01, v0.3.0 #12)', () => {
 
 describe('KERNEL_MODULES', () => {
   it('freezes the known kernel-stage module ids', () => {
-    expect(KERNEL_MODULES).toEqual(['yaml', 'schema', 'reference', 'security']);
+    expect(KERNEL_MODULES).toEqual(['yaml', 'schema', 'reference', 'security', 'rule-order']);
   });
 });
 

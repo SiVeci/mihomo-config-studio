@@ -23,6 +23,7 @@ import {
 import type { PipelineContext, ValidationStage } from './pipeline.js';
 import type { ValidationIssue } from './issue.js';
 import { REFERENCE_STAGE_ID, referenceStage } from './reference.js';
+import { RULE_ORDER_STAGE_ID, ruleOrderStage } from './rule-order.js';
 import { SECURITY_STAGE_ID, securityStage } from './security.js';
 
 /**
@@ -352,12 +353,19 @@ describe('runPipeline', () => {
     expect(runPipeline(ctx)).toEqual([]);
   });
 
-  it('defaults to [syntaxStage, schemaStage, referenceStage, securityStage] in that order', () => {
-    expect(DEFAULT_STAGES).toEqual([syntaxStage, schemaStage, referenceStage, securityStage]);
+  it('defaults to [syntaxStage, schemaStage, referenceStage, ruleOrderStage, securityStage] in that order', () => {
+    expect(DEFAULT_STAGES).toEqual([
+      syntaxStage,
+      schemaStage,
+      referenceStage,
+      ruleOrderStage,
+      securityStage,
+    ]);
     expect(DEFAULT_STAGES.map((stage) => stage.id)).toEqual([
       SYNTAX_STAGE_ID,
       SCHEMA_STAGE_ID,
       REFERENCE_STAGE_ID,
+      RULE_ORDER_STAGE_ID,
       SECURITY_STAGE_ID,
     ]);
   });
