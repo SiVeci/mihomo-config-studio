@@ -303,3 +303,33 @@ describe('reference scanning robustness', () => {
     expect(index.referencesTo(direct.id)).toHaveLength(1);
   });
 });
+
+describe('allReferences (v0.4.0 #12)', () => {
+  it('returns every reference in the document, not just one entity’s incoming edges', () => {
+    const source = [
+      'proxy-groups:',
+      '  - name: G',
+      '    type: select',
+      '    proxies: [DIRECT, REJECT]',
+      '',
+    ].join('\n');
+    const { index } = setUp(source);
+
+    expect(index.allReferences()).toHaveLength(2);
+  });
+
+  it('returns an empty array before rebuild and for a document with no references', () => {
+    expect(new ReferenceIndex().allReferences()).toEqual([]);
+    const { index } = setUp('mode: rule\n');
+    expect(index.allReferences()).toEqual([]);
+  });
+
+  it('sums to the same total as calling referencesTo for every entity', () => {
+    const { entities, index } = setUp();
+    const viaPerEntity = entities.reduce(
+      (total, entity) => total + index.referencesTo(entity.id).length,
+      0,
+    );
+    expect(index.allReferences()).toHaveLength(viaPerEntity);
+  });
+});

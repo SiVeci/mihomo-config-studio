@@ -81,6 +81,11 @@ export class ReferenceIndex {
     return this.#referencesToId.get(entityId) ?? [];
   }
 
+  /** Every reference in the document, regardless of target — `layout.ts` (v0.4.0 #12) needs the whole edge set, not one entity's incoming edges. */
+  allReferences(): readonly Reference[] {
+    return [...this.#referencesToId.values()].flat();
+  }
+
   /**
    * Renames `entityId` to `newName`: rewrites its own declaration and every
    * reference to it. Throws before touching the document when the entity is
