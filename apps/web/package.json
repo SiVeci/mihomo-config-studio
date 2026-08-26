@@ -25,6 +25,7 @@
   },
   "devDependencies": {
     "@mcs/templates": "workspace:*",
+    "@mcs/test-fixtures": "workspace:*",
     "@vitejs/plugin-react": "^4.3.4",
     "vite": "^6.0.7"
   }
