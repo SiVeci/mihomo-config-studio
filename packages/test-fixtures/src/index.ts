@@ -16,8 +16,8 @@ export function listFixtures(relativeDir: string): string[] {
     .sort();
 }
 
-export { generateLargeCorpus } from './generate-large.js';
-export type { LargeCorpusOptions } from './generate-large.js';
+export { generateLargeCorpus, generateScaleCorpus } from './generate-large.js';
+export type { LargeCorpusOptions, ScaleCorpusOptions } from './generate-large.js';
 
 export {
   P0_MODULE_IDS,

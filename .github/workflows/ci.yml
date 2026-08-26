@@ -69,11 +69,13 @@ jobs:
         run: node tools/android-manifest-check/dist/index.js apps/android/android/app/src
 
   perf-baseline:
-    name: 1 MB import benchmark (record only, non-blocking)
+    name: import + scale benchmarks (record only, non-blocking)
     runs-on: ubuntu-latest
-    # NFR-PERF-02: exit condition is "< 2s", verified per-slice in
-    # docs/releases/plans/v0.2.0-perf-baseline.md — this job only keeps the
-    # number visible on every push. A hard threshold job is v0.9.0 scope
+    # NFR-PERF-02/04: exit conditions are "< 2s" and the version document's
+    # three perf numbers, verified per-slice in
+    # docs/releases/plans/v0.2.0-perf-baseline.md /
+    # docs/releases/plans/v0.4.0-perf-baseline.md — this job only keeps the
+    # numbers visible on every push. A hard threshold job is v0.9.0 scope
     # (shared runners are too noisy to gate on before then).
     continue-on-error: true
     steps:
@@ -92,6 +94,9 @@ jobs:
 
       - name: Run the 1 MB corpus import benchmark
         run: pnpm vitest bench --run packages/validator/src/bench/import.bench.ts
+
+      - name: Run the 1,000-entity / 10,000-rule scale benchmark
+        run: pnpm vitest bench --run packages/validator/src/bench/scale.bench.ts
 
   no-network-egress:
     name: no configuration upload path

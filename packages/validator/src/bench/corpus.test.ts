@@ -1,8 +1,11 @@
-import { generateLargeCorpus } from '@mcs/test-fixtures';
+import { generateLargeCorpus, generateScaleCorpus } from '@mcs/test-fixtures';
 import { MihomoYamlDocument } from '@mcs/yaml-engine';
 import { describe, expect, it } from 'vitest';
 
-import { hasBlockingIssues, runPipeline } from '../pipeline.js';
+import { hasBlockingIssues, runPipeline, syntaxStage } from '../pipeline.js';
+import { referenceStage } from '../reference.js';
+import { ruleOrderStage } from '../rule-order.js';
+import { securityStage } from '../security.js';
 
 /**
  * `generate-large.ts` lives in `@mcs/test-fixtures`, which cannot depend on
@@ -53,6 +56,42 @@ describe('generateLargeCorpus (bench input sanity)', () => {
 
   it('round-trips byte for byte, same as any other input (M0-1)', () => {
     const corpus = generateLargeCorpus();
+
+    const { document } = MihomoYamlDocument.parse(corpus);
+
+    expect(document!.toText()).toBe(corpus);
+  });
+});
+
+/**
+ * Same sanity purpose as above, for `scale.bench.ts`'s input — but deliberately
+ * runs only `syntax`/`reference`/`ruleOrder`/`security`, never `schemaStage`.
+ * `schemaStage` is *the* dominant cost at this corpus's scale (measured
+ * ~40s for the 10,000 `unknown-field` issues a `rules:` array item-by-item
+ * produces today — see `v0.4.0-perf-baseline.md`), and running it here would
+ * turn an ordinary `pnpm run check` test into a 40-second one for a check
+ * that has nothing to do with `schemaStage` in the first place: whether the
+ * *corpus* is well-formed only depends on whether references/order/security
+ * are clean, which `schemaStage`'s findings do not affect either way.
+ */
+describe('generateScaleCorpus (bench input sanity, v0.4.0 #14)', () => {
+  it('parses with no syntax issues and no blocking reference/rule-order/security issues', () => {
+    const corpus = generateScaleCorpus();
+
+    const parseResult = MihomoYamlDocument.parse(corpus);
+    const issues = runPipeline({ parse: parseResult }, [
+      syntaxStage,
+      referenceStage,
+      ruleOrderStage,
+      securityStage,
+    ]);
+
+    expect(issues.some((issue) => issue.code.startsWith('reference.'))).toBe(false);
+    expect(hasBlockingIssues(issues)).toBe(false);
+  });
+
+  it('round-trips byte for byte, same as any other input (M0-1)', () => {
+    const corpus = generateScaleCorpus();
 
     const { document } = MihomoYamlDocument.parse(corpus);
 

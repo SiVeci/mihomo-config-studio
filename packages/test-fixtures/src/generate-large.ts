@@ -191,3 +191,79 @@ export function generateLargeCorpus(options: LargeCorpusOptions = {}): string {
     '',
   ].join('\n');
 }
+
+export interface ScaleCorpusOptions {
+  /** Total `proxy` + `proxy-group` entities. Rules are counted separately (`ruleCount`) — real configs grow the two axes independently, unlike `generateLargeCorpus`'s single byte budget. */
+  readonly entityCount?: number;
+  readonly ruleCount?: number;
+  readonly seed?: number;
+}
+
+const DEFAULT_ENTITY_COUNT = 1000;
+const DEFAULT_RULE_COUNT = 10_000;
+/** Roughly matches a real config's proxy-to-group ratio — groups are the minority. */
+const GROUP_SHARE = 0.2;
+
+/**
+ * Deterministic corpus sized by *count* along two independent axes (entities,
+ * rules) rather than by total byte size — NFR-PERF-04 asks for exactly
+ * "1,000 entities + 10,000 rules", a shape `generateLargeCorpus` cannot
+ * target since its proxy and rule sections both grow toward one shared byte
+ * budget (v0.4.0 #14). Every rule targets a real, generated proxy-group (or
+ * `DIRECT`) — this is a structurally clean corpus (no missing references, no
+ * cycles) so the benchmark it feeds measures normal-case cost, not the
+ * error-reporting paths `reference.test.ts` already covers.
+ */
+export function generateScaleCorpus(options: ScaleCorpusOptions = {}): string {
+  const entityCount = options.entityCount ?? DEFAULT_ENTITY_COUNT;
+  const ruleCount = options.ruleCount ?? DEFAULT_RULE_COUNT;
+  const rand = mulberry32(options.seed ?? DEFAULT_SEED);
+
+  const groupCount = Math.max(1, Math.round(entityCount * GROUP_SHARE));
+  const proxyCount = Math.max(1, entityCount - groupCount);
+
+  const proxyLines: string[] = [];
+  const proxyNames: string[] = [];
+  for (let index = 0; index < proxyCount; index += 1) {
+    proxyLines.push(proxyEntry(rand, index));
+    proxyNames.push(proxyName(index));
+  }
+
+  // `proxiesPerGroup >= 1` and `proxyCount >= groupCount * 1` never both hold
+  // for every input, but `start = index * proxiesPerGroup` stays below
+  // `proxyNames.length` for every valid `index < groupCount` regardless —
+  // each group's slice is never empty, so there is no empty-`proxies:`
+  // fallback branch to reach.
+  const proxiesPerGroup = Math.max(1, Math.floor(proxyNames.length / groupCount));
+  const groupNames: string[] = [];
+  const groupLines: string[] = [];
+  for (let index = 0; index < groupCount; index += 1) {
+    const name = `scale-group-${index}`;
+    groupNames.push(name);
+    const start = index * proxiesPerGroup;
+    const refs = proxyNames
+      .slice(start, start + proxiesPerGroup)
+      .map((member) => `      - ${member}`);
+    groupLines.push([`  - name: ${name}`, '    type: select', '    proxies:', ...refs].join('\n'));
+  }
+
+  const ruleTargets = [...groupNames, 'DIRECT'];
+  const ruleLines: string[] = [];
+  for (let index = 0; index < Math.max(0, ruleCount - 1); index += 1) {
+    ruleLines.push(ruleLine(rand, index, ruleTargets));
+  }
+  ruleLines.push('  - MATCH,DIRECT');
+
+  return [
+    HEADER,
+    'proxies:',
+    proxyLines.join('\n'),
+    '',
+    'proxy-groups:',
+    groupLines.join('\n'),
+    '',
+    'rules:',
+    ruleLines.join('\n'),
+    '',
+  ].join('\n');
+}
