@@ -99,6 +99,15 @@
   flex: 1 1 auto;
 }
 
+/** Always present alongside a `rule-order`-module message (PRD §8.6, NG-07) — visually secondary, but never conditionally rendered. */
+.issue-panel__caveat {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: var(--mcs-font-size-caption);
+  font-style: italic;
+  opacity: 0.85;
+}
+
 .issue-panel__jump-button {
   flex: 0 0 auto;
   border: 1px solid currentColor;

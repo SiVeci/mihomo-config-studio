@@ -33,6 +33,18 @@ export interface IssuePanelProps {
 
 const SEVERITY_ORDER: readonly IssueSeverity[] = ['error', 'warning', 'info'];
 
+/**
+ * `RULE_ORDER_STAGE_ID` in `@mcs/validator/rule-order.ts`, copied as a
+ * literal rather than imported: UI-side code only ever imports *types* from
+ * `worker/protocol.js`, never runtime engine values (the Worker-boundary
+ * rule `client.test.ts`'s structural fence enforces). Every issue this
+ * module produces is a static-text-analysis finding about the rule *list*
+ * (MATCH position, obvious shadowing) — PRD §8.6's closing line and NG-07
+ * require the caveat below to always accompany it, never conditionally on
+ * word-matching the message text (v0.4.0 #18).
+ */
+const RULE_ORDER_MODULE = 'rule-order';
+
 /** PRD §11.6: severity must never be color-only. Plain glyphs work for sighted *and* screen-reader users alike, unlike a bare CSS color. */
 const SEVERITY_MARK: Record<IssueSeverity, string> = {
   error: '✕',
@@ -155,6 +167,9 @@ export function IssuePanel({ issues, client, onJump, onJumpToField }: IssuePanel
                     <span className="issue-panel__message" aria-label={label}>
                       {translateIssueMessage(issue)}
                     </span>
+                    {issue.module === RULE_ORDER_MODULE && (
+                      <p className="issue-panel__caveat">{t('ruleOrder.staticAnalysisCaveat')}</p>
+                    )}
                     {canJumpToLine && (
                       <button
                         type="button"

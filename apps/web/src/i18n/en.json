@@ -156,5 +156,10 @@
   "graph.edgeText": "{from} → {to} ({status})",
   "graph.edgeStatusOk": "ok",
   "graph.edgeStatusMissing": "missing target",
-  "graph.edgeStatusCycle": "cycle"
+  "graph.edgeStatusCycle": "cycle",
+  "ruleOrder.noMatch": "The rules list has no catch-all MATCH rule at the end",
+  "ruleOrder.afterMatch": "Rule {ruleIndex} comes after the MATCH rule",
+  "ruleOrder.domainShadowed": "Rule {ruleIndex} ({type}) overlaps in domain match range with rule {shadowedByIndex}",
+  "ruleOrder.cidrShadowed": "Rule {ruleIndex} ({type}) overlaps in address range with rule {shadowedByIndex}",
+  "ruleOrder.staticAnalysisCaveat": "Static analysis only — not equivalent to the kernel's actual match-time behaviour"
 }
