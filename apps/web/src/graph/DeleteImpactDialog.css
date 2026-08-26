@@ -1,0 +1,28 @@
+.delete-impact-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mcs-spacing-sm);
+  max-width: 480px;
+  border: 1px solid var(--mcs-color-hairline);
+  border-radius: var(--mcs-rounded-sm);
+  padding: var(--mcs-spacing-sm);
+  background-color: var(--mcs-color-surface-card);
+}
+
+.delete-impact-dialog__title {
+  font-family: var(--mcs-font-family-title-sm);
+  font-size: var(--mcs-font-size-title-sm);
+  margin: 0;
+}
+
+.delete-impact-dialog__cascade-list {
+  margin: 0;
+  padding-left: var(--mcs-spacing-md);
+  font-size: var(--mcs-font-size-body-sm);
+}
+
+.delete-impact-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mcs-spacing-xs);
+}

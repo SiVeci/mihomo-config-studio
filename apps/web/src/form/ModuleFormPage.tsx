@@ -32,6 +32,14 @@ export interface ModuleFormPageProps {
   readonly onModeChange: (mode: FormMode) => void;
   /** Reports a field edit by absolute path, ready for the Worker's `applyPatch`. */
   readonly onFieldChange: (path: ConfigPath, value: unknown) => void;
+  /**
+   * Reports a request to delete an array-entry module's entry (a `proxy`/
+   * `proxy-group`/`proxy-provider`/`rule-provider` — the only entities an
+   * array-entry module ever represents) by its own path. Deciding what
+   * happens next — direct delete, or impact analysis first — is
+   * `ProjectPage`'s job, not this page's (v0.4.0 #11).
+   */
+  readonly onDeleteEntity: (path: ConfigPath) => void;
 }
 
 /** Imperative surface for #16's IssuePanel/UnknownFieldTree: jump straight to a rendered form field. */
@@ -52,7 +60,10 @@ export interface ModuleFormPageHandle {
  * actually share a root — see its own doc comment (v0.3.0 #14).
  */
 export const ModuleFormPage = forwardRef<ModuleFormPageHandle, ModuleFormPageProps>(
-  function ModuleFormPage({ modules, value, mode, onModeChange, onFieldChange }, ref): ReactNode {
+  function ModuleFormPage(
+    { modules, value, mode, onModeChange, onFieldChange, onDeleteEntity },
+    ref,
+  ): ReactNode {
     const rootRef = useRef<HTMLElement>(null);
     const knownPaths = useMemo(
       () => computeKnownPaths(modules, value, { mode: 'advanced' }),
@@ -132,6 +143,7 @@ export const ModuleFormPage = forwardRef<ModuleFormPageHandle, ModuleFormPagePro
                   onChange={onFieldChange}
                   controls={APP_CONTROLS}
                   t={translate}
+                  onDeleteEntry={onDeleteEntity}
                 />
               ) : (
                 <SchemaForm

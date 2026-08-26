@@ -1,5 +1,6 @@
 import { VALIDATION_DEBOUNCE_MS } from './protocol.js';
 import type {
+  AnalyzeImpactResponse,
   ApplyBatchResponse,
   ApplyPatchResponse,
   ConfigPath,
@@ -97,6 +98,15 @@ export class WorkerClient {
       requestId: this.#makeRequestId(),
       patches,
     }) as Promise<ApplyBatchResponse>;
+  }
+
+  /** Who references the entity at `path`, split into what can be reference-replaced and what must cascade-delete (v0.4.0 #11, FR-REL-03 UI). */
+  analyzeImpact(path: ConfigPath): Promise<AnalyzeImpactResponse> {
+    return this.#send({
+      type: 'analyzeImpact',
+      requestId: this.#makeRequestId(),
+      path,
+    }) as Promise<AnalyzeImpactResponse>;
   }
 
   validate(): Promise<ValidateResponse> {

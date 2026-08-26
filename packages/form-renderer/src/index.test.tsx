@@ -438,4 +438,20 @@ describe('SchemaArrayForm (FR-SCHEMA-01, v0.3.0 #14)', () => {
     expect(() => renderArrayForm({ value: {} })).not.toThrow();
     expect(document.querySelectorAll('[data-array-index]')).toHaveLength(0);
   });
+
+  it('renders no delete button when onDeleteEntry is not provided', () => {
+    renderArrayForm();
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+  });
+
+  it('renders one delete button per entry when onDeleteEntry is provided, reporting that entry’s own path (v0.4.0 #11)', () => {
+    const onDeleteEntry = vi.fn<(path: ConfigPath) => void>();
+    renderArrayForm({ onDeleteEntry });
+
+    const buttons = screen.getAllByRole('button');
+    expect(buttons).toHaveLength(2);
+
+    fireEvent.click(buttons[1] as HTMLElement);
+    expect(onDeleteEntry).toHaveBeenCalledExactlyOnceWith(['items', 1]);
+  });
 });

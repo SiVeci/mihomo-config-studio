@@ -90,6 +90,15 @@ export interface SchemaArrayFormProps {
   onChange: (path: ConfigPath, value: unknown) => void;
   controls?: Record<string, ControlComponent>;
   t?: (key: string) => string;
+  /**
+   * Renders a delete button per entry when provided, reporting that entry's
+   * own path — deleting is the caller's decision, not this renderer's
+   * (v0.4.0 #11): every entry here is a graph entity (`proxies`/
+   * `proxy-groups`/`proxy-providers`/`rule-providers` are the only
+   * array-entry modules), so the caller needs the chance to run impact
+   * analysis first rather than this component deleting unconditionally.
+   */
+  onDeleteEntry?: (path: ConfigPath) => void;
 }
 
 /**
@@ -101,7 +110,7 @@ export interface SchemaArrayFormProps {
  * module's root is never shared with another module.
  */
 export function SchemaArrayForm(props: SchemaArrayFormProps): JSX.Element {
-  const { module, value, onChange } = props;
+  const { module, value, onChange, onDeleteEntry } = props;
   const translate = props.t ?? ((key: string) => key);
   const controls = { ...DEFAULT_CONTROLS, ...props.controls };
 
@@ -115,6 +124,11 @@ export function SchemaArrayForm(props: SchemaArrayFormProps): JSX.Element {
       {items.map((field, index) => (
         <fieldset key={toPointer(field.path)} data-array-index={index}>
           <FieldRow field={field} controls={controls} onChange={onChange} translate={translate} />
+          {onDeleteEntry && (
+            <button type="button" onClick={() => onDeleteEntry(field.path)}>
+              {translate('arrayForm.deleteEntryButton')}
+            </button>
+          )}
         </fieldset>
       ))}
     </div>

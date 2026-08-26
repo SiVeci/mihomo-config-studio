@@ -30,14 +30,20 @@ import type { ImportWorkerClient } from '../import/ImportPanel.js';
 import { t } from '../i18n/index.js';
 import { IssuePanel } from '../issues/IssuePanel.js';
 import type { IssuePanelWorkerClient } from '../issues/IssuePanel.js';
+import { DeleteImpactDialog } from '../graph/DeleteImpactDialog.js';
+import { buildCascadeDeletePatches, buildReplacePatches } from '../graph/impact-patches.js';
 import { AppShell } from '../layout/AppShell.js';
 import { collectRuleEntityNames } from '../rules/entity-names.js';
 import { RuleListPage } from '../rules/RuleListPage.js';
 import type {
+  AnalyzeImpactResponse,
   ApplyBatchResponse,
   ApplyPatchResponse,
   ConfigPath,
+  Entity,
+  EntityKind,
   IssueFix,
+  Reference,
   RedoResponse,
   TextRange,
   UndoResponse,
@@ -73,6 +79,41 @@ const MAIN_VIEW_TAB_LABEL_KEYS: Record<MainView, 'project.formViewTab' | 'projec
   rules: 'project.rulesViewTab',
 };
 
+/** What `DeleteImpactDialog` needs, gathered from an `analyzeImpact` response plus the path that was originally clicked (v0.4.0 #11). */
+interface DeletingEntityState {
+  readonly path: ConfigPath;
+  readonly entityName: string;
+  readonly replaceable: readonly Reference[];
+  readonly cascading: readonly Entity[];
+  readonly targetOptions: readonly string[];
+}
+
+/**
+ * Candidate replacement names, chosen by the deleted entity's own kind —
+ * `proxy`/`proxy-group`/`builtin` share one outbound-policy namespace
+ * (mirrors `entity-names.ts`'s `proxyTargetNames`); `rule-provider` has its
+ * own separate namespace. The provider-subscription kind intentionally
+ * returns no suggestions: reading its top-level document key needs a
+ * quoted module-id literal that `schema-registry-boundary.test.ts`
+ * (FR-SCHEMA-05) forbids anywhere under this app — free text still works
+ * either way, this only narrows the autocomplete list for that one kind.
+ */
+function targetOptionsForKind(
+  kind: EntityKind,
+  names: ReturnType<typeof collectRuleEntityNames>,
+): readonly string[] {
+  switch (kind) {
+    case 'proxy':
+    case 'proxy-group':
+    case 'builtin':
+      return names.proxyTargetNames;
+    case 'rule-provider':
+      return names.ruleProviderNames;
+    default:
+      return [];
+  }
+}
+
 /**
  * Document-editing operations `ProjectPage` itself calls directly rather
  * than through a child component's own props — `ModuleFormPage` takes a
@@ -83,6 +124,7 @@ const MAIN_VIEW_TAB_LABEL_KEYS: Record<MainView, 'project.formViewTab' | 'projec
 export interface ModuleFormWorkerClient {
   applyPatch(patch: IssueFix): Promise<ApplyPatchResponse>;
   applyBatch(patches: IssueFix[]): Promise<ApplyBatchResponse>;
+  analyzeImpact(path: ConfigPath): Promise<AnalyzeImpactResponse>;
   value(): Promise<ValueResponse>;
   undo(): Promise<UndoResponse>;
   redo(): Promise<RedoResponse>;
@@ -137,6 +179,10 @@ export function ProjectPage({
   // three PRD §7.2 views ("图形化表单、列表、拖拽排序和关系图") are cheap to
   // switch between and irrelevant to browser history/deep-linking.
   const [mainView, setMainView] = useState<MainView>('form');
+  // `null` when no delete-impact dialog is open (v0.4.0 #11). Set only after
+  // `client.analyzeImpact` comes back with at least one reference — an
+  // unreferenced entity deletes directly, never opening this (exit condition 5).
+  const [deletingEntity, setDeletingEntity] = useState<DeletingEntityState | null>(null);
   // Static for the process lifetime: v0.3.0 has no Bundle-install UI yet, so
   // the built-in bundle is the only one that can ever be active (see
   // `builtinAsStoredBundle`'s own doc comment).
@@ -469,6 +515,55 @@ export function ProjectPage({
   }
 
   /**
+   * `SchemaArrayForm`'s per-entry delete button lands here (via
+   * `ModuleFormPage`'s `onDeleteEntity`) — never a direct delete itself
+   * (v0.4.0 #11, FR-REL-03 UI, exit condition 5). An unreferenced entity
+   * (`replaceable`/`cascading` both empty) deletes immediately with no
+   * dialog; anything else opens `DeleteImpactDialog` and waits for one of
+   * its two exits.
+   */
+  async function handleDeleteEntityRequest(path: ConfigPath): Promise<void> {
+    const response = await client.analyzeImpact(path);
+    const { replaceable, cascading } = response.result;
+    if (replaceable.length === 0 && cascading.length === 0) {
+      await applyFixAndRefresh({ kind: 'remove', path });
+      return;
+    }
+    setDeletingEntity({
+      path,
+      entityName: response.entity.serializedName,
+      replaceable,
+      cascading,
+      targetOptions: targetOptionsForKind(response.entity.kind, ruleEntityNames).filter(
+        (name) => name !== response.entity.serializedName,
+      ),
+    });
+  }
+
+  async function handleReplaceAndDelete(newTarget: string): Promise<void> {
+    if (!deletingEntity) return;
+    const patches = buildReplacePatches(
+      documentValue,
+      deletingEntity.path,
+      deletingEntity.replaceable,
+      newTarget,
+    );
+    await applyBatchAndRefresh(patches);
+    setDeletingEntity(null);
+  }
+
+  async function handleCascadeDelete(): Promise<void> {
+    if (!deletingEntity) return;
+    const patches = buildCascadeDeletePatches(
+      deletingEntity.path,
+      deletingEntity.replaceable,
+      deletingEntity.cascading,
+    );
+    await applyBatchAndRefresh(patches);
+    setDeletingEntity(null);
+  }
+
+  /**
    * A `ModuleFormPage` field edit — distinct from `handleFieldChange` above,
    * which is project *metadata* (name/description/targetProfile), not
    * document content. Always the `'set'` `IssueFix` kind (v0.3.0 #14):
@@ -598,6 +693,7 @@ export function ProjectPage({
                   mode={formMode}
                   onModeChange={setFormMode}
                   onFieldChange={(path, value) => void handleDocumentFieldChange(path, value)}
+                  onDeleteEntity={(path) => void handleDeleteEntityRequest(path)}
                 />
               )}
               {mainView === 'rules' && (
@@ -639,6 +735,17 @@ export function ProjectPage({
               issues={issues}
               onClose={() => setShowExportDialog(false)}
               {...(downloadFile ? { downloadFile } : {})}
+            />
+          )}
+          {deletingEntity && (
+            <DeleteImpactDialog
+              entityName={deletingEntity.entityName}
+              replaceable={deletingEntity.replaceable}
+              cascading={deletingEntity.cascading}
+              targetOptions={deletingEntity.targetOptions}
+              onReplace={(newTarget) => void handleReplaceAndDelete(newTarget)}
+              onCascadeDelete={() => void handleCascadeDelete()}
+              onCancel={() => setDeletingEntity(null)}
             />
           )}
         </>

@@ -408,6 +408,128 @@ rules:
   });
 });
 
+describe('handleWorkerRequest / analyzeImpact (v0.4.0 #11, FR-REL-03 UI)', () => {
+  const IMPACT_SAMPLE = `mode: rule
+proxy-groups:
+  - name: AUTO
+    type: url-test
+    proxies: [DIRECT]
+  - name: PROXY
+    type: select
+    proxies: [AUTO, DIRECT]
+rule-providers:
+  ads:
+    type: http
+    behavior: domain
+    url: https://example.invalid/ads.txt
+    path: ./ads.yaml
+rules:
+  - RULE-SET,ads,DIRECT
+  - MATCH,DIRECT
+`;
+
+  it('reports NO_DOCUMENT before any successful parse', () => {
+    const state = createWorkerState();
+    const response = handleWorkerRequest(state, {
+      type: 'analyzeImpact',
+      requestId: 'r1',
+      path: ['proxy-groups', 0, 'name'],
+    });
+
+    expect(response).toEqual({
+      type: 'error',
+      requestId: 'r1',
+      code: 'NO_DOCUMENT',
+      messageKey: 'worker.error.noDocument',
+    });
+  });
+
+  it('reports GRAPH_ENTITY_NOT_FOUND for a path that does not name an existing entity', () => {
+    const state = parsed(IMPACT_SAMPLE);
+    const response = handleWorkerRequest(state, {
+      type: 'analyzeImpact',
+      requestId: 'r1',
+      path: ['proxy-groups', 99, 'name'],
+    });
+
+    expect(response).toEqual({
+      type: 'error',
+      requestId: 'r1',
+      code: 'GRAPH_ENTITY_NOT_FOUND',
+      messageKey: 'worker.error.GRAPH_ENTITY_NOT_FOUND',
+      path: ['proxy-groups', 99, 'name'],
+    });
+  });
+
+  it('finds the entity by sourcePath and reports the proxy-group that references it as replaceable (not cascading, since it keeps another member)', () => {
+    const state = parsed(IMPACT_SAMPLE);
+    const response = handleWorkerRequest(state, {
+      type: 'analyzeImpact',
+      requestId: 'r1',
+      path: ['proxy-groups', 0, 'name'], // AUTO
+    });
+
+    if (response.type !== 'analyzeImpact') throw new Error('unreachable');
+    expect(response.entity).toMatchObject({ kind: 'proxy-group', serializedName: 'AUTO' });
+    expect(response.result.cascading).toEqual([]);
+    expect(response.result.replaceable).toHaveLength(1);
+    expect(response.result.replaceable[0]).toMatchObject({
+      path: ['proxy-groups', 1, 'proxies', 0],
+      referenceType: 'seq-item',
+    });
+  });
+
+  it('also finds a named-array entity by its item’s own path (one segment shorter than sourcePath) — the shape the real UI actually has', () => {
+    const state = parsed(IMPACT_SAMPLE);
+    const response = handleWorkerRequest(state, {
+      type: 'analyzeImpact',
+      requestId: 'r1',
+      path: ['proxy-groups', 0], // AUTO, item path rather than its `name` field's sourcePath
+    });
+
+    if (response.type !== 'analyzeImpact') throw new Error('unreachable');
+    expect(response.entity).toMatchObject({ kind: 'proxy-group', serializedName: 'AUTO' });
+    expect(response.result.replaceable).toHaveLength(1);
+  });
+
+  it('finds a rule-provider by its map-key sourcePath and reports the RULE-SET rule referencing it', () => {
+    const state = parsed(IMPACT_SAMPLE);
+    const response = handleWorkerRequest(state, {
+      type: 'analyzeImpact',
+      requestId: 'r1',
+      path: ['rule-providers', 'ads'],
+    });
+
+    if (response.type !== 'analyzeImpact') throw new Error('unreachable');
+    expect(response.result.cascading).toEqual([]);
+    expect(response.result.replaceable).toHaveLength(1);
+    expect(response.result.replaceable[0]).toMatchObject({ path: ['rules', 0] });
+  });
+
+  it('re-derives the entity index fresh from the current document rather than caching it (an edit between two requests changes the answer)', () => {
+    const state = parsed(IMPACT_SAMPLE);
+    // Empty PROXY's proxies down to just AUTO, so removing AUTO now cascades.
+    handleWorkerRequest(state, {
+      type: 'applyPatch',
+      requestId: 'r0',
+      patch: { kind: 'set', path: ['proxy-groups', 1, 'proxies'], value: ['AUTO'] },
+    });
+
+    const response = handleWorkerRequest(state, {
+      type: 'analyzeImpact',
+      requestId: 'r1',
+      path: ['proxy-groups', 0, 'name'], // AUTO
+    });
+
+    if (response.type !== 'analyzeImpact') throw new Error('unreachable');
+    expect(response.result.cascading).toHaveLength(1);
+    expect(response.result.cascading[0]).toMatchObject({
+      kind: 'proxy-group',
+      serializedName: 'PROXY',
+    });
+  });
+});
+
 describe('handleWorkerRequest / undo, redo (FR-PROJ-04, v0.3.0 #15)', () => {
   it('undo reports NO_DOCUMENT before any successful parse', () => {
     const state = createWorkerState();

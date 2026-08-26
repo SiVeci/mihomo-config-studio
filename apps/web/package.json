@@ -11,6 +11,7 @@
   "dependencies": {
     "@mcs/config-model": "workspace:*",
     "@mcs/form-renderer": "workspace:*",
+    "@mcs/graph": "workspace:*",
     "@mcs/project-format": "workspace:*",
     "@mcs/schema-builtin": "workspace:*",
     "@mcs/schema-core": "workspace:*",

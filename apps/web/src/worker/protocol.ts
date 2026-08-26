@@ -1,4 +1,7 @@
-import { HistoryStack } from '@mcs/config-model';
+import { EntityRegistry, HistoryStack } from '@mcs/config-model';
+import type { Entity } from '@mcs/config-model';
+import { analyzeImpact, ReferenceIndex } from '@mcs/graph';
+import type { ImpactResult } from '@mcs/graph';
 import type { SchemaModule } from '@mcs/schema-core';
 import { builtinAsStoredBundle, createRegistry } from '@mcs/schema-registry';
 import type { IssueFix, ValidationIssue } from '@mcs/validator';
@@ -41,6 +44,8 @@ export type {
   TextDiff,
   TextRange,
 } from '@mcs/yaml-engine';
+export type { Entity, EntityKind } from '@mcs/config-model';
+export type { ImpactResult, Reference, ReferenceType } from '@mcs/graph';
 export { hasBlockingIssues, VALIDATION_DEBOUNCE_MS } from '@mcs/validator';
 export { toPointer } from '@mcs/yaml-engine';
 
@@ -64,6 +69,19 @@ export interface ApplyBatchRequest {
   type: 'applyBatch';
   requestId: string;
   patches: IssueFix[];
+}
+/**
+ * Who references the entity at `path` before it is deleted (v0.4.0 #11,
+ * FR-REL-03 UI). `path` rather than an `entityId`: `EntityRegistry`'s ids
+ * are a Worker-internal concept (rebuilt fresh from the current document on
+ * every request, same as every other read here) — the main thread only
+ * ever has a `sourcePath` to point at, the same address scheme
+ * `Entity.sourcePath` already uses.
+ */
+export interface AnalyzeImpactRequest {
+  type: 'analyzeImpact';
+  requestId: string;
+  path: ConfigPath;
 }
 export interface ValidateRequest {
   type: 'validate';
@@ -112,6 +130,7 @@ export type WorkerRequest =
   | ParseRequest
   | ApplyPatchRequest
   | ApplyBatchRequest
+  | AnalyzeImpactRequest
   | ValidateRequest
   | DiffRequest
   | SerializeRequest
@@ -141,6 +160,13 @@ export interface ApplyBatchResponse {
   requestId: string;
   canUndo: boolean;
   canRedo: boolean;
+}
+export interface AnalyzeImpactResponse {
+  type: 'analyzeImpact';
+  requestId: string;
+  /** The entity `path` resolved to — the caller only ever sent a path, never an id/kind/name; the dialog needs those to render (v0.4.0 #11). */
+  entity: Entity;
+  result: ImpactResult;
 }
 export interface ValidateResponse {
   type: 'validate';
@@ -227,6 +253,7 @@ export type WorkerResponse =
   | ParseResponse
   | ApplyPatchResponse
   | ApplyBatchResponse
+  | AnalyzeImpactResponse
   | ValidateResponse
   | DiffResponse
   | SerializeResponse
@@ -267,6 +294,8 @@ export function handleWorkerRequest(state: WorkerState, request: WorkerRequest):
       return handleApplyPatch(state, request);
     case 'applyBatch':
       return handleApplyBatch(state, request);
+    case 'analyzeImpact':
+      return handleAnalyzeImpact(state, request);
     case 'validate':
       return handleValidate(state, request);
     case 'diff':
@@ -383,6 +412,62 @@ function handleApplyBatch(
   } catch (error) {
     return errorResponseFrom(request.requestId, error);
   }
+}
+
+/**
+ * `EntityRegistry`/`ReferenceIndex` are rebuilt fresh here, the same way
+ * every other handler reads `state.parseResult.document` fresh rather than
+ * caching derived state across requests — the document can have changed
+ * (any edit, undo/redo) between when the caller last saw an entity list and
+ * this request, so a stale index would silently answer against an outdated
+ * document (v0.4.0 #11, FR-REL-03 UI).
+ */
+function handleAnalyzeImpact(
+  state: WorkerState,
+  request: AnalyzeImpactRequest,
+): AnalyzeImpactResponse | WorkerErrorResponse {
+  const document = state.parseResult?.document;
+  if (!document) return noDocumentError(request.requestId);
+  const entities = new EntityRegistry().extract(document);
+  const target = entities.find((entity) => identifiesEntity(entity.sourcePath, request.path));
+  if (!target) {
+    return {
+      type: 'error',
+      requestId: request.requestId,
+      code: 'GRAPH_ENTITY_NOT_FOUND',
+      messageKey: 'worker.error.GRAPH_ENTITY_NOT_FOUND',
+      path: request.path,
+    };
+  }
+  const index = new ReferenceIndex();
+  index.rebuild(document, entities);
+  return {
+    type: 'analyzeImpact',
+    requestId: request.requestId,
+    entity: target,
+    result: analyzeImpact(document, index, target.id),
+  };
+}
+
+/**
+ * A caller only ever has an *item's* own path — for a keyed-map entity
+ * (`rule-provider`/`proxy-provider`, `Entity.sourcePath` is `[key, name]`)
+ * that already *is* the entity's `sourcePath`, but for a named-array entity
+ * (`proxy`/`proxy-group`, `sourcePath` is `[key, index, 'name']` —
+ * `config-model/entity.ts`'s `extractNamedArray`) the item's own path is
+ * one segment shorter, the `name` field's *parent*. Accepting either shape
+ * here means every caller (`SchemaArrayForm`'s per-entry delete button,
+ * either array- or map-shaped) can send the one path it naturally has,
+ * without needing to know which of the two `EntityRegistry` internally
+ * used.
+ */
+function identifiesEntity(entitySourcePath: ConfigPath, requestPath: ConfigPath): boolean {
+  if (pathsEqual(entitySourcePath, requestPath)) return true;
+  return pathsEqual(entitySourcePath.slice(0, -1), requestPath);
+}
+
+function pathsEqual(a: ConfigPath, b: ConfigPath): boolean {
+  return a.length === b.length && a.every((segment, i) => segment === b[i]);
 }
 
 function handleUndo(state: WorkerState, request: UndoRequest): UndoResponse | WorkerErrorResponse {

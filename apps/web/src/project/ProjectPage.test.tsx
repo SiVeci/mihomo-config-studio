@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { GENERAL_MODULE } from '@mcs/schema-builtin';
 import { MemoryStorageAdapter } from '@mcs/storage';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { DiffPanelWorkerClient } from '../diff/DiffPanel.js';
@@ -60,6 +60,12 @@ const FAKE_CLIENT: FakeClient = {
     requestId: 'fake',
     canUndo: false,
     canRedo: false,
+  }),
+  analyzeImpact: async (_path) => ({
+    type: 'analyzeImpact',
+    requestId: 'fake',
+    entity: { id: 'fake:0', kind: 'proxy-group', serializedName: 'fake', sourcePath: [] },
+    result: { replaceable: [], cascading: [] },
   }),
   value: async () => ({ type: 'value', requestId: 'fake', value: {} }),
   undo: async () => ({
@@ -1318,5 +1324,141 @@ describe('ProjectPage / batch actions (v0.4.0 #10, FR-RULE-03, ADR-023, exit con
     await waitFor(() => {
       expect(editorTextarea.value).toBe(beforeText);
     });
+  });
+});
+
+describe('ProjectPage / delete impact analysis (v0.4.0 #11, FR-REL-03 UI, exit condition 5)', () => {
+  const IMPACT_YAML = [
+    'mode: rule',
+    'proxy-groups:',
+    '  - name: AUTO',
+    '    type: url-test',
+    '    proxies: [DIRECT]',
+    '  - name: PROXY',
+    '    type: select',
+    '    proxies: [AUTO, DIRECT]',
+    '  - name: UNUSED',
+    '    type: select',
+    '    proxies: [DIRECT]',
+    '  - name: SOLO',
+    '    type: select',
+    '    proxies: [AUTO]',
+  ].join('\n');
+
+  async function setUpOnFormView(yaml: string) {
+    const adapter = new MemoryStorageAdapter();
+    const client = new WorkerClient(new RealWorker());
+    render(<ProjectPage client={client} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+    const editorTextarea = screen.getByLabelText<HTMLTextAreaElement>(t('editor.title'));
+    await waitFor(() => expect(editorTextarea.value).toBe(DEFAULT_PROJECT_CONFIG_TEXT));
+    fireEvent.change(editorTextarea, { target: { value: yaml } });
+    await waitFor(() => {
+      expect(document.querySelector('[data-module-section="proxy-groups"]')).not.toBeNull();
+    });
+    return { editorTextarea };
+  }
+
+  function deleteButtonFor(groupName: string): HTMLElement {
+    const section = document.querySelector('[data-module-section="proxy-groups"]') as HTMLElement;
+    const fieldsets = Array.from(section.querySelectorAll('[data-array-index]'));
+    // The group's name lives in an <input>'s `value`, not in textContent —
+    // an <input> exposes no text children at all.
+    const fieldset = fieldsets.find((el) => {
+      const nameField = el.querySelector('[data-field$="/name"] input') as HTMLInputElement | null;
+      return nameField?.value === groupName;
+    }) as HTMLElement;
+    return within(fieldset).getByRole('button', { name: t('arrayForm.deleteEntryButton') });
+  }
+
+  it('deletes an unreferenced entity directly, with no dialog', async () => {
+    const { editorTextarea } = await setUpOnFormView(IMPACT_YAML);
+
+    fireEvent.click(deleteButtonFor('UNUSED'));
+
+    await waitFor(() => {
+      expect(editorTextarea.value).not.toContain('UNUSED');
+    });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('opens the replace exit for a referenced entity with no cascading owner, and rewrites the reference through the real Worker', async () => {
+    const { editorTextarea } = await setUpOnFormView(IMPACT_YAML);
+    // Remove SOLO first so AUTO has no cascading owner, isolating the replace path.
+    fireEvent.click(deleteButtonFor('SOLO'));
+    await waitFor(() => expect(editorTextarea.value).not.toContain('SOLO'));
+
+    fireEvent.click(deleteButtonFor('AUTO'));
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      within(dialog).queryByRole('button', { name: t('deleteImpact.confirmCascadeButton') }),
+    ).toBeNull();
+
+    fireEvent.change(within(dialog).getByLabelText(t('deleteImpact.targetLabel')), {
+      target: { value: 'DIRECT' },
+    });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: t('deleteImpact.confirmReplaceButton') }),
+    );
+
+    await waitFor(() => {
+      expect(editorTextarea.value).not.toContain('name: AUTO');
+    });
+    // AUTO (and its own `proxies: [DIRECT]`) is gone entirely; UNUSED still
+    // has one DIRECT, and PROXY's `[AUTO, DIRECT]` becomes `[DIRECT, DIRECT]`
+    // once AUTO is replaced — three DIRECT occurrences total. Checked by
+    // count rather than exact array formatting (flow vs. block), which this
+    // app's AST-mode serialisation is free to choose once any structural
+    // edit has happened (this test already made one, deleting SOLO, before
+    // ever reaching this assertion).
+    expect(editorTextarea.value.match(/DIRECT/g)).toHaveLength(3);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('opens the cascade exit when deleting would leave an owner empty, and deletes both through one applyBatch', async () => {
+    const { editorTextarea } = await setUpOnFormView(IMPACT_YAML);
+    // Remove PROXY's other member first so deleting AUTO would leave SOLO as
+    // the only thing left referencing it (PROXY itself still references
+    // AUTO too, but keeps DIRECT — this isolates SOLO as the sole cascade).
+    fireEvent.click(deleteButtonFor('AUTO'));
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      within(dialog).getByRole('button', { name: t('deleteImpact.confirmCascadeButton') }),
+    ).not.toBeNull();
+    expect(within(dialog).getByText('SOLO')).not.toBeNull();
+
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: t('deleteImpact.confirmCascadeButton') }),
+    );
+
+    await waitFor(() => {
+      expect(editorTextarea.value).not.toContain('name: AUTO');
+    });
+    expect(editorTextarea.value).not.toContain('name: SOLO');
+    expect(editorTextarea.value).toContain('name: PROXY');
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    // One undo reverts the whole cascade (entity + cascading owner + the
+    // dangling reference cleanup) in a single step (ADR-023).
+    fireEvent.click(screen.getByRole('button', { name: t('project.undoButton') }));
+    await waitFor(() => {
+      expect(editorTextarea.value).toContain('name: AUTO');
+    });
+    expect(editorTextarea.value).toContain('name: SOLO');
+  });
+
+  it('cancelling the dialog leaves the document untouched', async () => {
+    const { editorTextarea } = await setUpOnFormView(IMPACT_YAML);
+    const beforeText = editorTextarea.value;
+
+    fireEvent.click(deleteButtonFor('AUTO'));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: t('deleteImpact.cancelButton') }));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(editorTextarea.value).toBe(beforeText);
   });
 });

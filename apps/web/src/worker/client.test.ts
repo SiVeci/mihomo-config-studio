@@ -104,6 +104,19 @@ describe('WorkerClient request/response correlation', () => {
     expect(undone.canUndo).toBe(false);
   });
 
+  it('round-trips analyzeImpact against a parsed document (v0.4.0 #11)', async () => {
+    const worker = new FakeWorker();
+    const client = new WorkerClient(worker);
+    await client.parse(
+      'mode: rule\nproxy-groups:\n  - name: AUTO\n    type: url-test\n    proxies: [DIRECT]\n  - name: PROXY\n    type: select\n    proxies: [AUTO, DIRECT]\n',
+    );
+
+    const response = await client.analyzeImpact(['proxy-groups', 0, 'name']);
+    expect(response.type).toBe('analyzeImpact');
+    expect(response.result.cascading).toEqual([]);
+    expect(response.result.replaceable).toHaveLength(1);
+  });
+
   it('round-trips undo / redo against a parsed document, real HistoryStack included (v0.3.0 #15)', async () => {
     const worker = new FakeWorker();
     const client = new WorkerClient(worker);

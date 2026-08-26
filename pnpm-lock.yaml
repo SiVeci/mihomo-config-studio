@@ -81,6 +81,9 @@ importers:
       '@mcs/form-renderer':
         specifier: workspace:*
         version: link:../../packages/form-renderer
+      '@mcs/graph':
+        specifier: workspace:*
+        version: link:../../packages/graph
       '@mcs/project-format':
         specifier: workspace:*
         version: link:../../packages/project-format

@@ -45,6 +45,7 @@ const DOCUMENT = {
 function renderPage(overrides: Partial<Parameters<typeof ModuleFormPage>[0]> = {}) {
   const onModeChange = vi.fn();
   const onFieldChange = vi.fn<(path: ConfigPath, value: unknown) => void>();
+  const onDeleteEntity = vi.fn<(path: ConfigPath) => void>();
   render(
     <ModuleFormPage
       modules={[GENERAL_MODULE, INBOUND_MODULE, PROXIES_MODULE]}
@@ -52,10 +53,11 @@ function renderPage(overrides: Partial<Parameters<typeof ModuleFormPage>[0]> = {
       mode="advanced"
       onModeChange={onModeChange}
       onFieldChange={onFieldChange}
+      onDeleteEntity={onDeleteEntity}
       {...overrides}
     />,
   );
-  return { onModeChange, onFieldChange };
+  return { onModeChange, onFieldChange, onDeleteEntity };
 }
 
 describe('ModuleFormPage (FR-SCHEMA-01, PRD §7.4, v0.3.0 #14)', () => {
@@ -189,6 +191,7 @@ describe('ModuleFormPage / proxy-providers (v0.3.0 #17)', () => {
         mode="advanced"
         onModeChange={vi.fn()}
         onFieldChange={vi.fn()}
+        onDeleteEntity={vi.fn()}
       />,
     );
     const section = document.querySelector('[data-module-section="proxy-providers"]')!;
@@ -204,6 +207,7 @@ describe('ModuleFormPage / proxy-providers (v0.3.0 #17)', () => {
         mode="advanced"
         onModeChange={vi.fn()}
         onFieldChange={vi.fn()}
+        onDeleteEntity={vi.fn()}
       />,
     );
     const urlField = document.querySelector('[data-field="/proxy-providers/provider-a/url"]')!;
@@ -227,6 +231,7 @@ describe('ModuleFormPage.jumpToField (FR-VAL-02, v0.3.0 #16)', () => {
         mode="advanced"
         onModeChange={onModeChange}
         onFieldChange={onFieldChange}
+        onDeleteEntity={vi.fn()}
       />,
     );
 
@@ -246,6 +251,7 @@ describe('ModuleFormPage.jumpToField (FR-VAL-02, v0.3.0 #16)', () => {
         mode="advanced"
         onModeChange={vi.fn()}
         onFieldChange={vi.fn()}
+        onDeleteEntity={vi.fn()}
       />,
     );
 
@@ -267,6 +273,7 @@ describe('ModuleFormPage.jumpToField (FR-VAL-02, v0.3.0 #16)', () => {
         mode="advanced"
         onModeChange={vi.fn()}
         onFieldChange={vi.fn()}
+        onDeleteEntity={vi.fn()}
       />,
     );
     const previouslyFocused = document.activeElement;
