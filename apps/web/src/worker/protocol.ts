@@ -1,7 +1,13 @@
 import { EntityRegistry, HistoryStack } from '@mcs/config-model';
 import type { Entity } from '@mcs/config-model';
-import { analyzeImpact, ReferenceIndex } from '@mcs/graph';
-import type { ImpactResult } from '@mcs/graph';
+import { analyzeImpact, buildGraphLayout, detectCycles, ReferenceIndex } from '@mcs/graph';
+import type {
+  BuildGraphLayoutOptions,
+  Cycle,
+  GraphLayout,
+  ImpactResult,
+  RelevantIssue,
+} from '@mcs/graph';
 import type { SchemaModule } from '@mcs/schema-core';
 import { builtinAsStoredBundle, createRegistry } from '@mcs/schema-registry';
 import type { IssueFix, ValidationIssue } from '@mcs/validator';
@@ -45,7 +51,20 @@ export type {
   TextRange,
 } from '@mcs/yaml-engine';
 export type { Entity, EntityKind } from '@mcs/config-model';
-export type { ImpactResult, Reference, ReferenceType } from '@mcs/graph';
+export type {
+  AggregateGraphNode,
+  BuildGraphLayoutOptions,
+  Cycle,
+  EdgeStatus,
+  GraphEdge,
+  GraphLayerIndex,
+  GraphLayout,
+  GraphNode,
+  ImpactResult,
+  LayoutNode,
+  Reference,
+  ReferenceType,
+} from '@mcs/graph';
 export { hasBlockingIssues, VALIDATION_DEBOUNCE_MS } from '@mcs/validator';
 export { toPointer } from '@mcs/yaml-engine';
 
@@ -82,6 +101,12 @@ export interface AnalyzeImpactRequest {
   type: 'analyzeImpact';
   requestId: string;
   path: ConfigPath;
+}
+/** The relationship graph's data (v0.4.0 #13, FR-REL-04/06) — layout, `entities` for click-to-jump path resolution, and the raw cycle name-sequences for the required text-equivalent list (PRD §11.6: never colour-only). */
+export interface GraphLayoutRequest {
+  type: 'graphLayout';
+  requestId: string;
+  options?: BuildGraphLayoutOptions;
 }
 export interface ValidateRequest {
   type: 'validate';
@@ -131,6 +156,7 @@ export type WorkerRequest =
   | ApplyPatchRequest
   | ApplyBatchRequest
   | AnalyzeImpactRequest
+  | GraphLayoutRequest
   | ValidateRequest
   | DiffRequest
   | SerializeRequest
@@ -167,6 +193,22 @@ export interface AnalyzeImpactResponse {
   /** The entity `path` resolved to — the caller only ever sent a path, never an id/kind/name; the dialog needs those to render (v0.4.0 #11). */
   entity: Entity;
   result: ImpactResult;
+}
+/**
+ * `entities` rides along because `GraphNode` deliberately excludes
+ * `sourcePath` (NFR-SEC-03's minimal-fields design, v0.4.0 #12) — the UI
+ * resolves a clicked node's id back to a jump-to-field path by looking it up
+ * here, the same `sourcePath` shape `identifiesEntity()` above already
+ * understands. `cycles` is `detectCycles()`'s own name-sequences: an edge's
+ * `status: 'cycle'` alone cannot reconstruct a full cycle path, and the
+ * required text-equivalent list (PRD §11.6 — never colour-only) needs one.
+ */
+export interface GraphLayoutResponse {
+  type: 'graphLayout';
+  requestId: string;
+  layout: GraphLayout;
+  entities: readonly Entity[];
+  cycles: readonly Cycle[];
 }
 export interface ValidateResponse {
   type: 'validate';
@@ -254,6 +296,7 @@ export type WorkerResponse =
   | ApplyPatchResponse
   | ApplyBatchResponse
   | AnalyzeImpactResponse
+  | GraphLayoutResponse
   | ValidateResponse
   | DiffResponse
   | SerializeResponse
@@ -296,6 +339,8 @@ export function handleWorkerRequest(state: WorkerState, request: WorkerRequest):
       return handleApplyBatch(state, request);
     case 'analyzeImpact':
       return handleAnalyzeImpact(state, request);
+    case 'graphLayout':
+      return handleGraphLayout(state, request);
     case 'validate':
       return handleValidate(state, request);
     case 'diff':
@@ -468,6 +513,59 @@ function identifiesEntity(entitySourcePath: ConfigPath, requestPath: ConfigPath)
 
 function pathsEqual(a: ConfigPath, b: ConfigPath): boolean {
   return a.length === b.length && a.every((segment, i) => segment === b[i]);
+}
+
+/**
+ * Builds the whole relationship graph fresh from the current document —
+ * same reasoning as `handleAnalyzeImpact`'s own `ReferenceIndex`: the graph
+ * can go stale between requests, so nothing here is cached across calls
+ * (v0.4.0 #13, FR-REL-04/06).
+ */
+function handleGraphLayout(
+  state: WorkerState,
+  request: GraphLayoutRequest,
+): GraphLayoutResponse | WorkerErrorResponse {
+  const document = state.parseResult?.document;
+  if (!document) return noDocumentError(request.requestId);
+  const entities = new EntityRegistry().extract(document);
+  const index = new ReferenceIndex();
+  index.rebuild(document, entities);
+  const issues = runPipeline({ parse: state.parseResult!, modules: RESOLVED_MODULES });
+  return {
+    type: 'graphLayout',
+    requestId: request.requestId,
+    layout: buildGraphLayout(
+      entities,
+      index.allReferences(),
+      toRelevantIssues(issues),
+      request.options ?? {},
+    ),
+    entities,
+    cycles: detectCycles(document),
+  };
+}
+
+/**
+ * `@mcs/graph` cannot import `ValidationIssue` itself (would cycle back
+ * through `@mcs/validator`'s own `import { detectCycles } from '@mcs/graph'`
+ * — see `layout.ts`'s `RelevantIssue` doc comment), so the Worker adapts
+ * here instead. `messageParams.cycle` is typed as the general
+ * `MessageParamValue` union at its source (nothing in `@mcs/yaml-engine`
+ * ties a specific `messageParams` key to a narrower type) even though
+ * `referenceStage`'s cycle check only ever puts a `Cycle` (a `string[]`)
+ * there — the runtime check below is what actually establishes that,
+ * `Array.isArray` plus an element check rather than a blind cast.
+ */
+function toRelevantIssues(issues: readonly ValidationIssue[]): RelevantIssue[] {
+  return issues.map((issue) => {
+    const cycle = issue.messageParams?.cycle;
+    const isCycle = Array.isArray(cycle) && cycle.every((name) => typeof name === 'string');
+    return {
+      code: issue.code,
+      ...(issue.path !== undefined ? { path: issue.path } : {}),
+      ...(isCycle ? { messageParams: { cycle: cycle as readonly string[] } } : {}),
+    };
+  });
 }
 
 function handleUndo(state: WorkerState, request: UndoRequest): UndoResponse | WorkerErrorResponse {

@@ -31,6 +31,7 @@ import { t } from '../i18n/index.js';
 import { IssuePanel } from '../issues/IssuePanel.js';
 import type { IssuePanelWorkerClient } from '../issues/IssuePanel.js';
 import { DeleteImpactDialog } from '../graph/DeleteImpactDialog.js';
+import { GraphView } from '../graph/GraphView.js';
 import { buildCascadeDeletePatches, buildReplacePatches } from '../graph/impact-patches.js';
 import { AppShell } from '../layout/AppShell.js';
 import { collectRuleEntityNames } from '../rules/entity-names.js';
@@ -42,6 +43,7 @@ import type {
   ConfigPath,
   Entity,
   EntityKind,
+  GraphLayoutResponse,
   IssueFix,
   Reference,
   RedoResponse,
@@ -66,17 +68,16 @@ import './ProjectPage.css';
 
 type ProjectField = 'name' | 'description' | 'targetProfile';
 
-/**
- * PRD §7.2's middle column: "图形化表单、列表、拖拽排序和关系图". `graph`
- * joins this list once #13 builds `GraphView` — deliberately not stubbed in
- * here ahead of that, since a tab with no real content behind it would just
- * be dead UI between now and then (E3, v0.4.0 #7).
- */
-const MAIN_VIEWS = ['form', 'rules'] as const;
+/** PRD §7.2's middle column: "图形化表单、列表、拖拽排序和关系图" (v0.4.0 #13 adds the third). */
+const MAIN_VIEWS = ['form', 'rules', 'graph'] as const;
 type MainView = (typeof MAIN_VIEWS)[number];
-const MAIN_VIEW_TAB_LABEL_KEYS: Record<MainView, 'project.formViewTab' | 'project.rulesViewTab'> = {
+const MAIN_VIEW_TAB_LABEL_KEYS: Record<
+  MainView,
+  'project.formViewTab' | 'project.rulesViewTab' | 'project.graphViewTab'
+> = {
   form: 'project.formViewTab',
   rules: 'project.rulesViewTab',
+  graph: 'project.graphViewTab',
 };
 
 /** What `DeleteImpactDialog` needs, gathered from an `analyzeImpact` response plus the path that was originally clicked (v0.4.0 #11). */
@@ -125,6 +126,8 @@ export interface ModuleFormWorkerClient {
   applyPatch(patch: IssueFix): Promise<ApplyPatchResponse>;
   applyBatch(patches: IssueFix[]): Promise<ApplyBatchResponse>;
   analyzeImpact(path: ConfigPath): Promise<AnalyzeImpactResponse>;
+  /** Backs `GraphView` (v0.4.0 #13) — `ProjectPage` fetches it directly, same reasoning as `analyzeImpact` above. */
+  graphLayout(): Promise<GraphLayoutResponse>;
   value(): Promise<ValueResponse>;
   undo(): Promise<UndoResponse>;
   redo(): Promise<RedoResponse>;
@@ -179,6 +182,11 @@ export function ProjectPage({
   // three PRD §7.2 views ("图形化表单、列表、拖拽排序和关系图") are cheap to
   // switch between and irrelevant to browser history/deep-linking.
   const [mainView, setMainView] = useState<MainView>('form');
+  // `null` until the graph tab has been opened at least once (v0.4.0 #13) —
+  // there is no cheap client-side derivation of the graph the way `rules`
+  // above reads straight out of `documentValue`; it needs a real
+  // `ReferenceIndex`/`detectCycles()` pass, which only the Worker can do.
+  const [graphData, setGraphData] = useState<GraphLayoutResponse | null>(null);
   // `null` when no delete-impact dialog is open (v0.4.0 #11). Set only after
   // `client.analyzeImpact` comes back with at least one reference — an
   // unreferenced entity deletes directly, never opening this (exit condition 5).
@@ -230,6 +238,9 @@ export function ProjectPage({
   const editorRef = useRef<YamlEditorHandle>(null);
   const moduleFormRef = useRef<ModuleFormPageHandle>(null);
   const mainViewTabRefs = useRef<Partial<Record<MainView, HTMLButtonElement | null>>>({});
+  // Set only when `handleJumpToField` had to switch `mainView` itself (v0.4.0
+  // #13) — see the effect below for why a same-render ref call cannot do this.
+  const pendingJumpPathRef = useRef<ConfigPath | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -261,6 +272,7 @@ export function ProjectPage({
       setDocumentValue(null);
       setCanUndo(false);
       setCanRedo(false);
+      setGraphData(null);
       return;
     }
     let cancelled = false;
@@ -365,6 +377,37 @@ export function ProjectPage({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Consumes a jump requested while `mainView` was still `'rules'`/`'graph'`
+  // (v0.4.0 #13). `handleJumpToField` cannot call `moduleFormRef.current`
+  // straight after `setMainView('form')` in the same handler: `ModuleFormPage`
+  // is lazy-mounted (E3, v0.4.0 #7), so on that render the ref is still
+  // whatever it was before the switch (`null`, the first time). Waiting for
+  // this effect — which runs after the *next* commit, once `mainView === 'form'`
+  // has actually mounted the component and attached its ref — is what makes
+  // the call land instead of silently no-op-ing.
+  useEffect(() => {
+    const path = pendingJumpPathRef.current;
+    if (mainView !== 'form' || path === null) return;
+    pendingJumpPathRef.current = null;
+    moduleFormRef.current?.jumpToField(path);
+  }, [mainView]);
+
+  // Fetches (and re-fetches on every document change) only while the graph
+  // tab is actually the one showing — the same "lazy-mounted view only pays
+  // for what it needs" reasoning `rules`'s memo above already follows,
+  // extended to a Worker round trip since a graph has no cheap client-side
+  // derivation (v0.4.0 #13).
+  useEffect(() => {
+    if (mainView !== 'graph' || !selectedId) return;
+    let cancelled = false;
+    void client.graphLayout().then((response) => {
+      if (!cancelled) setGraphData(response);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, mainView, selectedId, documentValue]);
+
   async function handleUndo(): Promise<void> {
     const response = await client.undo();
     applyHistoryResponse(response);
@@ -452,8 +495,20 @@ export function ProjectPage({
     editorRef.current?.jumpToRange(range);
   }
 
+  /**
+   * Used by `IssuePanel`/`UnknownFieldTree` already, and by `GraphView`'s
+   * click-to-jump (v0.4.0 #13) — every caller only ever has a path, never
+   * knows or cares which main-column view is currently showing. Switches
+   * `mainView` to `'form'` first when needed, since a field only exists in
+   * the DOM while that view is the one lazy-mounted (see the effect above).
+   */
   function handleJumpToField(path: ConfigPath): void {
-    moduleFormRef.current?.jumpToField(path);
+    if (mainView === 'form') {
+      moduleFormRef.current?.jumpToField(path);
+      return;
+    }
+    pendingJumpPathRef.current = path;
+    setMainView('form');
   }
 
   /**
@@ -682,7 +737,7 @@ export function ProjectPage({
               aria-labelledby={`main-view-tab-${mainView}`}
             >
               {/* Lazy-mounted (E3): only the selected view's component ever
-                  renders — a 10,000-row rule list or a future relationship
+                  renders — a 10,000-row rule list or a large relationship
                   graph costs nothing while the user is looking at the other
                   one. */}
               {mainView === 'form' && (
@@ -707,6 +762,17 @@ export function ProjectPage({
                   onApplyBatch={applyBatchAndRefresh}
                 />
               )}
+              {mainView === 'graph' &&
+                (graphData ? (
+                  <GraphView
+                    layout={graphData.layout}
+                    entities={graphData.entities}
+                    cycles={graphData.cycles}
+                    onJumpToField={handleJumpToField}
+                  />
+                ) : (
+                  <p className="project-detail__empty">{t('graph.emptyState')}</p>
+                ))}
             </div>
           </div>
           <DiffPanel

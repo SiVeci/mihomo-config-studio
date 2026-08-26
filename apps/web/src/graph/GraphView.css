@@ -1,0 +1,86 @@
+.graph-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mcs-spacing-sm);
+  height: 100%;
+}
+
+.graph-view__filter {
+  display: flex;
+  align-items: center;
+  gap: var(--mcs-spacing-xxs);
+  width: fit-content;
+}
+
+.graph-view__viewport {
+  overflow-y: auto;
+  border: 1px solid var(--mcs-color-hairline);
+  border-radius: var(--mcs-rounded-xs);
+}
+
+.graph-view__svg {
+  display: block;
+}
+
+.graph-view__layer-label {
+  font-size: var(--mcs-font-size-body-sm);
+  fill: var(--mcs-color-text-muted);
+}
+
+.graph-view__edge {
+  stroke: var(--mcs-color-hairline);
+  stroke-width: 1.5;
+  fill: none;
+}
+
+.graph-view__edge--missing {
+  stroke: var(--mcs-color-text-error);
+  stroke-dasharray: 5 3;
+}
+
+.graph-view__edge--cycle {
+  stroke: var(--mcs-color-text-warning);
+  stroke-dasharray: 1.5 2.5;
+}
+
+.graph-view__node {
+  cursor: pointer;
+}
+
+.graph-view__node rect {
+  fill: var(--mcs-color-surface-card);
+  stroke: var(--mcs-color-hairline);
+}
+
+.graph-view__node--aggregate rect {
+  stroke-dasharray: 4 2;
+}
+
+.graph-view__node text {
+  font-size: var(--mcs-font-size-body-sm);
+  fill: var(--mcs-color-text-primary);
+  pointer-events: none;
+}
+
+.graph-view__cycles h3 {
+  font-family: var(--mcs-font-family-title-sm);
+  font-size: var(--mcs-font-size-title-sm);
+  margin: 0 0 var(--mcs-spacing-xxs);
+}
+
+.graph-view__cycles ul {
+  margin: 0;
+  padding-left: var(--mcs-spacing-md);
+  font-size: var(--mcs-font-size-body-sm);
+}
+
+.graph-view__text-fallback h4 {
+  font-size: var(--mcs-font-size-body-sm);
+  margin: var(--mcs-spacing-xs) 0 var(--mcs-spacing-xxs);
+}
+
+.graph-view__text-fallback ul {
+  margin: 0;
+  padding-left: var(--mcs-spacing-md);
+  font-size: var(--mcs-font-size-body-sm);
+}

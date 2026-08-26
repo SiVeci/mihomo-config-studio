@@ -3,8 +3,10 @@ import type {
   AnalyzeImpactResponse,
   ApplyBatchResponse,
   ApplyPatchResponse,
+  BuildGraphLayoutOptions,
   ConfigPath,
   DiffResponse,
+  GraphLayoutResponse,
   IssueFix,
   LocateResponse,
   ParseResponse,
@@ -107,6 +109,15 @@ export class WorkerClient {
       requestId: this.#makeRequestId(),
       path,
     }) as Promise<AnalyzeImpactResponse>;
+  }
+
+  /** The whole relationship graph, freshly built from the current document (v0.4.0 #13, FR-REL-04/06). */
+  graphLayout(options?: BuildGraphLayoutOptions): Promise<GraphLayoutResponse> {
+    return this.#send({
+      type: 'graphLayout',
+      requestId: this.#makeRequestId(),
+      ...(options !== undefined ? { options } : {}),
+    }) as Promise<GraphLayoutResponse>;
   }
 
   validate(): Promise<ValidateResponse> {

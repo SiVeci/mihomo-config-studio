@@ -530,6 +530,112 @@ rules:
   });
 });
 
+describe('handleWorkerRequest / graphLayout (v0.4.0 #13, FR-REL-04/06)', () => {
+  const GRAPH_SAMPLE = `mode: rule
+proxy-groups:
+  - name: AUTO
+    type: url-test
+    proxies: [DIRECT]
+  - name: PROXY
+    type: select
+    proxies: [AUTO, DIRECT]
+rule-providers:
+  ads:
+    type: http
+    behavior: domain
+    url: https://example.invalid/ads.txt
+    path: ./ads.yaml
+rules:
+  - RULE-SET,ads,DIRECT
+  - MATCH,DIRECT
+`;
+
+  it('reports NO_DOCUMENT before any successful parse', () => {
+    const state = createWorkerState();
+    const response = handleWorkerRequest(state, { type: 'graphLayout', requestId: 'r1' });
+
+    expect(response).toEqual({
+      type: 'error',
+      requestId: 'r1',
+      code: 'NO_DOCUMENT',
+      messageKey: 'worker.error.noDocument',
+    });
+  });
+
+  it('lays out every entity into its layer, alongside a non-empty edge list and an empty cycle list for an acyclic document', () => {
+    const state = parsed(GRAPH_SAMPLE);
+    const response = handleWorkerRequest(state, { type: 'graphLayout', requestId: 'r1' });
+
+    if (response.type !== 'graphLayout') throw new Error('unreachable');
+    const byName = (name: string) =>
+      response.layout.nodes.find((n) => !n.aggregated && n.name === name);
+    expect(byName('AUTO')).toMatchObject({ kind: 'proxy-group', layer: 1 });
+    expect(byName('DIRECT')).toMatchObject({ kind: 'builtin', layer: 0 });
+    expect(byName('ads')).toMatchObject({ kind: 'rule-provider', layer: 2 });
+    expect(response.layout.edges.length).toBeGreaterThan(0);
+    expect(response.cycles).toEqual([]);
+  });
+
+  it('carries the full entity list alongside the layout, so a clicked node’s id resolves back to a jump-to-field sourcePath', () => {
+    const state = parsed(GRAPH_SAMPLE);
+    const response = handleWorkerRequest(state, { type: 'graphLayout', requestId: 'r1' });
+
+    if (response.type !== 'graphLayout') throw new Error('unreachable');
+    const node = response.layout.nodes.find((n) => !n.aggregated && n.name === 'AUTO');
+    if (!node) throw new Error('expected an AUTO node');
+    const entity = response.entities.find((e) => e.id === node.id);
+    expect(entity).toMatchObject({ kind: 'proxy-group', sourcePath: ['proxy-groups', 0, 'name'] });
+  });
+
+  it('forwards options.aggregateThreshold through to buildGraphLayout', () => {
+    const state = parsed(GRAPH_SAMPLE);
+    const response = handleWorkerRequest(state, {
+      type: 'graphLayout',
+      requestId: 'r1',
+      options: { aggregateThreshold: 1 },
+    });
+
+    if (response.type !== 'graphLayout') throw new Error('unreachable');
+    const aggregate = response.layout.nodes.find((n) => n.aggregated && n.kind === 'proxy-group');
+    expect(aggregate).toMatchObject({ count: 2 });
+  });
+
+  it('flags a real proxy-group nesting cycle as both an edge status and a name-sequence list', () => {
+    const state = parsed(
+      [
+        'proxy-groups:',
+        '  - {name: a, type: select, proxies: [b]}',
+        '  - {name: b, type: select, proxies: [a]}',
+        '',
+      ].join('\n'),
+    );
+    const response = handleWorkerRequest(state, { type: 'graphLayout', requestId: 'r1' });
+
+    if (response.type !== 'graphLayout') throw new Error('unreachable');
+    expect(response.cycles).toHaveLength(1);
+    expect(response.cycles[0]).toEqual(expect.arrayContaining(['a', 'b']));
+    expect(response.layout.edges.some((e) => e.status === 'cycle')).toBe(true);
+  });
+
+  it('re-derives the graph fresh from the current document rather than caching it (an edit between two requests changes the answer)', () => {
+    const state = parsed(GRAPH_SAMPLE);
+    // Empties PROXY's proxies down to just AUTO, so the DIRECT edge from PROXY should disappear.
+    handleWorkerRequest(state, {
+      type: 'applyPatch',
+      requestId: 'r0',
+      patch: { kind: 'set', path: ['proxy-groups', 1, 'proxies'], value: ['AUTO'] },
+    });
+
+    const response = handleWorkerRequest(state, { type: 'graphLayout', requestId: 'r1' });
+
+    if (response.type !== 'graphLayout') throw new Error('unreachable');
+    const proxyNode = response.layout.nodes.find((n) => !n.aggregated && n.name === 'PROXY');
+    if (!proxyNode) throw new Error('expected a PROXY node');
+    const edgesFromProxy = response.layout.edges.filter((e) => e.fromId === proxyNode.id);
+    expect(edgesFromProxy).toHaveLength(1);
+  });
+});
+
 describe('handleWorkerRequest / undo, redo (FR-PROJ-04, v0.3.0 #15)', () => {
   it('undo reports NO_DOCUMENT before any successful parse', () => {
     const state = createWorkerState();

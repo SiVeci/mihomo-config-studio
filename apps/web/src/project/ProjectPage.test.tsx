@@ -29,6 +29,12 @@ import type { ProjectRecord } from './model.js';
 import { ProjectPage } from './ProjectPage.js';
 import type { ModuleFormWorkerClient } from './ProjectPage.js';
 
+// jsdom does not implement `scrollIntoView` at all (real browsers do) — the
+// same test-environment gap `ModuleFormPage.test.tsx` already stubs around
+// for `jumpToField`, hit here too now that a jump can be triggered through
+// the real ProjectPage (v0.4.0 #13).
+Element.prototype.scrollIntoView = vi.fn();
+
 afterEach(() => {
   cleanup();
 });
@@ -66,6 +72,13 @@ const FAKE_CLIENT: FakeClient = {
     requestId: 'fake',
     entity: { id: 'fake:0', kind: 'proxy-group', serializedName: 'fake', sourcePath: [] },
     result: { replaceable: [], cascading: [] },
+  }),
+  graphLayout: async () => ({
+    type: 'graphLayout',
+    requestId: 'fake',
+    layout: { nodes: [], edges: [] },
+    entities: [],
+    cycles: [],
   }),
   value: async () => ({ type: 'value', requestId: 'fake', value: {} }),
   undo: async () => ({
@@ -1051,6 +1064,58 @@ describe('ProjectPage / main view switching (E3, v0.4.0 #7)', () => {
     expect(screen.queryByRole('grid', { name: t('ruleList.label') })).toBeNull();
   });
 
+  it('clicking the graph tab shows the real relationship graph, built through the real Worker, and unmounts the form (v0.4.0 #13)', async () => {
+    await setUpWithRealDocument(
+      [
+        'mode: rule',
+        'proxy-groups:',
+        '  - name: AUTO',
+        '    type: url-test',
+        '    proxies: [DIRECT]',
+        'rules:',
+        '  - MATCH,AUTO',
+        '',
+      ].join('\n'),
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: t('project.graphViewTab') }));
+
+    const svg = await screen.findByRole('img', { name: t('graph.svgLabel') });
+    expect(svg.tagName.toLowerCase()).toBe('svg');
+    expect(document.querySelectorAll('.graph-view__node').length).toBeGreaterThan(0);
+    expect(document.querySelector('[data-module-section="general"]')).toBeNull();
+  });
+
+  it('jumping to a field from the issues panel while on a different view switches back to the form and focuses the field (bug fix, v0.4.0 #13)', async () => {
+    await setUpWithRealDocument(
+      'mode: rule\nport: 7890\nsocks-port: 7890\nrules:\n  - MATCH,DIRECT\n',
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: t('project.rulesViewTab') }));
+    await screen.findByRole('grid', { name: t('ruleList.label') });
+    expect(document.querySelector('[data-module-section="general"]')).toBeNull();
+
+    // Validation is debounced (NFR-PERF-03) — the port-conflict issues this
+    // fixture triggers do not appear in the aside immediately after render.
+    // `getByRole`'s own `name` option has no `exact` flag (unlike
+    // `getByText`) — a plain string is always an exact match against the
+    // whole accessible name, so a regexp is what actually gets a substring
+    // match against the fuller "<severity>: <message> — 跳到表单字段" label.
+    const jumpButtons = await screen.findAllByRole('button', {
+      name: new RegExp(t('issues.jumpToFieldLabel')),
+    });
+    fireEvent.click(jumpButtons[0]!);
+
+    await waitFor(() => {
+      expect(document.querySelector('[data-module-section="general"]')).not.toBeNull();
+    });
+    expect(screen.queryByRole('grid', { name: t('ruleList.label') })).toBeNull();
+    await waitFor(() => {
+      const field = document.activeElement?.closest('[data-field]');
+      expect(field?.getAttribute('data-field')).toMatch(/^\/(port|socks-port)$/);
+    });
+  });
+
   it('ArrowRight/ArrowLeft on the tablist moves focus and switches the active view in one step (PRD §11.6)', async () => {
     await setUpWithRealDocument('mode: rule\nrules:\n  - MATCH,DIRECT\n');
 
@@ -1072,10 +1137,10 @@ describe('ProjectPage / main view switching (E3, v0.4.0 #7)', () => {
     await setUpWithRealDocument('mode: rule\nrules:\n  - MATCH,DIRECT\n');
 
     const formTab = screen.getByRole('tab', { name: t('project.formViewTab') });
-    const rulesTab = screen.getByRole('tab', { name: t('project.rulesViewTab') });
-    rulesTab.focus();
+    const graphTab = screen.getByRole('tab', { name: t('project.graphViewTab') });
+    graphTab.focus();
 
-    fireEvent.keyDown(rulesTab, { key: 'ArrowRight' });
+    fireEvent.keyDown(graphTab, { key: 'ArrowRight' });
     await waitFor(() => expect(formTab.getAttribute('aria-selected')).toBe('true'));
     expect(document.activeElement).toBe(formTab);
   });

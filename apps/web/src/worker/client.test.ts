@@ -117,6 +117,25 @@ describe('WorkerClient request/response correlation', () => {
     expect(response.result.replaceable).toHaveLength(1);
   });
 
+  it('round-trips graphLayout against a parsed document, options included (v0.4.0 #13)', async () => {
+    const worker = new FakeWorker();
+    const client = new WorkerClient(worker);
+    await client.parse(
+      'mode: rule\nproxy-groups:\n  - name: AUTO\n    type: url-test\n    proxies: [DIRECT]\n  - name: PROXY\n    type: select\n    proxies: [AUTO, DIRECT]\n',
+    );
+
+    const response = await client.graphLayout();
+    expect(response.type).toBe('graphLayout');
+    expect(response.layout.nodes.some((n) => !n.aggregated && n.name === 'AUTO')).toBe(true);
+    expect(response.entities.some((e) => e.serializedName === 'AUTO')).toBe(true);
+    expect(response.cycles).toEqual([]);
+
+    const aggregated = await client.graphLayout({ aggregateThreshold: 1 });
+    expect(aggregated.layout.nodes.some((n) => n.aggregated && n.kind === 'proxy-group')).toBe(
+      true,
+    );
+  });
+
   it('round-trips undo / redo against a parsed document, real HistoryStack included (v0.3.0 #15)', async () => {
     const worker = new FakeWorker();
     const client = new WorkerClient(worker);
