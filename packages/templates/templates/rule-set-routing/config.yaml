@@ -1,0 +1,43 @@
+mode: rule
+log-level: info
+allow-lan: false
+mixed-port: 7890
+dns:
+  enable: true
+  enhanced-mode: fake-ip
+  nameserver:
+    - 223.5.5.5
+    - 8.8.8.8
+proxies:
+  - name: my-server-1
+    type: ss
+    server: your-server-1.example.com # CHANGE_ME: your real server address
+    port: 8388
+    cipher: aes-128-gcm
+    password: "CHANGE_ME" # CHANGE_ME: your real password
+proxy-groups:
+  - name: PROXY
+    type: select
+    proxies:
+      - my-server-1
+      - DIRECT
+rule-providers:
+  cn-domain:
+    type: http
+    behavior: domain
+    format: yaml
+    url: "https://your-rule-source.example/cn-domain.yaml" # CHANGE_ME: a real rule-set subscription
+    interval: 259200
+    path: ./rule-providers/cn-domain.yaml
+  ads-mrs:
+    type: http
+    behavior: domain
+    format: mrs
+    url: "https://your-rule-source.example/ads.mrs" # CHANGE_ME: a real rule-set subscription, pre-converted to mrs
+    interval: 259200
+    path: ./rule-providers/ads.mrs
+rules:
+  - RULE-SET,ads-mrs,REJECT
+  - RULE-SET,cn-domain,DIRECT
+  - GEOIP,CN,DIRECT
+  - MATCH,PROXY

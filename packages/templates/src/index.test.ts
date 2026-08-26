@@ -7,8 +7,12 @@ import {
   GENERAL_MODULE,
   INBOUND_MODULE,
   PROXIES_MODULE,
+  PROXY_GROUPS_MODULE,
   PROXY_PROVIDERS_MODULE,
+  RULE_PROVIDERS_MODULE,
+  RULES_MODULE,
   SNIFFER_MODULE,
+  SUB_RULES_MODULE,
 } from '@mcs/schema-builtin';
 import type { SchemaModule } from '@mcs/schema-core';
 import { describeSensitivity } from '@mcs/project-format';
@@ -17,7 +21,13 @@ import { hasBlockingIssues, runPipeline } from '@mcs/validator';
 import { MihomoYamlDocument } from '@mcs/yaml-engine';
 import { describe, expect, it } from 'vitest';
 
-import { BASIC_PROXY_TEMPLATE, BUILTIN_TEMPLATES, PROVIDER_AUTO_SELECT_TEMPLATE } from './index.js';
+import {
+  BASIC_PROXY_TEMPLATE,
+  BUILTIN_TEMPLATES,
+  HOME_ROUTER_TEMPLATE,
+  PROVIDER_AUTO_SELECT_TEMPLATE,
+  RULE_SET_ROUTING_TEMPLATE,
+} from './index.js';
 import type { Template } from './index.js';
 
 const TEMPLATES_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', 'templates');
@@ -26,6 +36,7 @@ function readTemplateConfig(template: Template): string {
   return readFileSync(join(TEMPLATES_ROOT, template.configPath), 'utf8');
 }
 
+/** All ten P0 modules (v0.4.0 #0 grew this from six) — every template must clear the full pipeline, not just the six the first two templates were written against. */
 const MODULES: readonly SchemaModule[] = [
   GENERAL_MODULE,
   DNS_MODULE,
@@ -33,10 +44,14 @@ const MODULES: readonly SchemaModule[] = [
   INBOUND_MODULE,
   PROXIES_MODULE,
   PROXY_PROVIDERS_MODULE,
+  PROXY_GROUPS_MODULE,
+  RULE_PROVIDERS_MODULE,
+  RULES_MODULE,
+  SUB_RULES_MODULE,
 ];
 
 describe.each(BUILTIN_TEMPLATES.map((template) => ({ id: template.id, template })))(
-  '$id template (PRD §8.8, v0.3.0 #20)',
+  '$id template (PRD §8.8, v0.3.0 #20 / v0.4.0 #16)',
   ({ template }) => {
     it('declares a Mihomo version range referencing ADR-012’s pinned v1.19.29, not an unrelated literal', () => {
       expect(template.mihomo.minVersion).toBe('1.19.29');
@@ -61,7 +76,7 @@ describe.each(BUILTIN_TEMPLATES.map((template) => ({ id: template.id, template }
       expect(hasBlockingIssues(issues)).toBe(false);
     });
 
-    it('any unrecognised (P1/P2, e.g. proxy-groups) section reads as info-severity unknown-field, never blocks export', () => {
+    it('any unrecognised section (still-uncovered P1/P2 fields, if any) reads as info-severity unknown-field, never blocks export', () => {
       const text = readTemplateConfig(template);
       const parse = MihomoYamlDocument.parse(text);
       const issues = runPipeline({ parse, modules: MODULES });
@@ -90,17 +105,19 @@ describe.each(BUILTIN_TEMPLATES.map((template) => ({ id: template.id, template }
   },
 );
 
-describe('BUILTIN_TEMPLATES (PRD §8.8, v0.3.0 #20)', () => {
-  it('ships exactly the two templates this version commits to — the version doc says "1–2 个", not all five MVP templates', () => {
+describe('BUILTIN_TEMPLATES (PRD §8.8, v0.3.0 #20 / v0.4.0 #16)', () => {
+  it('ships exactly the four templates built so far — the fifth (Android generation target) is #17', () => {
     expect(BUILTIN_TEMPLATES.map((template) => template.id)).toEqual([
       'basic-proxy',
       'provider-auto-select',
+      'home-router',
+      'rule-set-routing',
     ]);
   });
 });
 
-describe('provider-auto-select: proxy-groups is unmodelled data, preserved losslessly (E6, PRD §8.3, v0.3.0 #20)', () => {
-  it('editing a real, schema-modelled field leaves the unmodelled proxy-groups section byte-exact', () => {
+describe('provider-auto-select: editing one field leaves an unrelated section byte-exact (E6, PRD §8.3, v0.3.0 #20)', () => {
+  it('editing a real, schema-modelled field leaves proxy-groups byte-exact', () => {
     const original = readTemplateConfig(PROVIDER_AUTO_SELECT_TEMPLATE);
     const groupsIndex = original.indexOf('proxy-groups:');
     expect(groupsIndex).toBeGreaterThan(-1);
@@ -131,5 +148,43 @@ describe('basic-proxy: real P0 proxy fields are correctly modelled (v0.3.0 #20)'
       (issue) => issue.code === 'unknown-field' && issue.path?.[0] === 'proxies',
     );
     expect(unknownProxyFields).toEqual([]);
+  });
+});
+
+describe('home-router: TUN + allow-lan + bind-address is the core, with the expected security warning (v0.4.0 #16)', () => {
+  it('enables tun and allow-lan — the two fields the version doc names as this template’s core', () => {
+    const text = readTemplateConfig(HOME_ROUTER_TEMPLATE);
+    const document = MihomoYamlDocument.parse(text).document!;
+    expect(document.getIn(['tun', 'enable'])).toBe(true);
+    expect(document.getIn(['allow-lan'])).toBe(true);
+  });
+
+  it('flags allow-lan + wildcard bind-address as a non-blocking security warning — expected, not something to silence by editing the template or the check', () => {
+    const text = readTemplateConfig(HOME_ROUTER_TEMPLATE);
+    const parse = MihomoYamlDocument.parse(text);
+    const issues = runPipeline({ parse, modules: MODULES });
+    const warning = issues.find((issue) => issue.code === 'security.allowLanWildcardBind');
+    expect(warning).toMatchObject({ severity: 'warning', blocking: false });
+    expect(hasBlockingIssues(issues)).toBe(false);
+  });
+});
+
+describe('rule-set-routing: a real format: mrs + behavior: domain entry (v0.4.0 #16, kernel-test vehicle for #17)', () => {
+  it('contains at least one rule-providers entry using format: mrs with behavior: domain', () => {
+    const text = readTemplateConfig(RULE_SET_ROUTING_TEMPLATE);
+    const value = MihomoYamlDocument.parse(text).document!.toJS() as {
+      'rule-providers': Record<string, { format?: string; behavior?: string }>;
+    };
+    const entries = Object.values(value['rule-providers']);
+    expect(entries.some((entry) => entry.format === 'mrs' && entry.behavior === 'domain')).toBe(
+      true,
+    );
+  });
+
+  it('every RULE-SET rule references a real rule-providers entry — no missing-reference issue', () => {
+    const text = readTemplateConfig(RULE_SET_ROUTING_TEMPLATE);
+    const parse = MihomoYamlDocument.parse(text);
+    const issues = runPipeline({ parse, modules: MODULES });
+    expect(issues.some((issue) => issue.code.startsWith('reference.missing'))).toBe(false);
   });
 });

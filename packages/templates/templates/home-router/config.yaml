@@ -1,0 +1,54 @@
+mode: rule
+log-level: info
+ipv6: true
+allow-lan: true # CHANGE_ME: other devices on your LAN can use this router as a proxy — confirm your network is trusted before keeping this on
+bind-address: "*"
+mixed-port: 7890
+external-controller: 0.0.0.0:9090
+secret: "CHANGE_ME"
+dns:
+  enable: true
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  nameserver:
+    - 223.5.5.5
+    - 8.8.8.8
+tun:
+  enable: true
+  stack: system
+  dns-hijack:
+    - 0.0.0.0:53
+  auto-redirect: true
+proxies:
+  - name: my-server-1
+    type: ss
+    server: your-server-1.example.com # CHANGE_ME: your real server address
+    port: 8388
+    cipher: aes-128-gcm
+    password: "CHANGE_ME" # CHANGE_ME: your real password
+  - name: my-server-2
+    type: trojan
+    server: your-server-2.example.com # CHANGE_ME: your real server address
+    port: 443
+    password: "CHANGE_ME" # CHANGE_ME: your real password
+proxy-groups:
+  - name: PROXY
+    type: select
+    proxies:
+      - AUTO
+      - my-server-1
+      - my-server-2
+      - DIRECT
+  - name: AUTO
+    type: url-test
+    proxies:
+      - my-server-1
+      - my-server-2
+    url: "https://cp.cloudflare.com/generate_204"
+    interval: 300
+    tolerance: 150
+rules:
+  - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
+  - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
+  - GEOIP,CN,DIRECT
+  - MATCH,PROXY

@@ -1,7 +1,9 @@
 import type { Platform } from '@mcs/schema-core';
 
 import basicProxyManifest from '../templates/basic-proxy/template.manifest.json' with { type: 'json' };
+import homeRouterManifest from '../templates/home-router/template.manifest.json' with { type: 'json' };
 import providerAutoSelectManifest from '../templates/provider-auto-select/template.manifest.json' with { type: 'json' };
+import ruleSetRoutingManifest from '../templates/rule-set-routing/template.manifest.json' with { type: 'json' };
 
 /**
  * A built-in project template (PRD §8.8): starter project content a user
@@ -21,7 +23,7 @@ export interface Template {
   version: string;
   /** Relative to this package's own `templates/<id>/` directory. */
   configPath: string;
-  /** ADR-012: every template targets the same single pinned Mihomo version `@mcs/schema-builtin`'s six P0 modules do — not a per-template choice. */
+  /** ADR-012: every template targets the same single pinned Mihomo version `@mcs/schema-builtin`'s P0 modules do — not a per-template choice. */
   mihomo: {
     minVersion: string;
     maxTestedVersion: string;
@@ -39,15 +41,27 @@ export const PROVIDER_AUTO_SELECT_TEMPLATE: Template = {
   configPath: 'provider-auto-select/config.yaml',
 };
 
+export const HOME_ROUTER_TEMPLATE: Template = {
+  ...(homeRouterManifest as Omit<Template, 'configPath'>),
+  configPath: 'home-router/config.yaml',
+};
+
+export const RULE_SET_ROUTING_TEMPLATE: Template = {
+  ...(ruleSetRoutingManifest as Omit<Template, 'configPath'>),
+  configPath: 'rule-set-routing/config.yaml',
+};
+
 /**
- * PRD §8.8 MVP lists five templates; this version ships only the first two
- * (version doc: "本版本 1–2 个"). The remaining three — Android generation
- * target, home router, rule-collection routing — need the `rules`/
- * `rule-providers` modules (v0.4.0) and are deliberately not here yet
- * (`docs/requirements-traceability.md` §8.8 records them as Todo with that
- * dependency, not silently dropped).
+ * PRD §8.8 MVP lists five templates; this version adds two more (v0.4.0
+ * #16) now that `rules`/`rule-providers`/`proxy-groups` exist to build them
+ * on. The remaining one — Android generation target — needs no new module
+ * (E9: a plain Mihomo YAML with `platforms: ["android"]`, not a new produced
+ * format), it is scoped to #17 alongside wiring all five into the kernel
+ * test matrix.
  */
 export const BUILTIN_TEMPLATES: readonly Template[] = [
   BASIC_PROXY_TEMPLATE,
   PROVIDER_AUTO_SELECT_TEMPLATE,
+  HOME_ROUTER_TEMPLATE,
+  RULE_SET_ROUTING_TEMPLATE,
 ];
