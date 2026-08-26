@@ -22,6 +22,7 @@ import { MihomoYamlDocument } from '@mcs/yaml-engine';
 import { describe, expect, it } from 'vitest';
 
 import {
+  ANDROID_TARGET_TEMPLATE,
   BASIC_PROXY_TEMPLATE,
   BUILTIN_TEMPLATES,
   HOME_ROUTER_TEMPLATE,
@@ -51,7 +52,7 @@ const MODULES: readonly SchemaModule[] = [
 ];
 
 describe.each(BUILTIN_TEMPLATES.map((template) => ({ id: template.id, template })))(
-  '$id template (PRD §8.8, v0.3.0 #20 / v0.4.0 #16)',
+  '$id template (PRD §8.8, v0.3.0 #20 / v0.4.0 #16/#17)',
   ({ template }) => {
     it('declares a Mihomo version range referencing ADR-012’s pinned v1.19.29, not an unrelated literal', () => {
       expect(template.mihomo.minVersion).toBe('1.19.29');
@@ -105,13 +106,14 @@ describe.each(BUILTIN_TEMPLATES.map((template) => ({ id: template.id, template }
   },
 );
 
-describe('BUILTIN_TEMPLATES (PRD §8.8, v0.3.0 #20 / v0.4.0 #16)', () => {
-  it('ships exactly the four templates built so far — the fifth (Android generation target) is #17', () => {
+describe('BUILTIN_TEMPLATES (PRD §8.8, v0.3.0 #20 / v0.4.0 #16/#17)', () => {
+  it('ships all five PRD §8.8 MVP templates — every one of them automatically joins the kernel test matrix (core-test-runner iterates this array directly)', () => {
     expect(BUILTIN_TEMPLATES.map((template) => template.id)).toEqual([
       'basic-proxy',
       'provider-auto-select',
       'home-router',
       'rule-set-routing',
+      'android-target',
     ]);
   });
 });
@@ -166,6 +168,38 @@ describe('home-router: TUN + allow-lan + bind-address is the core, with the expe
     const warning = issues.find((issue) => issue.code === 'security.allowLanWildcardBind');
     expect(warning).toMatchObject({ severity: 'warning', blocking: false });
     expect(hasBlockingIssues(issues)).toBe(false);
+  });
+});
+
+describe('android-target: a plain Mihomo YAML with platforms: ["android"], no new produced format (E9, v0.4.0 #17)', () => {
+  it('targets only android — the version doc’s own scoping for this template', () => {
+    expect(ANDROID_TARGET_TEMPLATE.platforms).toEqual(['android']);
+  });
+
+  it('enables tun — the field this template is built around (E9)', () => {
+    const text = readTemplateConfig(ANDROID_TARGET_TEMPLATE);
+    const document = MihomoYamlDocument.parse(text).document!;
+    expect(document.getIn(['tun', 'enable'])).toBe(true);
+  });
+
+  // The plan text for this slice predicted a security warning here (by analogy
+  // with #16's home-router template, on the theory that `tun.enable`/
+  // `tun.auto-redirect`'s `safety: 'caution'` tag in `inbound/ui.schema.json`
+  // implies a `securityStage` check). It does not: `safety: 'caution'` is
+  // form-rendering metadata only (a caution icon next to the field), and
+  // `packages/validator/src/security.ts`'s five real checks
+  // (`checkAllowLanWildcardBind`/`checkControllerWithoutSecret`/
+  // `checkSkipCertVerify`/`checkRuleProviderPlaintextUrl`/
+  // `checkGroupRiskyFilterPattern`) never look at `tun.*` at all — confirmed
+  // by reading the file, not assumed. Corrected in the plan's own "执行时决策"
+  // notes rather than writing a test that would either fail or vacuously pass
+  // against a check that does not exist.
+  it('has zero blocking issues and, unlike home-router, no security warning either — tun fields have no validator-level check today', () => {
+    const text = readTemplateConfig(ANDROID_TARGET_TEMPLATE);
+    const parse = MihomoYamlDocument.parse(text);
+    const issues = runPipeline({ parse, modules: MODULES });
+    expect(hasBlockingIssues(issues)).toBe(false);
+    expect(issues.filter((issue) => issue.module === 'security')).toEqual([]);
   });
 });
 

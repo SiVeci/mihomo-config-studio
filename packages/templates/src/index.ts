@@ -1,5 +1,6 @@
 import type { Platform } from '@mcs/schema-core';
 
+import androidTargetManifest from '../templates/android-target/template.manifest.json' with { type: 'json' };
 import basicProxyManifest from '../templates/basic-proxy/template.manifest.json' with { type: 'json' };
 import homeRouterManifest from '../templates/home-router/template.manifest.json' with { type: 'json' };
 import providerAutoSelectManifest from '../templates/provider-auto-select/template.manifest.json' with { type: 'json' };
@@ -51,17 +52,26 @@ export const RULE_SET_ROUTING_TEMPLATE: Template = {
   configPath: 'rule-set-routing/config.yaml',
 };
 
+export const ANDROID_TARGET_TEMPLATE: Template = {
+  ...(androidTargetManifest as Omit<Template, 'configPath'>),
+  configPath: 'android-target/config.yaml',
+};
+
 /**
- * PRD §8.8 MVP lists five templates; this version adds two more (v0.4.0
- * #16) now that `rules`/`rule-providers`/`proxy-groups` exist to build them
- * on. The remaining one — Android generation target — needs no new module
- * (E9: a plain Mihomo YAML with `platforms: ["android"]`, not a new produced
- * format), it is scoped to #17 alongside wiring all five into the kernel
- * test matrix.
+ * PRD §8.8 MVP's five templates, all now built (v0.3.0 #20 shipped the
+ * first two; v0.4.0 #16/#17 added the rest once `rules`/`rule-providers`/
+ * `proxy-groups` existed to build them on). `ANDROID_TARGET_TEMPLATE` needs
+ * no new module or produced format (E9): a plain Mihomo YAML with
+ * `platforms: ["android"]`, since `inbound`'s TUN fields already declare
+ * `android` as a supported platform. Every member of this array
+ * automatically joins `tools/core-test-runner`'s kernel test matrix (it
+ * iterates this array directly) — adding a template here is a real decision
+ * to also run it through a live kernel binary in CI, not just a documentation change.
  */
 export const BUILTIN_TEMPLATES: readonly Template[] = [
   BASIC_PROXY_TEMPLATE,
   PROVIDER_AUTO_SELECT_TEMPLATE,
   HOME_ROUTER_TEMPLATE,
   RULE_SET_ROUTING_TEMPLATE,
+  ANDROID_TARGET_TEMPLATE,
 ];
