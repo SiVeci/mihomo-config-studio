@@ -1,0 +1,185 @@
+name: Schema Bundle Release
+
+# ADR-010 §4 / ADR-024: only a version tag or an explicit manual dispatch can
+# reach the signing job — never a plain push to any branch (tighter than
+# ADR-010 §2's own "tag and main", per ADR-024's compensating measures).
+# `pull_request_target` is never used anywhere in this file.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Bundle version (e.g. 2026.08.0) — required for a manual run; ignored for a tag push, where the tag name (minus a leading "v") is used instead.'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  # "Schema 静态检查 → YAML Golden Test → Mihomo 内核兼容测试矩阵" (the release
+  # pipeline's own documented order, v0.5.0-bundle-update-and-migration.md §3):
+  # `pnpm run check` already runs schema-cli's own static-check unit tests and
+  # the YAML Golden Test; `core-config-test`-equivalent below is the real
+  # v1.19.29 kernel compatibility matrix (mirrors ci.yml's own job of the same
+  # name — a separate workflow can't `needs:` a job in a different workflow
+  # file, so this repeats the same steps rather than skipping them).
+  test-matrix:
+    name: static check / golden test / kernel compat matrix
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Type check / lint / format / unit tests (incl. schema-cli static check, YAML Golden Test)
+        run: pnpm run check && pnpm run format:check
+
+      - name: Build (same composite project graph pnpm run typecheck uses)
+        run: pnpm exec tsc -b tsconfig.build.json
+
+      - name: Assert the real built-in modules directory itself passes schema-cli's static check
+        run: pnpm vitest run tools/schema-cli/src/index.test.ts -t "accepts the real, shipping built-in modules directory"
+
+      - name: Built-in templates pass the real v1.19.29 kernel config test
+        run: node tools/core-test-runner/dist/index.js
+
+  build-unsigned:
+    name: pack the built-in Bundle (unsigned — signing happens later, in the approval-gated job)
+    needs: test-matrix
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm exec tsc -b tsconfig.build.json
+
+      - name: Resolve the Bundle version (tag name minus a leading "v", or the manual dispatch input)
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          if [ -z "$VERSION" ]; then
+            echo "No version resolved (manual dispatch needs the 'version' input)." >&2
+            exit 1
+          fi
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # ADR-010 §1 / ADR-024: this job has no access to the production key.
+      # `pack-unsigned.mjs` generates a fresh, throwaway keypair used once
+      # and held only in memory — the resulting signature is meaningless and
+      # gets fully replaced by the real one in sign-and-release below.
+      - name: Pack the built-in Bundle (static check + hash real content; signature is a throwaway placeholder)
+        run: >
+          node .github/scripts/pack-unsigned.mjs
+          --source packages/schema-builtin/modules
+          --bundle-id official
+          --version ${{ steps.version.outputs.value }}
+          --channel stable
+          --format-version 1
+          --requires-app 0.1.0
+          --mihomo-min-version 1.19.29
+          --mihomo-max-tested-version 1.19.29
+          --mihomo-upstream-commit e26714a181ac0e2fa803453c0a8e9a9ce94e31cb
+          --mihomo-docs-snapshot 2026-08-19
+          --out unsigned-manifest.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-bundle
+          path: |
+            unsigned-manifest.json
+            packages/schema-builtin/modules
+
+  sign-and-release:
+    name: sign with the production key and publish the GitHub Release
+    needs: build-unsigned
+    runs-on: ubuntu-latest
+    # Environment gate (ADR-010 §2, narrowed by ADR-024): required reviewers
+    # must approve before this job — the one holding `contents: write` and
+    # the only one with access to SCHEMA_SIGNING_KEY_B64 — is allowed to run.
+    environment: schema-release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: unsigned-bundle
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm exec tsc -b tsconfig.build.json
+
+      # ADR-010 §4: the key is injected via `env:` (GitHub masks the exact
+      # secret string wherever it is used) and read from `process.env` inside
+      # sign-manifest.mjs, then written directly to the child process's
+      # stdin — it never appears on this or any shell command line.
+      - name: Sign the manifest with the production key
+        env:
+          SCHEMA_SIGNING_KEY_B64: ${{ secrets.SCHEMA_SIGNING_KEY_B64 }}
+        run: node .github/scripts/sign-manifest.mjs unsigned-manifest.json signed-manifest.json
+
+      # Uploaded regardless of trigger — this is the "the approval-gated job
+      # actually produced a signed artifact" evidence for a manual
+      # workflow_dispatch verification run, without that run needing to also
+      # publish a real, tag-less GitHub Release.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signed-manifest
+          path: signed-manifest.json
+
+      - name: Archive the module files as a single release asset
+        if: github.event_name == 'push'
+        run: |
+          cd packages/schema-builtin/modules
+          zip -r ../../../bundle-files.zip .
+
+      # Only a real tag push publishes a GitHub Release — a workflow_dispatch
+      # run (used to verify the approval gate itself) must never create one.
+      - name: Publish the GitHub Release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create ${{ github.ref_name }}
+          signed-manifest.json bundle-files.zip
+          --title "Schema Bundle ${{ github.ref_name }}"
+          --generate-notes

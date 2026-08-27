@@ -52,7 +52,15 @@ export const BUILTIN_MODULE: SchemaModule = GENERAL_MODULE;
  * was itself only ever a placeholder single-entry array) and bumped
  * `version` to `0.5.0` (the release arc this content now ships with).
  * `tools/schema-cli` must re-issue this file against the real key custody
- * workflow before any Bundle-update feature ships to users (v0.5.0 #14).
+ * workflow before any Bundle-update feature ships to users. v0.5.0 #14
+ * delivered that workflow (`.github/workflows/schema-release.yml`, ADR-024)
+ * but this array is still the bootstrap keypair described above — the
+ * actual re-signing needs the production public key (ADR-010 §2's
+ * `schema-release` environment secret), which is the user's own GitHub-side
+ * step (#14's plan notes list it as a prerequisite the assistant never
+ * performs) and had not happened as of #14's own commit. Swap this array's
+ * only entry for the real public key and re-run `tools/schema-cli`'s `pack`
+ * (via the workflow, never locally) once that step is done.
  */
 export const BUILTIN_TRUST_ANCHORS_HEX: readonly string[] = [
   '5dcade308a5c8b24f40c0a5e7c4e0a10c6f70cbf13be442d777314750d5220fc',

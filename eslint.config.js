@@ -60,4 +60,16 @@ export default tseslint.config(
       'no-console': 'off',
     },
   },
+  {
+    // Plain Node CLI scripts run only by schema-release.yml (v0.5.0 #14) —
+    // not TypeScript, so tseslint's own `no-undef` override never applies;
+    // `no-undef` otherwise flags every reference to a Node global.
+    files: ['.github/scripts/**/*.mjs'],
+    languageOptions: {
+      globals: { process: 'readonly', console: 'readonly', Buffer: 'readonly', crypto: 'readonly' },
+    },
+    rules: {
+      'no-console': 'off',
+    },
+  },
 );
