@@ -25,6 +25,7 @@ import { ExportDialog } from '../export/ExportDialog.js';
 import type { DownloadFile } from '../export/ExportDialog.js';
 import { UpgradeDialog } from '../migration/UpgradeDialog.js';
 import type { UpgradeResult } from '../migration/UpgradeDialog.js';
+import { ReadOnlyGuard } from './ReadOnlyGuard.js';
 import { ModuleFormPage } from '../form/ModuleFormPage.js';
 import type { ModuleFormPageHandle } from '../form/ModuleFormPage.js';
 import { UnknownFieldTree } from '../form/UnknownFieldTree.js';
@@ -213,6 +214,12 @@ export function ProjectPage({
     createRegistry(builtinAsStoredBundle()).modules(),
   );
   const [schemaLock, setSchemaLock] = useState<McsProjSchemaLock | null>(null);
+  // ADR-004 point 6 / PRD §9.5 point 3 (v0.5.0 #12): `true` when the locked
+  // Bundle version could not be found locally but something else was — the
+  // editing surface below is not mounted at all in that case (never merely
+  // disabled), so `applyPatch`/`applyBatch`/`undo`/`redo` are structurally
+  // unreachable while this is true.
+  const [readOnly, setReadOnly] = useState(false);
   const [quarantine, setQuarantine] = useState<McsProjQuarantine>({ fields: [] });
   // `null` (not yet parsed) is not "an empty document" — `collectUnknownFields`
   // would otherwise plan every module against `null` and, same as
@@ -290,6 +297,7 @@ export function ProjectPage({
       setCanUndo(false);
       setCanRedo(false);
       setGraphData(null);
+      setReadOnly(false);
       return;
     }
     let cancelled = false;
@@ -315,6 +323,7 @@ export function ProjectPage({
       if (cancelled) return;
       setModules(resolvedSchema.modules);
       setSchemaLock(resolvedSchema.schemaLock);
+      setReadOnly(resolvedSchema.readOnly);
       setQuarantine(resolvedQuarantine);
       const text = savedText ?? '';
       setConfigText(text);
@@ -528,6 +537,10 @@ export function ProjectPage({
     await saveProjectQuarantine(adapter, id, result.quarantine);
     setModules(result.modules);
     setSchemaLock(result.schemaLock);
+    // The just-upgraded lock names the bundle this project's own modules
+    // came from — it is definitionally available locally, so read-only
+    // protection (if it was active) no longer applies.
+    setReadOnly(false);
     setQuarantine(result.quarantine);
     configTextRef.current = result.configText;
     setConfigText(result.configText);
@@ -746,106 +759,135 @@ export function ProjectPage({
     >
       {selected ? (
         <>
-          <ImportPanel client={client} onImport={(text) => void handleImport(selected.id, text)} />
-          <YamlEditor
-            ref={editorRef}
-            text={configText}
-            onChange={handleConfigChange}
-            client={client}
-            onIssuesChange={setIssues}
-            onValueChange={setDocumentValue}
-          />
-          <div className="project-main-view">
-            <div
-              className="project-main-view__tablist"
-              role="tablist"
-              aria-label={t('project.mainViewTabListLabel')}
+          {readOnly ? (
+            <ReadOnlyGuard
+              lockedVersion={schemaLock?.bundleVersion ?? ''}
+              onUpgradeClick={() => setShowUpgradeDialog(true)}
             >
-              {MAIN_VIEWS.map((view) => (
-                <button
-                  key={view}
-                  ref={(element) => {
-                    mainViewTabRefs.current[view] = element;
-                  }}
-                  type="button"
-                  role="tab"
-                  id={`main-view-tab-${view}`}
-                  aria-selected={mainView === view}
-                  aria-controls={`main-view-panel-${view}`}
-                  tabIndex={mainView === view ? 0 : -1}
-                  className="project-main-view__tab"
-                  onClick={() => setMainView(view)}
-                  onKeyDown={(event) => handleMainViewTabKeyDown(event, view)}
+              <div className="project-detail project-detail--read-only" aria-label={selected.name}>
+                <div className="project-detail__toolbar">
+                  <button type="button" onClick={() => setShowExportDialog(true)}>
+                    {t('export.triggerButton')}
+                  </button>
+                </div>
+                <label className="project-detail__label" htmlFor="read-only-config-text">
+                  {t('editor.title')}
+                </label>
+                <textarea
+                  id="read-only-config-text"
+                  className="read-only-guard__textarea"
+                  readOnly
+                  value={configText}
+                />
+              </div>
+            </ReadOnlyGuard>
+          ) : (
+            <>
+              <ImportPanel
+                client={client}
+                onImport={(text) => void handleImport(selected.id, text)}
+              />
+              <YamlEditor
+                ref={editorRef}
+                text={configText}
+                onChange={handleConfigChange}
+                client={client}
+                onIssuesChange={setIssues}
+                onValueChange={setDocumentValue}
+              />
+              <div className="project-main-view">
+                <div
+                  className="project-main-view__tablist"
+                  role="tablist"
+                  aria-label={t('project.mainViewTabListLabel')}
                 >
-                  {t(MAIN_VIEW_TAB_LABEL_KEYS[view])}
-                </button>
-              ))}
-            </div>
-            <div
-              className="project-main-view__panel"
-              role="tabpanel"
-              id={`main-view-panel-${mainView}`}
-              aria-labelledby={`main-view-tab-${mainView}`}
-            >
-              {/* Lazy-mounted (E3): only the selected view's component ever
+                  {MAIN_VIEWS.map((view) => (
+                    <button
+                      key={view}
+                      ref={(element) => {
+                        mainViewTabRefs.current[view] = element;
+                      }}
+                      type="button"
+                      role="tab"
+                      id={`main-view-tab-${view}`}
+                      aria-selected={mainView === view}
+                      aria-controls={`main-view-panel-${view}`}
+                      tabIndex={mainView === view ? 0 : -1}
+                      className="project-main-view__tab"
+                      onClick={() => setMainView(view)}
+                      onKeyDown={(event) => handleMainViewTabKeyDown(event, view)}
+                    >
+                      {t(MAIN_VIEW_TAB_LABEL_KEYS[view])}
+                    </button>
+                  ))}
+                </div>
+                <div
+                  className="project-main-view__panel"
+                  role="tabpanel"
+                  id={`main-view-panel-${mainView}`}
+                  aria-labelledby={`main-view-tab-${mainView}`}
+                >
+                  {/* Lazy-mounted (E3): only the selected view's component ever
                   renders — a 10,000-row rule list or a large relationship
                   graph costs nothing while the user is looking at the other
                   one. */}
-              {mainView === 'form' && (
-                <ModuleFormPage
-                  ref={moduleFormRef}
-                  modules={modules}
-                  value={documentValue}
-                  mode={formMode}
-                  onModeChange={setFormMode}
-                  onFieldChange={(path, value) => void handleDocumentFieldChange(path, value)}
-                  onDeleteEntity={(path) => void handleDeleteEntityRequest(path)}
-                />
-              )}
-              {mainView === 'rules' && (
-                <RuleListPage
-                  rules={rules}
-                  catalog={ruleCatalog}
-                  proxyTargetNames={ruleEntityNames.proxyTargetNames}
-                  ruleProviderNames={ruleEntityNames.ruleProviderNames}
-                  subRuleGroupNames={ruleEntityNames.subRuleGroupNames}
-                  onApplyFix={applyFixAndRefresh}
-                  onApplyBatch={applyBatchAndRefresh}
-                />
-              )}
-              {mainView === 'graph' &&
-                (graphData ? (
-                  <GraphView
-                    layout={graphData.layout}
-                    entities={graphData.entities}
-                    cycles={graphData.cycles}
-                    onJumpToField={handleJumpToField}
-                  />
-                ) : (
-                  <p className="project-detail__empty">{t('graph.emptyState')}</p>
-                ))}
-            </div>
-          </div>
-          <DiffPanel
-            importBaseline={importBaseline}
-            savedBaseline={savedBaseline}
-            client={client}
-            issues={issues}
-          />
-          <ProjectDetail
-            project={selected}
-            canUndo={canUndo}
-            canRedo={canRedo}
-            onUndo={() => void handleUndo()}
-            onRedo={() => void handleRedo()}
-            onFieldChange={handleFieldChange}
-            onExportClick={() => setShowExportDialog(true)}
-            onUpgradeClick={() => setShowUpgradeDialog(true)}
-            confirmingDelete={confirmingDeleteId === selected.id}
-            onDeleteClick={() => setConfirmingDeleteId(selected.id)}
-            onCancelDelete={() => setConfirmingDeleteId(null)}
-            onConfirmDelete={() => void handleConfirmDelete(selected.id)}
-          />
+                  {mainView === 'form' && (
+                    <ModuleFormPage
+                      ref={moduleFormRef}
+                      modules={modules}
+                      value={documentValue}
+                      mode={formMode}
+                      onModeChange={setFormMode}
+                      onFieldChange={(path, value) => void handleDocumentFieldChange(path, value)}
+                      onDeleteEntity={(path) => void handleDeleteEntityRequest(path)}
+                    />
+                  )}
+                  {mainView === 'rules' && (
+                    <RuleListPage
+                      rules={rules}
+                      catalog={ruleCatalog}
+                      proxyTargetNames={ruleEntityNames.proxyTargetNames}
+                      ruleProviderNames={ruleEntityNames.ruleProviderNames}
+                      subRuleGroupNames={ruleEntityNames.subRuleGroupNames}
+                      onApplyFix={applyFixAndRefresh}
+                      onApplyBatch={applyBatchAndRefresh}
+                    />
+                  )}
+                  {mainView === 'graph' &&
+                    (graphData ? (
+                      <GraphView
+                        layout={graphData.layout}
+                        entities={graphData.entities}
+                        cycles={graphData.cycles}
+                        onJumpToField={handleJumpToField}
+                      />
+                    ) : (
+                      <p className="project-detail__empty">{t('graph.emptyState')}</p>
+                    ))}
+                </div>
+              </div>
+              <DiffPanel
+                importBaseline={importBaseline}
+                savedBaseline={savedBaseline}
+                client={client}
+                issues={issues}
+              />
+              <ProjectDetail
+                project={selected}
+                canUndo={canUndo}
+                canRedo={canRedo}
+                onUndo={() => void handleUndo()}
+                onRedo={() => void handleRedo()}
+                onFieldChange={handleFieldChange}
+                onExportClick={() => setShowExportDialog(true)}
+                onUpgradeClick={() => setShowUpgradeDialog(true)}
+                confirmingDelete={confirmingDeleteId === selected.id}
+                onDeleteClick={() => setConfirmingDeleteId(selected.id)}
+                onCancelDelete={() => setConfirmingDeleteId(null)}
+                onConfirmDelete={() => void handleConfirmDelete(selected.id)}
+              />
+            </>
+          )}
           {showExportDialog && schemaLock && (
             <ExportDialog
               project={selected}

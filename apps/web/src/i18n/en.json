@@ -226,5 +226,8 @@
   "migration.error.lossyNotConfirmed": "This upgrade includes lossy changes that have not been confirmed",
   "migration.error.snapshotFailed": "Could not create a safety snapshot before upgrading — nothing was changed",
   "migration.error.operationFailed": "The upgrade failed partway through — nothing was changed",
-  "migration.error.unknown": "An unknown error occurred — nothing was changed"
+  "migration.error.unknown": "An unknown error occurred — nothing was changed",
+  "readonly.banner": "This project is locked to Bundle version {version}, which is not available locally. It is open read-only so nothing is changed against the wrong Schema.",
+  "readonly.goToBundlePage": "Go to Bundle management (try restoring that version)",
+  "readonly.upgradeButton": "Upgrade to the current version instead"
 }

@@ -226,5 +226,8 @@
   "migration.error.lossyNotConfirmed": "本次升级包含未确认的有损变更",
   "migration.error.snapshotFailed": "升级前创建安全快照失败——未做任何改动",
   "migration.error.operationFailed": "升级中途失败——未做任何改动",
-  "migration.error.unknown": "发生未知错误——未做任何改动"
+  "migration.error.unknown": "发生未知错误——未做任何改动",
+  "readonly.banner": "该项目锁定的 Bundle 版本 {version} 在本地不可用，已切换为只读打开，不会用错误的 Schema 改动它。",
+  "readonly.goToBundlePage": "前往 Bundle 管理（尝试恢复该版本）",
+  "readonly.upgradeButton": "改为升级到当前版本"
 }

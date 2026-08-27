@@ -18,6 +18,7 @@ describe('resolveProjectSchema (ADR-004, v0.5.0 #11, decision F14)', () => {
       compatibilityProfile: BUILTIN_BUNDLE.manifest.mihomo.minVersion,
     });
     expect(result.modules.map((module) => module.manifest.id).sort()).toContain('general');
+    expect(result.readOnly).toBe(false);
     // The backfill is persisted, not just returned — a second read sees it too.
     expect(await getProjectSchemaLock(adapter, 'p1')).toEqual(result.schemaLock);
   });
@@ -66,11 +67,12 @@ describe('resolveProjectSchema (ADR-004, v0.5.0 #11, decision F14)', () => {
     const result = await resolveProjectSchema(adapter, 'p1', trustedPublicKeys);
 
     expect(result.schemaLock).toEqual({ bundleVersion: '1.0.0', compatibilityProfile: 'v1.19.29' });
+    expect(result.readOnly).toBe(false);
     const general = result.modules.find((module) => module.manifest.id === 'general');
     expect(general?.schema).toEqual({ title: 'v1' });
   });
 
-  it('falls back to the active bundle when the locked version is not available from any local slot (documented interim behavior, decision F14 — #12 replaces this with real read-only protection)', async () => {
+  it('state 3 — falls back to the active (built-in) bundle, writable, when the store is completely empty (ADR-004 point 6, v0.5.0 #12)', async () => {
     const adapter = new MemoryStorageAdapter();
     await saveProjectSchemaLock(adapter, 'p1', {
       bundleVersion: 'never-installed',
@@ -80,8 +82,10 @@ describe('resolveProjectSchema (ADR-004, v0.5.0 #11, decision F14)', () => {
     const result = await resolveProjectSchema(adapter, 'p1');
 
     // Falls back to the built-in bundle (nothing else is installed) rather
-    // than throwing or resolving an empty module set.
+    // than throwing or resolving an empty module set — and stays writable,
+    // matching `resolveActiveBundle`'s own long-standing default behavior.
     expect(result.modules.map((module) => module.manifest.id).sort()).toContain('general');
+    expect(result.readOnly).toBe(false);
     // The lock itself is left untouched — falling back to serve the project
     // must not silently rewrite what it is actually locked to.
     expect(await getProjectSchemaLock(adapter, 'p1')).toEqual({
@@ -90,7 +94,32 @@ describe('resolveProjectSchema (ADR-004, v0.5.0 #11, decision F14)', () => {
     });
   });
 
-  it('a bundle whose only copy fails re-verification is treated the same as not being available at all', async () => {
+  it('state 2 — read-only when the locked version is not found but the store is not empty (ADR-004 point 6, v0.5.0 #12)', async () => {
+    const adapter = new MemoryStorageAdapter();
+    const store = bundleStoreFrom(adapter);
+    const keyPair = await generateTestKeyPair();
+    const trustedPublicKeys = [keyPair.publicKeyRaw];
+    const options = defaultVerifyOptions(trustedPublicKeys);
+    const v2 = await buildSignedBundle({ keyPair, bundleId: 'v2', version: '2.0.0' });
+    await installBundle(store, v2.manifest, v2.files, options);
+    await saveProjectSchemaLock(adapter, 'p1', {
+      bundleVersion: 'never-installed',
+      compatibilityProfile: 'v1.19.29',
+    });
+
+    const result = await resolveProjectSchema(adapter, 'p1', trustedPublicKeys);
+
+    expect(result.readOnly).toBe(true);
+    // Still resolves to *something* usable for a read-only display, never an
+    // empty module set — the caller decides what to do with `readOnly: true`.
+    expect(result.modules.map((module) => module.manifest.id).sort()).toContain('test-module');
+    expect(await getProjectSchemaLock(adapter, 'p1')).toEqual({
+      bundleVersion: 'never-installed',
+      compatibilityProfile: 'v1.19.29',
+    });
+  });
+
+  it('a bundle whose only copy fails re-verification is treated the same as not being available at all (read-only, not a silent fallback to a wrong version)', async () => {
     const adapter = new MemoryStorageAdapter();
     const store = bundleStoreFrom(adapter);
     const keyPair = await generateTestKeyPair();
@@ -108,5 +137,8 @@ describe('resolveProjectSchema (ADR-004, v0.5.0 #11, decision F14)', () => {
     const result = await resolveProjectSchema(adapter, 'p1', [keyPair.publicKeyRaw]);
 
     expect(result.modules.map((module) => module.manifest.id).sort()).toContain('general');
+    // The store is not empty (a corrupted entry still counts as "something is
+    // there") — this is state 2, not state 3, so it must be read-only.
+    expect(result.readOnly).toBe(true);
   });
 });

@@ -923,6 +923,26 @@ class RealWorker implements WorkerLike {
   }
 }
 
+/** Same real behavior as `RealWorker`, plus counters for the four document-mutating messages (v0.5.0 #12: read-only must be structural — these must never be *sent*, not merely have their buttons disabled). */
+class CountingWorker implements WorkerLike {
+  onmessage: ((event: WorkerMessageEvent) => void) | null = null;
+  readonly #state = createWorkerState();
+  readonly counts: Record<'applyPatch' | 'applyBatch' | 'undo' | 'redo', number> = {
+    applyPatch: 0,
+    applyBatch: 0,
+    undo: 0,
+    redo: 0,
+  };
+
+  postMessage(message: WorkerRequest): void {
+    if (message.type in this.counts) {
+      this.counts[message.type as keyof CountingWorker['counts']] += 1;
+    }
+    const response = handleWorkerRequest(this.#state, message);
+    queueMicrotask(() => this.onmessage?.({ data: response }));
+  }
+}
+
 describe('ProjectPage / module form wiring (FR-SCHEMA-01, PRD §7.4, v0.3.0 #14)', () => {
   async function setUpWithRealDocument(yaml: string) {
     const adapter = new MemoryStorageAdapter();
@@ -1712,5 +1732,118 @@ describe('ProjectPage / schema-lock (ADR-004, v0.5.0 #11, decision F14/F15)', ()
       value: 'hunter2',
       moduleId: 'general',
     });
+  });
+});
+
+describe('ProjectPage / read-only protection (ADR-004 point 6, PRD §9.5 point 3, v0.5.0 #12)', () => {
+  /**
+   * Locks a fresh project to v1, then evicts v1 from both store slots by
+   * installing v2 then v3 (the store only ever keeps two per channel,
+   * FR-UPD-04) — a genuine "locked version gone, but the store is not
+   * empty" state 2, not a contrived one.
+   */
+  async function setUpReadOnlyProject(): Promise<{
+    adapter: MemoryStorageAdapter;
+    trustedPublicKeys: Uint8Array[];
+    projectId: string;
+  }> {
+    const adapter = new MemoryStorageAdapter();
+    const store = bundleStoreFrom(adapter);
+    const keyPair = await generateTestKeyPair();
+    const trustedPublicKeys = [keyPair.publicKeyRaw];
+    const options = defaultVerifyOptions(trustedPublicKeys);
+
+    const v1 = await buildSignedBundle({ keyPair, bundleId: 'v1', version: '1.0.0' });
+    expect((await installBundle(store, v1.manifest, v1.files, options)).ok).toBe(true);
+
+    const client = new WorkerClient(new RealWorker());
+    render(<ProjectPage client={client} adapter={adapter} trustedPublicKeys={trustedPublicKeys} />);
+    await screen.findByText(t('project.emptyState'));
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+    const [record] = await listProjects(adapter);
+    if (!record) throw new Error('project was not persisted');
+    // The schema-lock backfill happens inside the selected-project loading
+    // effect (async, separate from `handleCreate`'s own writes) — wait for
+    // it rather than assuming it has landed the instant the name label appears.
+    await waitFor(async () => {
+      expect(await getProjectSchemaLock(adapter, record.id)).toEqual({
+        bundleVersion: '1.0.0',
+        compatibilityProfile: '1.19.29',
+      });
+    });
+    cleanup();
+
+    const v2 = await buildSignedBundle({ keyPair, bundleId: 'v2', version: '2.0.0' });
+    expect((await installBundle(store, v2.manifest, v2.files, options)).ok).toBe(true);
+    const v3 = await buildSignedBundle({ keyPair, bundleId: 'v3', version: '3.0.0' });
+    expect((await installBundle(store, v3.manifest, v3.files, options)).ok).toBe(true);
+
+    return { adapter, trustedPublicKeys, projectId: record.id };
+  }
+
+  it('shows the read-only guard with the raw text, and hides the mutable editing surface entirely (not merely disabled)', async () => {
+    const { adapter, trustedPublicKeys, projectId } = await setUpReadOnlyProject();
+    const client = new WorkerClient(new RealWorker());
+    render(<ProjectPage client={client} adapter={adapter} trustedPublicKeys={trustedPublicKeys} />);
+    fireEvent.click(await screen.findByRole('button', { name: t('project.untitledName') }));
+
+    await screen.findByText(t('readonly.banner', { version: '1.0.0' }));
+    const rawText = screen.getByLabelText<HTMLTextAreaElement>(t('editor.title'));
+    expect(rawText.readOnly).toBe(true);
+    expect(rawText.value).toBe(DEFAULT_PROJECT_CONFIG_TEXT);
+
+    // The mutable editing surface never mounts at all while read-only.
+    expect(screen.queryByRole('tablist')).toBeNull();
+    expect(screen.queryByRole('button', { name: t('project.undoButton') })).toBeNull();
+    expect(screen.queryByRole('button', { name: t('project.redoButton') })).toBeNull();
+
+    // Not silently rewritten to whatever is now active (v3) — falling back
+    // to serve a read-only view must not itself change what is locked.
+    expect(await getProjectSchemaLock(adapter, projectId)).toEqual({
+      bundleVersion: '1.0.0',
+      compatibilityProfile: '1.19.29',
+    });
+  });
+
+  it('never sends applyPatch/applyBatch/undo/redo while read-only — zero messages, not just disabled buttons', async () => {
+    const { adapter, trustedPublicKeys } = await setUpReadOnlyProject();
+    const freshWorker = new CountingWorker();
+    const client = new WorkerClient(freshWorker);
+    render(<ProjectPage client={client} adapter={adapter} trustedPublicKeys={trustedPublicKeys} />);
+    fireEvent.click(await screen.findByRole('button', { name: t('project.untitledName') }));
+    await screen.findByText(t('readonly.banner', { version: '1.0.0' }));
+
+    expect(freshWorker.counts).toEqual({ applyPatch: 0, applyBatch: 0, undo: 0, redo: 0 });
+  });
+
+  it('export still works from the read-only view (viewing/exporting is not what read-only protects against)', async () => {
+    const { adapter, trustedPublicKeys } = await setUpReadOnlyProject();
+    const client = new WorkerClient(new RealWorker());
+    render(<ProjectPage client={client} adapter={adapter} trustedPublicKeys={trustedPublicKeys} />);
+    fireEvent.click(await screen.findByRole('button', { name: t('project.untitledName') }));
+    await screen.findByText(t('readonly.banner', { version: '1.0.0' }));
+
+    fireEvent.click(screen.getByRole('button', { name: t('export.triggerButton') }));
+
+    expect(await screen.findByRole('dialog', { name: t('export.title') })).toBeDefined();
+  });
+
+  it('upgrading from the read-only guard applies the upgrade and leaves read-only mode', async () => {
+    const { adapter, trustedPublicKeys } = await setUpReadOnlyProject();
+    const client = new WorkerClient(new RealWorker());
+    render(<ProjectPage client={client} adapter={adapter} trustedPublicKeys={trustedPublicKeys} />);
+    fireEvent.click(await screen.findByRole('button', { name: t('project.untitledName') }));
+    await screen.findByText(t('readonly.banner', { version: '1.0.0' }));
+
+    fireEvent.click(screen.getByRole('button', { name: t('readonly.upgradeButton') }));
+    const confirmButton = await screen.findByRole<HTMLButtonElement>('button', {
+      name: t('migration.upgradeDialog.confirmButton'),
+    });
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => expect(screen.queryByText(t('readonly.upgradeButton'))).toBeNull());
+    // Back to the normal, writable editing surface.
+    await screen.findByRole('tablist');
   });
 });
