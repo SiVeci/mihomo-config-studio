@@ -1,10 +1,15 @@
 import { describeSensitivity, MCSPROJ_FORMAT_VERSION, writeMcsproj } from '@mcs/project-format';
-import type { McsProject, SensitivityFinding, SensitivityKind } from '@mcs/project-format';
+import type {
+  McsProject,
+  McsProjQuarantine,
+  McsProjSchemaLock,
+  SensitivityFinding,
+  SensitivityKind,
+} from '@mcs/project-format';
 import { useMemo, type ReactNode } from 'react';
 
 import { t } from '../i18n/index.js';
 import type { TranslationKey } from '../i18n/index.js';
-import { DEFAULT_BUNDLE_VERSION } from '../project/model.js';
 import type { ProjectRecord } from '../project/model.js';
 import { hasBlockingIssues } from '../worker/protocol.js';
 import type { ValidationIssue } from '../worker/protocol.js';
@@ -45,6 +50,8 @@ export interface ExportDialogProps {
   readonly project: ProjectRecord;
   readonly configText: string;
   readonly issues: ValidationIssue[];
+  readonly schemaLock: McsProjSchemaLock;
+  readonly quarantine: McsProjQuarantine;
   readonly onClose: () => void;
   readonly downloadFile?: DownloadFile;
 }
@@ -57,14 +64,17 @@ const SENSITIVITY_LABEL_KEY: Record<SensitivityKind, TranslationKey> = {
 };
 
 /**
- * v0.2.0 has no real Schema Bundle or persisted UI state (#6's own note:
- * nothing concrete to store in `uiState` yet), so those two `McsProject`
- * fields are fixed placeholders here rather than plumbed through from
- * elsewhere that doesn't have real values either. `quarantine` joins them
- * for the same reason (v0.5.0 #9): nothing in `apps/web` produces a
- * quarantined field yet — that lands with the project-upgrade UI (#11).
+ * v0.2.0 has no persisted UI state (#6's own note: nothing concrete to store
+ * in `uiState` yet), so that one `McsProject` field is still a fixed
+ * placeholder. `schemaLock`/`quarantine` are real as of v0.5.0 #11 — the
+ * project's own persisted lock and quarantine, not derived here.
  */
-function buildMcsProject(project: ProjectRecord, configText: string): McsProject {
+function buildMcsProject(
+  project: ProjectRecord,
+  configText: string,
+  schemaLock: McsProjSchemaLock,
+  quarantine: McsProjQuarantine,
+): McsProject {
   return {
     manifest: {
       formatVersion: MCSPROJ_FORMAT_VERSION,
@@ -77,11 +87,8 @@ function buildMcsProject(project: ProjectRecord, configText: string): McsProject
     },
     configText,
     uiState: {},
-    schemaLock: {
-      bundleVersion: DEFAULT_BUNDLE_VERSION,
-      compatibilityProfile: project.targetProfile,
-    },
-    quarantine: { fields: [] },
+    schemaLock,
+    quarantine,
   };
 }
 
@@ -101,13 +108,15 @@ export function ExportDialog({
   project,
   configText,
   issues,
+  schemaLock,
+  quarantine,
   onClose,
   downloadFile = defaultDownloadFile,
 }: ExportDialogProps): ReactNode {
   const blocking = hasBlockingIssues(issues);
   const findings = useMemo(
-    () => describeSensitivity(buildMcsProject(project, configText)),
-    [project, configText],
+    () => describeSensitivity(buildMcsProject(project, configText, schemaLock, quarantine)),
+    [project, configText, schemaLock, quarantine],
   );
 
   function handleExportYaml(): void {
@@ -115,7 +124,7 @@ export function ExportDialog({
   }
 
   async function handleExportMcsproj(): Promise<void> {
-    const bytes = await writeMcsproj(buildMcsProject(project, configText));
+    const bytes = await writeMcsproj(buildMcsProject(project, configText, schemaLock, quarantine));
     downloadFile(bytes, `${project.name}.mcsproj`, 'application/zip');
   }
 

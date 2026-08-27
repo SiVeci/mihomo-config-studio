@@ -1,3 +1,4 @@
+import type { McsProjQuarantine, McsProjSchemaLock } from '@mcs/project-format';
 import {
   collectUnknownFields,
   type FormMode,
@@ -22,6 +23,8 @@ import { YamlEditor } from '../editor/YamlEditor.js';
 import type { YamlEditorHandle, YamlEditorWorkerClient } from '../editor/YamlEditor.js';
 import { ExportDialog } from '../export/ExportDialog.js';
 import type { DownloadFile } from '../export/ExportDialog.js';
+import { UpgradeDialog } from '../migration/UpgradeDialog.js';
+import type { UpgradeResult } from '../migration/UpgradeDialog.js';
 import { ModuleFormPage } from '../form/ModuleFormPage.js';
 import type { ModuleFormPageHandle } from '../form/ModuleFormPage.js';
 import { UnknownFieldTree } from '../form/UnknownFieldTree.js';
@@ -41,6 +44,7 @@ import type {
   ApplyBatchResponse,
   ApplyPatchResponse,
   ConfigPath,
+  ConfigureModulesResponse,
   Entity,
   EntityKind,
   GraphLayoutResponse,
@@ -58,13 +62,17 @@ import {
   DEFAULT_TARGET_PROFILE,
   getImportBaseline,
   getProjectConfigText,
+  getProjectQuarantine,
   listProjects,
   saveImportBaseline,
   saveProjectConfigText,
   saveProjectManifest,
+  saveProjectQuarantine,
+  saveProjectSchemaLock,
 } from './model.js';
 import type { ProjectRecord } from './model.js';
 import './ProjectPage.css';
+import { resolveProjectSchema } from './schema-resolution.js';
 
 type ProjectField = 'name' | 'description' | 'targetProfile';
 
@@ -131,6 +139,8 @@ export interface ModuleFormWorkerClient {
   value(): Promise<ValueResponse>;
   undo(): Promise<UndoResponse>;
   redo(): Promise<RedoResponse>;
+  /** Swaps which Bundle's modules the Worker validates against, per the selected project's own schema-lock (v0.5.0 #11, decision F14). */
+  configureModules(modules: readonly SchemaModule[]): Promise<ConfigureModulesResponse>;
 }
 
 export interface ProjectPageProps {
@@ -154,6 +164,8 @@ export interface ProjectPageProps {
   readonly now?: () => number;
   /** Forwarded to `ExportDialog` as-is; injectable because jsdom has no `URL.createObjectURL` (see `ExportDialog`'s own doc comment). */
   readonly downloadFile?: DownloadFile;
+  /** Test-only trust anchor override forwarded to `resolveProjectSchema` (v0.5.0 #11), same escape hatch `BundlePage` exposes; production code leaves this unset. */
+  readonly trustedPublicKeys?: readonly Uint8Array[];
 }
 
 export function ProjectPage({
@@ -161,6 +173,7 @@ export function ProjectPage({
   client,
   now = Date.now,
   downloadFile,
+  trustedPublicKeys,
 }: ProjectPageProps): ReactNode {
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -171,6 +184,7 @@ export function ProjectPage({
   const [importBaseline, setImportBaseline] = useState('');
   const [savedBaseline, setSavedBaseline] = useState('');
   const [showExportDialog, setShowExportDialog] = useState(false);
+  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
   // Driven by the Worker's own HistoryStack (v0.3.0 #15) — the one live
   // MihomoYamlDocument lives there (v0.2.0 #10), so this shell never records
   // edits itself, only reflects `canUndo`/`canRedo` back from each response.
@@ -191,12 +205,15 @@ export function ProjectPage({
   // `client.analyzeImpact` comes back with at least one reference — an
   // unreferenced entity deletes directly, never opening this (exit condition 5).
   const [deletingEntity, setDeletingEntity] = useState<DeletingEntityState | null>(null);
-  // Static for the process lifetime: v0.3.0 has no Bundle-install UI yet, so
-  // the built-in bundle is the only one that can ever be active (see
-  // `builtinAsStoredBundle`'s own doc comment).
-  const [modules] = useState<readonly SchemaModule[]>(() =>
+  // Default before any project is selected, and for a Worker call that never
+  // gets reconfigured (matches `WorkerState`'s own default) — the effect
+  // below replaces this with the selected project's own locked modules
+  // (ADR-004, v0.5.0 #11, decision F14) before that project's text is parsed.
+  const [modules, setModules] = useState<readonly SchemaModule[]>(() =>
     createRegistry(builtinAsStoredBundle()).modules(),
   );
+  const [schemaLock, setSchemaLock] = useState<McsProjSchemaLock | null>(null);
+  const [quarantine, setQuarantine] = useState<McsProjQuarantine>({ fields: [] });
   // `null` (not yet parsed) is not "an empty document" — `collectUnknownFields`
   // would otherwise plan every module against `null` and, same as
   // `ModuleFormPage`, transiently report schema-default values as if they
@@ -276,16 +293,29 @@ export function ProjectPage({
       return;
     }
     let cancelled = false;
-    // Fetched together and applied from one callback rather than two
-    // independent `.then()`s: the two requests can resolve in either order,
-    // and the import-baseline fallback below needs *this* project's config
-    // text, not whatever `configText` state still holds from the project
-    // that was selected before this effect ran.
+    const id = selectedId;
+    // Fetched together and applied from one callback rather than several
+    // independent `.then()`s: the requests can resolve in either order, and
+    // the import-baseline fallback below needs *this* project's config text,
+    // not whatever `configText` state still holds from the project that was
+    // selected before this effect ran.
     void Promise.all([
-      getProjectConfigText(adapter, selectedId),
-      getImportBaseline(adapter, selectedId),
-    ]).then(([savedText, importText]) => {
+      getProjectConfigText(adapter, id),
+      getImportBaseline(adapter, id),
+      resolveProjectSchema(adapter, id, trustedPublicKeys),
+      getProjectQuarantine(adapter, id),
+    ]).then(async ([savedText, importText, resolvedSchema, resolvedQuarantine]) => {
       if (cancelled) return;
+      // Must land before `setConfigText` below: `YamlEditor`'s own effect
+      // sends `client.parse(text)` as soon as `configText` changes, and that
+      // parse needs this project's own locked modules already configured
+      // (ADR-004, v0.5.0 #11, decision F14), not a still-live previous
+      // project's or the Worker's built-in default.
+      await client.configureModules(resolvedSchema.modules);
+      if (cancelled) return;
+      setModules(resolvedSchema.modules);
+      setSchemaLock(resolvedSchema.schemaLock);
+      setQuarantine(resolvedQuarantine);
       const text = savedText ?? '';
       setConfigText(text);
       setSavedBaseline(text);
@@ -296,7 +326,7 @@ export function ProjectPage({
     return () => {
       cancelled = true;
     };
-  }, [adapter, selectedId]);
+  }, [adapter, client, selectedId, trustedPublicKeys]);
 
   // One AutoSaver per selected project, flushed whenever selection moves away
   // from it (or the page unmounts) so a pending metadata edit is never lost
@@ -481,6 +511,27 @@ export function ProjectPage({
     setProjects(updated);
     const record = updated.find((project) => project.id === id);
     if (record) await saveProjectManifest(adapter, record);
+  }
+
+  /**
+   * `UpgradeDialog` already ran the migration and resolved the new modules;
+   * this only persists the result and refreshes local state. `configureModules`
+   * must land before `setConfigText` for the same reason as the selectedId
+   * effect above — the modules that now describe this project changed too.
+   */
+  async function handleUpgraded(result: UpgradeResult): Promise<void> {
+    if (!selectedId) return;
+    const id = selectedId;
+    await client.configureModules(result.modules);
+    await saveProjectConfigText(adapter, id, result.configText);
+    await saveProjectSchemaLock(adapter, id, result.schemaLock);
+    await saveProjectQuarantine(adapter, id, result.quarantine);
+    setModules(result.modules);
+    setSchemaLock(result.schemaLock);
+    setQuarantine(result.quarantine);
+    configTextRef.current = result.configText;
+    setConfigText(result.configText);
+    setShowUpgradeDialog(false);
   }
 
   function handleConfigChange(text: string): void {
@@ -789,18 +840,34 @@ export function ProjectPage({
             onRedo={() => void handleRedo()}
             onFieldChange={handleFieldChange}
             onExportClick={() => setShowExportDialog(true)}
+            onUpgradeClick={() => setShowUpgradeDialog(true)}
             confirmingDelete={confirmingDeleteId === selected.id}
             onDeleteClick={() => setConfirmingDeleteId(selected.id)}
             onCancelDelete={() => setConfirmingDeleteId(null)}
             onConfirmDelete={() => void handleConfirmDelete(selected.id)}
           />
-          {showExportDialog && (
+          {showExportDialog && schemaLock && (
             <ExportDialog
               project={selected}
               configText={configText}
               issues={issues}
+              schemaLock={schemaLock}
+              quarantine={quarantine}
               onClose={() => setShowExportDialog(false)}
               {...(downloadFile ? { downloadFile } : {})}
+            />
+          )}
+          {showUpgradeDialog && schemaLock && (
+            <UpgradeDialog
+              adapter={adapter}
+              projectId={selected.id}
+              configText={configText}
+              schemaLock={schemaLock}
+              quarantine={quarantine}
+              oldModules={modules}
+              onUpgraded={(result) => void handleUpgraded(result)}
+              onClose={() => setShowUpgradeDialog(false)}
+              {...(trustedPublicKeys ? { trustedPublicKeys } : {})}
             />
           )}
           {deletingEntity && (
@@ -830,6 +897,7 @@ interface ProjectDetailProps {
   readonly onRedo: () => void;
   readonly onFieldChange: (field: ProjectField, value: string) => void;
   readonly onExportClick: () => void;
+  readonly onUpgradeClick: () => void;
   readonly confirmingDelete: boolean;
   readonly onDeleteClick: () => void;
   readonly onCancelDelete: () => void;
@@ -844,6 +912,7 @@ function ProjectDetail({
   onRedo,
   onFieldChange,
   onExportClick,
+  onUpgradeClick,
   confirmingDelete,
   onDeleteClick,
   onCancelDelete,
@@ -854,6 +923,9 @@ function ProjectDetail({
       <div className="project-detail__toolbar">
         <button type="button" onClick={onExportClick}>
           {t('export.triggerButton')}
+        </button>
+        <button type="button" onClick={onUpgradeClick}>
+          {t('migration.upgradeTriggerButton')}
         </button>
         <button type="button" onClick={onUndo} disabled={!canUndo}>
           {t('project.undoButton')}

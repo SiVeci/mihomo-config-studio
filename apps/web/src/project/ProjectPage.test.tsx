@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { GENERAL_MODULE } from '@mcs/schema-builtin';
+import { BUILTIN_BUNDLE, bundleStoreFrom, installBundle } from '@mcs/schema-registry';
 import { MemoryStorageAdapter } from '@mcs/storage';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { defaultVerifyOptions } from '../bundle/verify-options.js';
 import type { DiffPanelWorkerClient } from '../diff/DiffPanel.js';
 import { WorkerClient } from '../worker/client.js';
 import type { WorkerLike, WorkerMessageEvent } from '../worker/client.js';
@@ -11,6 +13,7 @@ import type { YamlEditorWorkerClient } from '../editor/YamlEditor.js';
 import { t } from '../i18n/index.js';
 import type { ImportWorkerClient } from '../import/ImportPanel.js';
 import type { IssuePanelWorkerClient } from '../issues/IssuePanel.js';
+import { buildSignedBundle, generateTestKeyPair, minimalModule } from '../testing/signed-bundle.js';
 import {
   createWorkerState,
   handleWorkerRequest,
@@ -22,6 +25,9 @@ import {
   DEFAULT_TARGET_PROFILE,
   getImportBaseline,
   getProjectConfigText,
+  getProjectQuarantine,
+  getProjectSchemaLock,
+  listProjects,
   saveProjectConfigText,
   saveProjectManifest,
 } from './model.js';
@@ -98,6 +104,7 @@ const FAKE_CLIENT: FakeClient = {
     value: {},
   }),
   previewProvider: async (_text) => ({ type: 'previewProvider', requestId: 'fake', preview: null }),
+  configureModules: async (_modules) => ({ type: 'configureModules', requestId: 'fake' }),
 };
 
 const decoder = new TextDecoder();
@@ -1525,5 +1532,185 @@ describe('ProjectPage / delete impact analysis (v0.4.0 #11, FR-REL-03 UI, exit c
 
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(editorTextarea.value).toBe(beforeText);
+  });
+});
+
+describe('ProjectPage / schema-lock (ADR-004, v0.5.0 #11, decision F14/F15)', () => {
+  it('creating a project persists a real schema-lock pointing at the currently active bundle, not the old "none" placeholder', async () => {
+    const adapter = new MemoryStorageAdapter();
+    const client = new WorkerClient(new RealWorker());
+    render(<ProjectPage client={client} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+
+    const [record] = await listProjects(adapter);
+    if (!record) throw new Error('project was not persisted');
+    await waitFor(async () => {
+      expect(await getProjectSchemaLock(adapter, record.id)).toEqual({
+        bundleVersion: BUILTIN_BUNDLE.manifest.version,
+        compatibilityProfile: BUILTIN_BUNDLE.manifest.mihomo.minVersion,
+      });
+    });
+  });
+
+  it('installing a newer Bundle leaves an existing, un-upgraded project’s config text and validation issues byte-for-byte and issue-for-issue unchanged after reopening it (exit condition 3)', async () => {
+    const adapter = new MemoryStorageAdapter();
+    const store = bundleStoreFrom(adapter);
+    const keyPair = await generateTestKeyPair();
+    const trustedPublicKeys = [keyPair.publicKeyRaw];
+    const options = defaultVerifyOptions(trustedPublicKeys);
+
+    // v1 has both `general` and `rules` modules — same as the real built-in
+    // bundle, `rules` claims its root but does not validate each list item's
+    // shape, so a `rules:` entry is flagged `unknown-field` (the same signal
+    // `protocol.test.ts` already relies on for the real built-in bundle).
+    const v1 = await buildSignedBundle({
+      keyPair,
+      bundleId: 'v1',
+      version: '1.0.0',
+      modules: new Map([
+        ['general', minimalModule('general')],
+        ['rules', minimalModule('rules')],
+      ]),
+    });
+    expect((await installBundle(store, v1.manifest, v1.files, options)).ok).toBe(true);
+
+    const client = new WorkerClient(new RealWorker());
+    const { unmount } = render(
+      <ProjectPage client={client} adapter={adapter} trustedPublicKeys={trustedPublicKeys} />,
+    );
+    await screen.findByText(t('project.emptyState'));
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+    const editorTextarea = screen.getByLabelText<HTMLTextAreaElement>(t('editor.title'));
+    await waitFor(() => expect(editorTextarea.value).toBe(DEFAULT_PROJECT_CONFIG_TEXT));
+
+    const yaml = 'mode: rule\nrules:\n  - DOMAIN,example.com,DIRECT\n';
+    fireEvent.change(editorTextarea, { target: { value: yaml } });
+    await waitFor(
+      () => {
+        expect(document.querySelector('[data-module-section="general"]')).not.toBeNull();
+      },
+      { timeout: 2000 },
+    );
+    const issuesRegion = screen.getByRole('region', { name: t('issues.title') });
+    await waitFor(() => expect(issuesRegion.textContent).toContain('unknown-field'));
+    const beforeConfigText = editorTextarea.value;
+    const beforeIssuesText = issuesRegion.textContent;
+
+    // v2 deliberately drops the `rules` module — if the still-open project
+    // ever picked this up, the `unknown-field` issue above would vanish.
+    const v2 = await buildSignedBundle({
+      keyPair,
+      bundleId: 'v2',
+      version: '2.0.0',
+      modules: new Map([['general', minimalModule('general')]]),
+    });
+    expect((await installBundle(store, v2.manifest, v2.files, options)).ok).toBe(true);
+
+    // Simulate leaving the project (e.g. to the Bundle page) and coming back:
+    // unmount entirely and remount with a *fresh* Worker, so a stale
+    // in-memory `WorkerState` cannot accidentally make this pass.
+    unmount();
+    const freshClient = new WorkerClient(new RealWorker());
+    render(
+      <ProjectPage client={freshClient} adapter={adapter} trustedPublicKeys={trustedPublicKeys} />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: t('project.untitledName') }));
+    const reopenedTextarea = await screen.findByLabelText<HTMLTextAreaElement>(t('editor.title'));
+    await waitFor(() => expect(reopenedTextarea.value).toBe(beforeConfigText));
+
+    const reopenedIssuesRegion = screen.getByRole('region', { name: t('issues.title') });
+    await waitFor(() => expect(reopenedIssuesRegion.textContent).toBe(beforeIssuesText));
+  });
+
+  it('clicking "Upgrade project" through the real UI applies the migration and persists the new config text, schema-lock and quarantine (FR-UPD-06)', async () => {
+    const adapter = new MemoryStorageAdapter();
+    const store = bundleStoreFrom(adapter);
+    const keyPair = await generateTestKeyPair();
+    const trustedPublicKeys = [keyPair.publicKeyRaw];
+    const options = defaultVerifyOptions(trustedPublicKeys);
+
+    const v1 = await buildSignedBundle({
+      keyPair,
+      bundleId: 'v1',
+      version: '1.0.0',
+      modules: new Map([
+        ['general', minimalModule('general')],
+        ['rules', minimalModule('rules')],
+      ]),
+    });
+    expect((await installBundle(store, v1.manifest, v1.files, options)).ok).toBe(true);
+
+    const client = new WorkerClient(new RealWorker());
+    render(<ProjectPage client={client} adapter={adapter} trustedPublicKeys={trustedPublicKeys} />);
+    await screen.findByText(t('project.emptyState'));
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+    const editorTextarea = screen.getByLabelText<HTMLTextAreaElement>(t('editor.title'));
+    await waitFor(() => expect(editorTextarea.value).toBe(DEFAULT_PROJECT_CONFIG_TEXT));
+    fireEvent.change(editorTextarea, {
+      target: { value: 'mode: rule\nlegacy-secret: hunter2\n' },
+    });
+    await waitFor(
+      () => {
+        expect(document.querySelector('[data-module-section="general"]')).not.toBeNull();
+      },
+      { timeout: 2000 },
+    );
+
+    const [record] = await listProjects(adapter);
+    if (!record) throw new Error('project was not persisted');
+
+    // v2: adds a migration that quarantines the legacy field (not lossy —
+    // the value survives) and drops the `rules` module entirely.
+    const v2 = await buildSignedBundle({
+      keyPair,
+      bundleId: 'v2',
+      version: '2.0.0',
+      modules: new Map([
+        [
+          'general',
+          {
+            manifest: { id: 'general', root: [], version: '2.0.0' },
+            schema: {},
+            ui: {},
+            migrations: [
+              {
+                from: '1.0.0',
+                to: '2.0.0',
+                operations: [{ op: 'quarantine-field', path: 'legacy-secret' }],
+              },
+            ],
+          },
+        ],
+      ]),
+    });
+    expect((await installBundle(store, v2.manifest, v2.files, options)).ok).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: t('migration.upgradeTriggerButton') }));
+    const confirmButton = await screen.findByRole<HTMLButtonElement>('button', {
+      name: t('migration.upgradeDialog.confirmButton'),
+    });
+    expect(confirmButton.disabled).toBe(false); // quarantine-field is not lossy
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => expect(editorTextarea.value).toBe('mode: rule\n'));
+    expect(screen.queryByRole('dialog')).toBeNull(); // the dialog closes itself on success
+
+    expect(await getProjectConfigText(adapter, record.id)).toBe('mode: rule\n');
+    expect(await getProjectSchemaLock(adapter, record.id)).toEqual({
+      bundleVersion: '2.0.0',
+      compatibilityProfile: '1.19.29',
+    });
+    const quarantine = await getProjectQuarantine(adapter, record.id);
+    expect(quarantine.fields).toHaveLength(1);
+    expect(quarantine.fields[0]).toMatchObject({
+      path: 'legacy-secret',
+      value: 'hunter2',
+      moduleId: 'general',
+    });
   });
 });

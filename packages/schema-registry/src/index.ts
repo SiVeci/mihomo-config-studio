@@ -35,6 +35,7 @@ export {
   builtinAsStoredBundle,
   installBundle,
   resolveActiveBundle,
+  resolveBundleByVersion,
   rollbackBundle,
 } from './store.js';
 export type {

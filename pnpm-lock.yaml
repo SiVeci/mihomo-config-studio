@@ -84,6 +84,9 @@ importers:
       '@mcs/graph':
         specifier: workspace:*
         version: link:../../packages/graph
+      '@mcs/migration':
+        specifier: workspace:*
+        version: link:../../packages/migration
       '@mcs/project-format':
         specifier: workspace:*
         version: link:../../packages/project-format

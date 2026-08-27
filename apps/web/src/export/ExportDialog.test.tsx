@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { readMcsproj } from '@mcs/project-format';
+import type { McsProjQuarantine, McsProjSchemaLock } from '@mcs/project-format';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -21,6 +22,9 @@ const PROJECT: ProjectRecord = {
   updatedAt: '2026-08-02T00:00:00.000Z',
 };
 
+const SCHEMA_LOCK: McsProjSchemaLock = { bundleVersion: '0.5.0', compatibilityProfile: 'v1.19.29' };
+const QUARANTINE: McsProjQuarantine = { fields: [] };
+
 const BLOCKING_ISSUE: ValidationIssue = {
   severity: 'error',
   code: 'yaml.syntax.x',
@@ -35,6 +39,8 @@ describe('ExportDialog / normal export (no blocking issues)', () => {
     render(
       <ExportDialog
         project={PROJECT}
+        schemaLock={SCHEMA_LOCK}
+        quarantine={QUARANTINE}
         configText={'mode: rule\nport: 7890\n'}
         issues={[]}
         onClose={vi.fn()}
@@ -56,6 +62,8 @@ describe('ExportDialog / normal export (no blocking issues)', () => {
     render(
       <ExportDialog
         project={PROJECT}
+        schemaLock={SCHEMA_LOCK}
+        quarantine={QUARANTINE}
         configText={'mode: rule\n'}
         issues={[]}
         onClose={vi.fn()}
@@ -78,7 +86,14 @@ describe('ExportDialog / normal export (no blocking issues)', () => {
 
   it('does not render a draft-export button', () => {
     render(
-      <ExportDialog project={PROJECT} configText={'mode: rule\n'} issues={[]} onClose={vi.fn()} />,
+      <ExportDialog
+        project={PROJECT}
+        schemaLock={SCHEMA_LOCK}
+        quarantine={QUARANTINE}
+        configText={'mode: rule\n'}
+        issues={[]}
+        onClose={vi.fn()}
+      />,
     );
 
     expect(screen.queryByRole('button', { name: t('export.draftButton') })).toBeNull();
@@ -87,7 +102,14 @@ describe('ExportDialog / normal export (no blocking issues)', () => {
   it('closing calls onClose', () => {
     const onClose = vi.fn();
     render(
-      <ExportDialog project={PROJECT} configText={'mode: rule\n'} issues={[]} onClose={onClose} />,
+      <ExportDialog
+        project={PROJECT}
+        schemaLock={SCHEMA_LOCK}
+        quarantine={QUARANTINE}
+        configText={'mode: rule\n'}
+        issues={[]}
+        onClose={onClose}
+      />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: t('export.closeButton') }));
@@ -101,6 +123,8 @@ describe('ExportDialog / blocking issues (FR-YAML-07 mutually exclusive exports)
     render(
       <ExportDialog
         project={PROJECT}
+        schemaLock={SCHEMA_LOCK}
+        quarantine={QUARANTINE}
         configText={'mode: rule\n  bad: indent'}
         issues={[BLOCKING_ISSUE]}
         onClose={vi.fn()}
@@ -121,6 +145,8 @@ describe('ExportDialog / blocking issues (FR-YAML-07 mutually exclusive exports)
     render(
       <ExportDialog
         project={PROJECT}
+        schemaLock={SCHEMA_LOCK}
+        quarantine={QUARANTINE}
         configText={'mode: rule\n  bad: indent'}
         issues={[BLOCKING_ISSUE]}
         onClose={vi.fn()}
@@ -143,6 +169,8 @@ describe('ExportDialog / sensitivity warnings (NFR-SEC-08)', () => {
     render(
       <ExportDialog
         project={PROJECT}
+        schemaLock={SCHEMA_LOCK}
+        quarantine={QUARANTINE}
         configText={'mode: rule\nport: 7890\n'}
         issues={[]}
         onClose={vi.fn()}
@@ -162,7 +190,14 @@ describe('ExportDialog / sensitivity warnings (NFR-SEC-08)', () => {
       '    url: "https://example.com/subscription"',
     ].join('\n');
     render(
-      <ExportDialog project={PROJECT} configText={configText} issues={[]} onClose={vi.fn()} />,
+      <ExportDialog
+        project={PROJECT}
+        schemaLock={SCHEMA_LOCK}
+        quarantine={QUARANTINE}
+        configText={configText}
+        issues={[]}
+        onClose={vi.fn()}
+      />,
     );
 
     expect(screen.getByText(t('export.sensitivityTitle'))).toBeDefined();
@@ -175,7 +210,14 @@ describe('ExportDialog / sensitivity warnings (NFR-SEC-08)', () => {
     const secretPassword = 'correct-horse-battery-staple';
     const configText = `proxies:\n  - password: "${secretPassword}"\n`;
     render(
-      <ExportDialog project={PROJECT} configText={configText} issues={[]} onClose={vi.fn()} />,
+      <ExportDialog
+        project={PROJECT}
+        schemaLock={SCHEMA_LOCK}
+        quarantine={QUARANTINE}
+        configText={configText}
+        issues={[]}
+        onClose={vi.fn()}
+      />,
     );
 
     expect(screen.getByText(t('export.sensitivity.password'))).toBeDefined();

@@ -1,3 +1,4 @@
+import type { McsProjQuarantine, McsProjSchemaLock } from '@mcs/project-format';
 import type { StorageAdapter } from '@mcs/storage';
 
 export interface ProjectRecord {
@@ -21,19 +22,17 @@ export const DEFAULT_TARGET_PROFILE = 'v1.19.29';
 /** Minimal syntactically-valid starting document; #12 replaces this via real import. */
 export const DEFAULT_PROJECT_CONFIG_TEXT = 'mode: rule\n';
 
-/**
- * No Schema Bundle is installed in v0.2.0 ("不装任何 Schema 模块" is this
- * release's own closed-loop scenario) — a real bundle version lands once
- * Schema module installation does. `.mcsproj` still needs *some*
- * `schemaLock.bundleVersion` to write (ADR-004), so this is the documented
- * placeholder, same pattern as `DEFAULT_TARGET_PROFILE` above.
- */
-export const DEFAULT_BUNDLE_VERSION = 'none';
-
 const PROJECT_PREFIX = 'project/';
 const MANIFEST_SUFFIX = '/manifest.json';
 const CONFIG_SUFFIX = '/config.yaml';
 const IMPORT_BASELINE_SUFFIX = '/import-baseline.yaml';
+const SCHEMA_LOCK_SUFFIX = '/schema-lock.json';
+const QUARANTINE_SUFFIX = '/quarantine.json';
+
+/** `SnapshotManager`'s key prefix for this project's pre-migration snapshots (v0.5.0 #11, NFR-REL-01). */
+export function projectSnapshotPrefix(id: string): string {
+  return `${PROJECT_PREFIX}${id}/snapshots/`;
+}
 
 function manifestKey(id: string): string {
   return `${PROJECT_PREFIX}${id}${MANIFEST_SUFFIX}`;
@@ -45,6 +44,14 @@ function configKey(id: string): string {
 
 function importBaselineKey(id: string): string {
   return `${PROJECT_PREFIX}${id}${IMPORT_BASELINE_SUFFIX}`;
+}
+
+function schemaLockKey(id: string): string {
+  return `${PROJECT_PREFIX}${id}${SCHEMA_LOCK_SUFFIX}`;
+}
+
+function quarantineKey(id: string): string {
+  return `${PROJECT_PREFIX}${id}${QUARANTINE_SUFFIX}`;
 }
 
 const encoder = new TextEncoder();
@@ -110,8 +117,44 @@ export async function getImportBaseline(
   return bytes ? decoder.decode(bytes) : null;
 }
 
+/** ADR-004: the Bundle version and compatibility profile this project was authored against. `null` for a project created before v0.5.0 #11 — callers backfill one rather than assuming a value. */
+export async function getProjectSchemaLock(
+  adapter: StorageAdapter,
+  id: string,
+): Promise<McsProjSchemaLock | null> {
+  const bytes = await adapter.get(schemaLockKey(id));
+  return bytes ? (JSON.parse(decoder.decode(bytes)) as McsProjSchemaLock) : null;
+}
+
+export async function saveProjectSchemaLock(
+  adapter: StorageAdapter,
+  id: string,
+  lock: McsProjSchemaLock,
+): Promise<void> {
+  await adapter.put(schemaLockKey(id), encoder.encode(JSON.stringify(lock)));
+}
+
+/** Fields a downgrade migration moved out of `config.yaml` (v0.5.0 #9/#11, PRD §9.5 point 6). Absent for a project that has never gone through a downgrade — defaults to empty, same as `.mcsproj`'s own `readMcsproj` fallback. */
+export async function getProjectQuarantine(
+  adapter: StorageAdapter,
+  id: string,
+): Promise<McsProjQuarantine> {
+  const bytes = await adapter.get(quarantineKey(id));
+  return bytes ? (JSON.parse(decoder.decode(bytes)) as McsProjQuarantine) : { fields: [] };
+}
+
+export async function saveProjectQuarantine(
+  adapter: StorageAdapter,
+  id: string,
+  quarantine: McsProjQuarantine,
+): Promise<void> {
+  await adapter.put(quarantineKey(id), encoder.encode(JSON.stringify(quarantine)));
+}
+
 export async function deleteProject(adapter: StorageAdapter, id: string): Promise<void> {
   await adapter.delete(manifestKey(id));
   await adapter.delete(configKey(id));
   await adapter.delete(importBaselineKey(id));
+  await adapter.delete(schemaLockKey(id));
+  await adapter.delete(quarantineKey(id));
 }

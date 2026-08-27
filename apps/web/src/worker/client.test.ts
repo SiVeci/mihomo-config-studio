@@ -296,6 +296,14 @@ const SRC_ROOT = join(WORKER_DIR, '..');
 const ENGINE_AWARE_FILES = new Set([
   join(WORKER_DIR, 'protocol.ts'),
   join(WORKER_DIR, 'config.worker.ts'),
+  // v0.5.0 #11, decision F13: project upgrade is a rare, explicit,
+  // user-confirmed one-time action behind a dialog, not a per-keystroke hot
+  // path — unlike applyPatch/applyBatch, it does not need the Worker's
+  // synchronous dispatch loop to stay off the main thread. `applyMigration`
+  // (`@mcs/migration`) needs `SnapshotRecorder.record()`, an inherently
+  // async `StorageAdapter` operation the Worker's current synchronous
+  // `handleWorkerRequest` cannot host without a much larger rearchitecture.
+  join(SRC_ROOT, 'migration', 'UpgradeDialog.tsx'),
 ]);
 const FORBIDDEN_SPECIFIERS = [
   "'@mcs/yaml-engine'",

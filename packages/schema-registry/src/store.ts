@@ -3,6 +3,8 @@ import { channelSlotKey, DEFAULT_BUNDLE_CHANNEL } from './channel.js';
 import type { BundleChannel, BundleManifest } from './manifest.js';
 import { verifyBundle, type BundleVerifyFailure, type VerifyBundleOptions } from './verify.js';
 
+const ALL_CHANNELS: readonly BundleChannel[] = ['stable', 'beta'];
+
 export interface StoredBundle {
   readonly manifest: BundleManifest;
   readonly files: ReadonlyMap<string, Uint8Array>;
@@ -117,6 +119,38 @@ export async function resolveActiveBundle(
     if (result.ok) return candidate;
   }
   return builtinAsStoredBundle();
+}
+
+/**
+ * Finds the specific Bundle version a project's `schema-lock` names (ADR-004),
+ * not "whatever is active right now" — installing an update must never change
+ * what an existing, un-upgraded project resolves to (v0.5.0 #11). Searches
+ * every slot across both channels (a project's lock does not record which
+ * channel it was authored under, and versions are unique across channels), so
+ * a project can keep validating against a Beta bundle after the user switches
+ * their own preference back to Stable, or vice versa. The built-in bundle is
+ * checked first since it never occupies a store slot and comparing its
+ * version is free. `null` means the locked version is not available from any
+ * local source — the caller's job (v0.5.0 #12: read-only protection), not
+ * this function's.
+ */
+export async function resolveBundleByVersion(
+  store: BundleStore,
+  version: string,
+  options: VerifyBundleOptions,
+): Promise<StoredBundle | null> {
+  const builtin = builtinAsStoredBundle();
+  if (builtin.manifest.version === version) return builtin;
+
+  for (const channel of ALL_CHANNELS) {
+    for (const slot of [channelSlotKey(channel, 'active'), channelSlotKey(channel, 'previous')]) {
+      const candidate = await store.read(slot);
+      if (!candidate || candidate.manifest.version !== version) continue;
+      const result = await verifyBundle(candidate.manifest, candidate.files, options);
+      if (result.ok) return candidate;
+    }
+  }
+  return null;
 }
 
 /**

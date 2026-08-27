@@ -104,6 +104,41 @@ describe('handleWorkerRequest / validate', () => {
   });
 });
 
+describe('handleWorkerRequest / configureModules (v0.5.0 #11, decision F14)', () => {
+  it('is a pure state write: no requestId re-parse, response just echoes the requestId back', () => {
+    const state = createWorkerState();
+
+    const response = handleWorkerRequest(state, {
+      type: 'configureModules',
+      requestId: 'r1',
+      modules: [],
+    });
+
+    expect(response).toEqual({ type: 'configureModules', requestId: 'r1' });
+  });
+
+  it('actually changes what later parse/validate calls flag — the default modules flag `rules[0]` unknown-field (per the parse test above); an empty module set does not, because schemaStage has nothing left to check field shapes against', () => {
+    const state = createWorkerState();
+    handleWorkerRequest(state, { type: 'configureModules', requestId: 'r0', modules: [] });
+    const response = handleWorkerRequest(state, { type: 'parse', requestId: 'r1', text: SAMPLE });
+
+    if (response.type !== 'parse') throw new Error('unreachable');
+    expect(response.issues).not.toContainEqual(
+      expect.objectContaining({ code: 'unknown-field', module: 'schema' }),
+    );
+  });
+
+  it('a project that never sends configureModules keeps validating against the built-in bundle, unchanged', () => {
+    const state = parsed();
+    const response = handleWorkerRequest(state, { type: 'validate', requestId: 'r1' });
+
+    if (response.type !== 'validate') throw new Error('unreachable');
+    expect(response.issues).toContainEqual(
+      expect.objectContaining({ code: 'unknown-field', module: 'schema', path: ['rules', 0] }),
+    );
+  });
+});
+
 describe('handleWorkerRequest / applyPatch', () => {
   it('reports NO_DOCUMENT before any successful parse', () => {
     const state = createWorkerState();

@@ -30,15 +30,14 @@ import { diffLines, MihomoYamlDocument, YamlEngineError } from '@mcs/yaml-engine
  */
 
 /**
- * Resolved once per Worker instance (v0.3.0 has no Bundle-install UI, so the
- * built-in bundle is the only one that can ever be active — see
- * `builtinAsStoredBundle`'s own doc comment) and fed into every
- * `runPipeline` call below. Without this, `schemaStage`/`securityStage`
- * (v0.3.0 #12/#13) never fire outside their own package's tests: the
- * pipeline needs `PipelineContext.modules` to do anything beyond the syntax
- * stage.
+ * `WorkerState.modules`'s default until `configureModules` (v0.5.0 #11) says
+ * otherwise — every `runPipeline` call below reads `state.modules`, never
+ * this directly. Without some default, `schemaStage`/`securityStage`
+ * (v0.3.0 #12/#13) would never fire for a caller that never sends
+ * `configureModules` (every test predating v0.5.0 #11, and any project whose
+ * schema-lock resolves back to the built-in bundle anyway).
  */
-const RESOLVED_MODULES: readonly SchemaModule[] = createRegistry(builtinAsStoredBundle()).modules();
+const DEFAULT_MODULES: readonly SchemaModule[] = createRegistry(builtinAsStoredBundle()).modules();
 
 export type { IssueFix, ValidationIssue } from '@mcs/validator';
 export type {
@@ -51,6 +50,7 @@ export type {
   TextRange,
 } from '@mcs/yaml-engine';
 export type { Entity, EntityKind } from '@mcs/config-model';
+export type { SchemaModule } from '@mcs/schema-core';
 export type {
   AggregateGraphNode,
   BuildGraphLayoutOptions,
@@ -151,6 +151,20 @@ export interface PreviewProviderRequest {
   text: string;
 }
 
+/**
+ * Swaps which Bundle's modules `parse`/`validate` run against (v0.5.0 #11,
+ * decision F14). `modules` is plain, structured-clone-safe declarative data
+ * (ADR-002) resolved on the main thread — the Worker only stores it, no
+ * async work happens here. Never sent, the Worker keeps using its default
+ * (the built-in bundle), so every caller that predates this message is
+ * unaffected.
+ */
+export interface ConfigureModulesRequest {
+  type: 'configureModules';
+  requestId: string;
+  modules: readonly SchemaModule[];
+}
+
 export type WorkerRequest =
   | ParseRequest
   | ApplyPatchRequest
@@ -164,7 +178,8 @@ export type WorkerRequest =
   | ValueRequest
   | UndoRequest
   | RedoRequest
-  | PreviewProviderRequest;
+  | PreviewProviderRequest
+  | ConfigureModulesRequest;
 
 export interface ParseResponse {
   type: 'parse';
@@ -282,6 +297,10 @@ export interface PreviewProviderResponse {
   requestId: string;
   preview: ProviderPreview | null;
 }
+export interface ConfigureModulesResponse {
+  type: 'configureModules';
+  requestId: string;
+}
 /** NFR-SEC-03: never carries configuration values — only a stable code, an i18n key, and a path. */
 export interface WorkerErrorResponse {
   type: 'error';
@@ -305,6 +324,7 @@ export type WorkerResponse =
   | UndoResponse
   | RedoResponse
   | PreviewProviderResponse
+  | ConfigureModulesResponse
   | WorkerErrorResponse;
 
 /**
@@ -318,10 +338,12 @@ export type WorkerResponse =
 export interface WorkerState {
   parseResult: ParseResult | null;
   historyStack: HistoryStack;
+  /** Defaults to the built-in bundle's modules; `configureModules` (v0.5.0 #11) swaps it per open project. */
+  modules: readonly SchemaModule[];
 }
 
 export function createWorkerState(): WorkerState {
-  return { parseResult: null, historyStack: new HistoryStack() };
+  return { parseResult: null, historyStack: new HistoryStack(), modules: DEFAULT_MODULES };
 }
 
 /**
@@ -357,6 +379,8 @@ export function handleWorkerRequest(state: WorkerState, request: WorkerRequest):
       return handleRedo(state, request);
     case 'previewProvider':
       return handlePreviewProvider(request);
+    case 'configureModules':
+      return handleConfigureModules(state, request);
   }
 }
 
@@ -379,9 +403,23 @@ function handleParse(state: WorkerState, request: ParseRequest): ParseResponse {
   return {
     type: 'parse',
     requestId: request.requestId,
-    issues: runPipeline({ parse: parseResult, modules: RESOLVED_MODULES }),
+    issues: runPipeline({ parse: parseResult, modules: state.modules }),
     value: parseResult.document?.toJS() ?? null,
   };
+}
+
+/**
+ * Purely synchronous — `modules` arrives already resolved (main thread did
+ * whatever async store lookup was needed). Does not itself re-run `validate`;
+ * the caller sends this before `parse`/`validate` for the project it applies
+ * to, same as every other request that expects `state.parseResult` already set.
+ */
+function handleConfigureModules(
+  state: WorkerState,
+  request: ConfigureModulesRequest,
+): ConfigureModulesResponse {
+  state.modules = request.modules;
+  return { type: 'configureModules', requestId: request.requestId };
 }
 
 function handleApplyPatch(
@@ -530,7 +568,7 @@ function handleGraphLayout(
   const entities = new EntityRegistry().extract(document);
   const index = new ReferenceIndex();
   index.rebuild(document, entities);
-  const issues = runPipeline({ parse: state.parseResult!, modules: RESOLVED_MODULES });
+  const issues = runPipeline({ parse: state.parseResult!, modules: state.modules });
   return {
     type: 'graphLayout',
     requestId: request.requestId,
@@ -613,7 +651,7 @@ function handleValidate(
   return {
     type: 'validate',
     requestId: request.requestId,
-    issues: runPipeline({ parse: state.parseResult, modules: RESOLVED_MODULES }),
+    issues: runPipeline({ parse: state.parseResult, modules: state.modules }),
   };
 }
 

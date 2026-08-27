@@ -8,6 +8,7 @@ import {
   builtinAsStoredBundle,
   installBundle,
   resolveActiveBundle,
+  resolveBundleByVersion,
   rollbackBundle,
   type BundleStore,
   type StoredBundle,
@@ -409,6 +410,84 @@ describe('resolveActiveBundle (FR-UPD-01, FR-UPD-04)', () => {
     });
 
     expect(resolved.manifest.bundleId).toBe(BUILTIN_BUNDLE.manifest.bundleId);
+  });
+});
+
+describe('resolveBundleByVersion (ADR-004, v0.5.0 #11)', () => {
+  it('returns the built-in bundle when the version matches it, without touching the store', async () => {
+    const store = new MemoryBundleStore();
+    const keyPair = await generateTestKeyPair();
+    const options = { ...DEFAULT_OPTIONS, trustedPublicKeys: [keyPair.publicKeyRaw] };
+
+    const resolved = await resolveBundleByVersion(store, BUILTIN_BUNDLE.manifest.version, options);
+
+    expect(resolved?.manifest.bundleId).toBe(BUILTIN_BUNDLE.manifest.bundleId);
+  });
+
+  it('finds a version sitting in the stable previous slot, not just active', async () => {
+    const store = new MemoryBundleStore();
+    const keyPair = await generateTestKeyPair();
+    const options = { ...DEFAULT_OPTIONS, trustedPublicKeys: [keyPair.publicKeyRaw] };
+    for (const version of ['1.0.0', '2.0.0']) {
+      const { manifest, files } = await buildSignedBundle({
+        keyPair,
+        bundleId: `v${version}`,
+        manifestOverrides: { version },
+      });
+      await installBundle(store, manifest, files, options);
+    }
+    // '1.0.0' is now in STABLE_PREVIOUS, '2.0.0' in STABLE_ACTIVE.
+
+    const resolved = await resolveBundleByVersion(store, '1.0.0', options);
+
+    expect(resolved?.manifest.bundleId).toBe('v1.0.0');
+  });
+
+  it('finds a version that only exists in the beta slot-pair, even though stable is the default elsewhere', async () => {
+    const store = new MemoryBundleStore();
+    const keyPair = await generateTestKeyPair();
+    const options = { ...DEFAULT_OPTIONS, trustedPublicKeys: [keyPair.publicKeyRaw] };
+    const { manifest, files } = await buildSignedBundle({
+      keyPair,
+      bundleId: 'beta-only',
+      manifestOverrides: { channel: 'beta', version: '3.0.0-beta' },
+    });
+    await installBundle(store, manifest, files, options);
+
+    const resolved = await resolveBundleByVersion(store, '3.0.0-beta', options);
+
+    expect(resolved?.manifest.bundleId).toBe('beta-only');
+  });
+
+  it('returns null when the version is not the built-in one and not present in any slot', async () => {
+    const store = new MemoryBundleStore();
+    const keyPair = await generateTestKeyPair();
+    const options = { ...DEFAULT_OPTIONS, trustedPublicKeys: [keyPair.publicKeyRaw] };
+    const { manifest, files } = await buildSignedBundle({ keyPair, bundleId: 'v1' });
+    await installBundle(store, manifest, files, options);
+
+    const resolved = await resolveBundleByVersion(store, 'never-installed', options);
+
+    expect(resolved).toBeNull();
+  });
+
+  it('does not resolve a version whose only copy fails re-verification (on-disk corruption)', async () => {
+    const store = new MemoryBundleStore();
+    const keyPair = await generateTestKeyPair();
+    const options = { ...DEFAULT_OPTIONS, trustedPublicKeys: [keyPair.publicKeyRaw] };
+    const { manifest } = await buildSignedBundle({
+      keyPair,
+      bundleId: 'v1',
+      manifestOverrides: { version: '9.9.9' },
+    });
+    await store.write(STABLE_ACTIVE, {
+      manifest,
+      files: new Map([['modules/general.json', new TextEncoder().encode('{"corrupted":true}')]]),
+    });
+
+    const resolved = await resolveBundleByVersion(store, '9.9.9', options);
+
+    expect(resolved).toBeNull();
   });
 });
 

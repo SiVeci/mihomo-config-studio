@@ -4,6 +4,7 @@ import type {
   ApplyBatchResponse,
   ApplyPatchResponse,
   BuildGraphLayoutOptions,
+  ConfigureModulesResponse,
   ConfigPath,
   DiffResponse,
   GraphLayoutResponse,
@@ -12,6 +13,7 @@ import type {
   ParseResponse,
   PreviewProviderResponse,
   RedoResponse,
+  SchemaModule,
   SerializeOptions,
   SerializeResponse,
   UndoResponse,
@@ -182,6 +184,20 @@ export class WorkerClient {
       requestId: this.#makeRequestId(),
       text,
     }) as Promise<PreviewProviderResponse>;
+  }
+
+  /**
+   * Swaps which Bundle's modules `parse`/`validate` run against, going
+   * forward — send before `parse` for the project `modules` was resolved for
+   * (v0.5.0 #11, decision F14). Never sent, the Worker keeps validating
+   * against the built-in bundle.
+   */
+  configureModules(modules: readonly SchemaModule[]): Promise<ConfigureModulesResponse> {
+    return this.#send({
+      type: 'configureModules',
+      requestId: this.#makeRequestId(),
+      modules,
+    }) as Promise<ConfigureModulesResponse>;
   }
 
   /**
