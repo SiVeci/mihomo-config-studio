@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { BUILTIN_BUNDLE, BUILTIN_TRUST_ANCHOR_PUBLIC_KEY_HEX } from './builtin.js';
+import { BUILTIN_BUNDLE, BUILTIN_TRUST_ANCHORS_HEX } from './builtin.js';
 import type { BundleManifest } from './manifest.js';
 import { generateTestKeyPair, type TestKeyPair } from './testing/keys.js';
 import {
@@ -91,7 +91,7 @@ describe('verifyBundle (FR-UPD-03, NFR-SEC-04)', () => {
     const result = await verifyBundle(BUILTIN_BUNDLE.manifest, files, {
       ...DEFAULT_OPTIONS,
       currentAppVersion: BUILTIN_BUNDLE.manifest.requiresApp,
-      trustedPublicKeys: [hexToBytes(BUILTIN_TRUST_ANCHOR_PUBLIC_KEY_HEX)],
+      trustedPublicKeys: BUILTIN_TRUST_ANCHORS_HEX.map(hexToBytes),
     });
 
     expect(result).toEqual({ ok: true, manifest: BUILTIN_BUNDLE.manifest });

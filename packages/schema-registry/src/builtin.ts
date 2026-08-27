@@ -41,10 +41,15 @@ export const BUILTIN_MODULE: SchemaModule = GENERAL_MODULE;
  * it ships with, not the individual slice); #2 added
  * `modules/rule-providers.json`, the eighth module; #3 added
  * `modules/rules.json` and `modules/sub-rules.json`, the ninth and tenth
- * (and last — PRD §8.3 names ten P0 modules total).
+ * (and last — PRD §8.3 names ten P0 modules total). v0.5.0 #0 turned the
+ * single bootstrap key into a `[current, next]` shaped array (ADR-010 §3)
+ * — still the same bootstrap keypair, only its declared shape changed;
+ * `tools/schema-cli` must re-issue this file against the real key custody
+ * workflow before any Bundle-update feature ships to users (v0.5.0 #14).
  */
-export const BUILTIN_TRUST_ANCHOR_PUBLIC_KEY_HEX =
-  'cb9b7d5404553029d789b56101e2df9d5d6afd66078487342580b2e34445ee3c';
+export const BUILTIN_TRUST_ANCHORS_HEX: readonly string[] = [
+  'cb9b7d5404553029d789b56101e2df9d5d6afd66078487342580b2e34445ee3c',
+];
 
 export const BUILTIN_MANIFEST: BundleManifest = {
   bundleId: 'builtin',

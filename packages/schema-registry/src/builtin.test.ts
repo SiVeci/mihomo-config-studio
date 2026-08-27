@@ -5,7 +5,7 @@ import {
   BUILTIN_MANIFEST,
   BUILTIN_MODULE,
   BUILTIN_MODULE_PATH,
-  BUILTIN_TRUST_ANCHOR_PUBLIC_KEY_HEX,
+  BUILTIN_TRUST_ANCHORS_HEX,
 } from './builtin.js';
 import { hexToBytes, sha256Hex, verifyBundle } from './verify.js';
 
@@ -50,7 +50,7 @@ describe('built-in bundle re-issue regression (v0.3.0 E5)', () => {
       currentAppVersion: BUILTIN_MANIFEST.requiresApp,
       minFormatVersion: BUILTIN_MANIFEST.formatVersion,
       maxFormatVersion: BUILTIN_MANIFEST.formatVersion,
-      trustedPublicKeys: [hexToBytes(BUILTIN_TRUST_ANCHOR_PUBLIC_KEY_HEX)],
+      trustedPublicKeys: BUILTIN_TRUST_ANCHORS_HEX.map(hexToBytes),
     });
 
     expect(result).toEqual({ ok: true, manifest: BUILTIN_MANIFEST });

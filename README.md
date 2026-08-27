@@ -37,7 +37,8 @@ proxy-providers）均有 Schema 驱动表单、Golden 往返测试与内置模�
 sub-rules）补齐，规则列表（重排、批量操作）、关系图（导航、环路、异常关系筛选）、
 1,000 实体+10,000 规则规模下的虚拟化与性能基准均已交付；全部退出条件见
 [需求追踪表](docs/requirements-traceability.md)，切片记录见
-[版本执行计划](docs/releases/plans/v0.4.0.md)。下一步 M4（v0.5.0）。尚未发布
+[版本执行计划](docs/releases/plans/v0.4.0.md)。**M4（Bundle 更新、签名、迁移与
+回滚，v0.5.0）进行中**，见[版本执行计划](docs/releases/plans/v0.5.0.md)。尚未发布
 可用版本。
 
 ## 仓库结构
