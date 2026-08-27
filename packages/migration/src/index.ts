@@ -1,15 +1,18 @@
-export { applyMigration } from './apply.js';
+export { applyMigration, resolveMigrationPath } from './apply.js';
 export type {
   ApplyMigrationErrorCode,
   ApplyMigrationFailure,
   ApplyMigrationOptions,
   ApplyMigrationResult,
   ApplyMigrationSuccess,
+  QuarantinedField,
+  QuarantineSink,
   SnapshotRecorder,
 } from './apply.js';
 export { loadMigrations } from './load.js';
 export type { LoadMigrationsResult } from './load.js';
 export { buildMigrationPlan, isLossyOperation, MIGRATION_OPERATION_KINDS } from './plan.js';
+export { restoreQuarantinedField } from './quarantine.js';
 export { diffSchemas, SchemaDiffError } from './schema-diff.js';
 export type { DefaultChangedEntry, SchemaDiff, SchemaDiffEntry } from './schema-diff.js';
 export type {

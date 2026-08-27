@@ -60,7 +60,9 @@ const SENSITIVITY_LABEL_KEY: Record<SensitivityKind, TranslationKey> = {
  * v0.2.0 has no real Schema Bundle or persisted UI state (#6's own note:
  * nothing concrete to store in `uiState` yet), so those two `McsProject`
  * fields are fixed placeholders here rather than plumbed through from
- * elsewhere that doesn't have real values either.
+ * elsewhere that doesn't have real values either. `quarantine` joins them
+ * for the same reason (v0.5.0 #9): nothing in `apps/web` produces a
+ * quarantined field yet — that lands with the project-upgrade UI (#11).
  */
 function buildMcsProject(project: ProjectRecord, configText: string): McsProject {
   return {
@@ -79,6 +81,7 @@ function buildMcsProject(project: ProjectRecord, configText: string): McsProject
       bundleVersion: DEFAULT_BUNDLE_VERSION,
       compatibilityProfile: project.targetProfile,
     },
+    quarantine: { fields: [] },
   };
 }
 

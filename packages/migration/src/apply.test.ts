@@ -333,7 +333,7 @@ describe('applyMigration — per-opcode execution', () => {
     expect(result.warnings).toEqual([]);
   });
 
-  it('quarantine-field: is a no-op in this slice — the field is left untouched (real wiring lands in v0.5.0 #9)', async () => {
+  it('quarantine-field: falls back to a no-op when no quarantine sink is injected (real wiring + sink tested in quarantine.test.ts, v0.5.0 #9)', async () => {
     const document = parse(FIXTURE);
     const result = await applyMigration(
       plan([{ op: 'quarantine-field', path: 'old-name' }]),

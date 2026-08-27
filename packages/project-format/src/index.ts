@@ -4,6 +4,8 @@ export { ProjectFormatError, readZip, writeZip } from './zip.js';
 export type {
   McsProject,
   McsProjManifest,
+  McsProjQuarantine,
+  McsProjQuarantinedField,
   McsProjSchemaLock,
   SensitivityFinding,
   SensitivityKind,

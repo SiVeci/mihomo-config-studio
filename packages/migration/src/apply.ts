@@ -25,6 +25,26 @@ export interface ApplyMigrationOptions {
    * `Condition.path` uses for a module's own field addressing.
    */
   readonly moduleRoot?: ConfigPath;
+  /**
+   * Where a `quarantine-field` operation deposits the field's value (v0.5.0
+   * #9). Omitted entirely, `quarantine-field` falls back to a no-op — the
+   * field stays in the document rather than being deleted with nowhere to
+   * put it (PRD §9.5 point 6: never a silent delete). `packages/migration`
+   * has no opinion on where a quarantined value ultimately lives (that's
+   * `.mcsproj`'s `quarantine.json`, `@mcs/project-format`'s concern); this
+   * is only the injection point.
+   */
+  readonly quarantine?: QuarantineSink;
+}
+
+/** Where `applyMigration` deposits a field's value when a `quarantine-field` operation fires (v0.5.0 #9). */
+export interface QuarantinedField {
+  readonly path: string;
+  readonly value: unknown;
+}
+
+export interface QuarantineSink {
+  quarantine(field: QuarantinedField): void;
 }
 
 export type ApplyMigrationErrorCode =
@@ -86,7 +106,7 @@ export async function applyMigration(
   const warnings: MigrationWarning[] = [];
   for (const operation of plan.operations) {
     try {
-      applyOperation(document, moduleRoot, operation, warnings);
+      applyOperation(document, moduleRoot, operation, warnings, options.quarantine);
     } catch {
       return {
         ok: false,
@@ -105,8 +125,9 @@ function applyOperation(
   moduleRoot: ConfigPath,
   operation: MigrationOperation,
   warnings: MigrationWarning[],
+  quarantine: QuarantineSink | undefined,
 ): void {
-  const path = resolvePath(document, moduleRoot, operation.path);
+  const path = resolveMigrationPath(document, moduleRoot, operation.path);
   const exists = document.hasIn(path);
 
   switch (operation.op) {
@@ -122,7 +143,7 @@ function applyOperation(
     case 'move-field': {
       if (!exists) return;
       const value = document.getIn(path);
-      const toPath = resolvePath(document, moduleRoot, operation.to);
+      const toPath = resolveMigrationPath(document, moduleRoot, operation.to);
       document.setIn(toPath, value);
       document.deleteIn(path);
       return;
@@ -158,18 +179,29 @@ function applyOperation(
       return;
     }
     case 'quarantine-field': {
-      // Deliberately a no-op in this slice: moving the value into the
-      // project's quarantine area is v0.5.0 #9's own addition to this
-      // function (`.mcsproj` doesn't have a quarantine entry yet). Leaving
-      // the field untouched is the safe interim — nothing is lost, and
-      // nothing claims a quarantine happened that didn't.
+      if (!exists) return;
+      if (!quarantine) {
+        // No sink injected: leave the field in the document rather than
+        // deleting it with nowhere to put it (PRD §9.5 point 6).
+        return;
+      }
+      const value = document.getIn(path);
+      quarantine.quarantine({ path: operation.path, value });
+      document.deleteIn(path);
+      warnings.push({ code: 'FIELD_QUARANTINED', path: operation.path });
       return;
     }
   }
 }
 
-/** `MigrationOperation.path` is relative to the module's own root; array-vs-object-key for a numeric-looking segment can only be decided by walking the live document. */
-function resolvePath(
+/**
+ * `MigrationOperation.path` is relative to the module's own root;
+ * array-vs-object-key for a numeric-looking segment can only be decided by
+ * walking the live document. Exported for `quarantine.ts`'s
+ * `restoreQuarantinedField`, which needs the exact same resolution to write
+ * a value back to where it came from.
+ */
+export function resolveMigrationPath(
   document: MihomoYamlDocument,
   moduleRoot: ConfigPath,
   dotPath: string,

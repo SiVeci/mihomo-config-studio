@@ -24,6 +24,7 @@ function sampleProject(overrides: Partial<McsProject> = {}): McsProject {
     configText: 'mode: rule\nport: 7890\n',
     uiState: { collapsedGroups: ['proxies'], selectedEntityId: 'e1' },
     schemaLock: { bundleVersion: '1.0.0', compatibilityProfile: 'v1.19.29' },
+    quarantine: { fields: [] },
     ...overrides,
   };
 }
@@ -52,6 +53,42 @@ describe('writeMcsproj / readMcsproj round-trip', () => {
     const read = await readMcsproj(await writeMcsproj(project));
 
     expect(read.uiState).toEqual({});
+  });
+
+  it('round-trips quarantined fields exactly, including a non-primitive value (v0.5.0 #9)', async () => {
+    const project = sampleProject({
+      quarantine: {
+        fields: [
+          {
+            path: 'dns.legacy-opt',
+            value: { nested: ['a', 'b'], count: 2 },
+            moduleId: 'dns',
+            quarantinedAt: '2026-08-27T00:00:00.000Z',
+          },
+        ],
+      },
+    });
+
+    const read = await readMcsproj(await writeMcsproj(project));
+
+    expect(read.quarantine).toEqual(project.quarantine);
+  });
+
+  it('defaults quarantine to an empty list when reading a .mcsproj exported before v0.5.0 #9', async () => {
+    const encoder = new TextEncoder();
+    const project = sampleProject();
+    // Manually built without quarantine.json — simulates every .mcsproj
+    // exported by an earlier version of the app.
+    const archive = await writeZip([
+      { path: 'manifest.json', data: encoder.encode(JSON.stringify(project.manifest)) },
+      { path: 'config.yaml', data: encoder.encode(project.configText) },
+      { path: 'ui-state.json', data: encoder.encode(JSON.stringify(project.uiState)) },
+      { path: 'schema-lock.json', data: encoder.encode(JSON.stringify(project.schemaLock)) },
+    ]);
+
+    const read = await readMcsproj(archive);
+
+    expect(read.quarantine).toEqual({ fields: [] });
   });
 });
 
@@ -201,6 +238,44 @@ describe('readMcsproj error handling', () => {
         data: encoder.encode('{"bundleVersion":"1.0.0","compatibilityProfile":"v1"}'),
       },
     ]);
+
+    await expect(readMcsproj(archive)).rejects.toMatchObject({
+      code: 'PROJECT_FORMAT_INVALID_MANIFEST',
+    });
+  });
+
+  function archiveWithQuarantine(quarantineJson: string): Promise<Uint8Array> {
+    const encoder = new TextEncoder();
+    const project = sampleProject();
+    return writeZip([
+      { path: 'manifest.json', data: encoder.encode(JSON.stringify(project.manifest)) },
+      { path: 'config.yaml', data: encoder.encode(project.configText) },
+      { path: 'ui-state.json', data: encoder.encode(JSON.stringify(project.uiState)) },
+      { path: 'schema-lock.json', data: encoder.encode(JSON.stringify(project.schemaLock)) },
+      { path: 'quarantine.json', data: encoder.encode(quarantineJson) },
+    ]);
+  }
+
+  it('rejects a quarantine.json that is not a JSON object', async () => {
+    const archive = await archiveWithQuarantine('[1,2,3]');
+
+    await expect(readMcsproj(archive)).rejects.toMatchObject({
+      code: 'PROJECT_FORMAT_INVALID_MANIFEST',
+    });
+  });
+
+  it('rejects a quarantine.json whose fields is not an array', async () => {
+    const archive = await archiveWithQuarantine('{"fields":"nope"}');
+
+    await expect(readMcsproj(archive)).rejects.toMatchObject({
+      code: 'PROJECT_FORMAT_INVALID_MANIFEST',
+    });
+  });
+
+  it('rejects a quarantined field missing a required string field', async () => {
+    const archive = await archiveWithQuarantine(
+      '{"fields":[{"path":"a","value":1,"moduleId":"dns"}]}',
+    );
 
     await expect(readMcsproj(archive)).rejects.toMatchObject({
       code: 'PROJECT_FORMAT_INVALID_MANIFEST',
