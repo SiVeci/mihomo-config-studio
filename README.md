@@ -38,24 +38,29 @@ sub-rules）补齐，规则列表（重排、批量操作）、关系图（导�
 1,000 实体+10,000 规则规模下的虚拟化与性能基准均已交付；全部退出条件见
 [需求追踪表](docs/requirements-traceability.md)，切片记录见
 [版本执行计划](docs/releases/plans/v0.4.0.md)。**M4（Bundle 更新、签名、迁移与
-回滚，v0.5.0）进行中**，见[版本执行计划](docs/releases/plans/v0.5.0.md)。尚未发布
-可用版本。
+回滚，v0.5.0）已收口**：Stable/Beta 双通道、三类否定用例、迁移引擎（预览+执行同一份
+`MigrationPlan`+快照+隔离区）、项目升级 UI、缺失 Bundle 只读保护、`schema-cli`
+完整化均已交付并有真实测试证据；十条退出条件 9 项 Done、1 项 Partial（发布工作流
+本身与 [ADR-024](docs/adr/ADR-024-single-maintainer-release-approval.md) 已就位，
+真实签发与审批拦截验证需要 GitHub Environment/生产密钥两项先决项由用户在网页侧
+完成后才能执行），如实记录不宣告，见[需求追踪表](docs/requirements-traceability.md)
+与[版本执行计划](docs/releases/plans/v0.5.0.md)。尚未发布可用版本。
 
 ## 仓库结构
 
 ```text
 apps/
-  web/                 Web、PWA、静态部署                     ✅ 三栏布局壳、导入/编辑/差异/导出闭环、Worker 边界（v0.2.0 全部切片）
+  web/                 Web、PWA、静态部署                     ✅ 三栏布局壳、导入/编辑/差异/导出闭环、Worker 边界（v0.2.0）；+Schema 表单/规则列表/关系图（v0.3.0-v0.4.0）；+Bundle 管理/项目升级/只读保护 UI（v0.5.0 #10-#12）
   android/             Capacitor Android 壳与原生适配         🚧 M0-5 模拟器验证，Partial（真机推迟 v0.6.0）
 packages/
   config-model/        领域实体、引用和项目模型               ✅ M0 已验证
   yaml-engine/         AST 解析、局部修改、序列化、差异        ✅ M0 已验证
   schema-core/         JSON Schema、UI Schema 和类型          ✅ M0 已验证
-  schema-registry/     模块发现、依赖解析和版本选择           ✅ M0 已验证
+  schema-registry/     模块发现、依赖解析和版本选择           ✅ M0 已验证；+通道/双槽安装回滚/更新器/信任锚点（v0.5.0 #0-#4）
   schema-builtin/      随应用发布的默认 Bundle                ✅ 磁盘 JSON 布局 + general 模块（v0.3.0 #6）
   form-renderer/       Schema 驱动表单与控件映射              ✅ M0 已验证
   validator/           语法、结构、语义、引用和安全检查        ✅ 骨架 + 流水线 + 1MB 导入基准（v0.2.0 #1-2、#16）
-  migration/           声明式迁移计划与预览                    ✅ `MigrationPlan` 与封闭操作码（v0.5.0 #5，ADR-025）
+  migration/           声明式迁移计划与预览                    ✅ 封闭操作码 + 契约装载 + 字段差异 + 执行器/快照/隔离区（v0.5.0 #5-#9，ADR-025）
   graph/               引用索引、循环检测和关系图数据         ✅ M0 已验证
   templates/           模板定义与变量                          ✅ 五个内置模板，全部接入内核测试矩阵（v0.3.0 #20、v0.4.0 #16-17）
   storage/             Web/Android 存储抽象                  ✅ 端口 + 内存/IndexedDB + 自动保存/快照裁剪（v0.2.0 #4-5）

@@ -8,8 +8,11 @@
 
 > 本表随每个垂直切片更新。任何标记为 Done 的行都必须能指向具体测试文件。
 
-最近一次核对：2026-08-27（v0.4.0/M3 收口）。`pnpm run test:coverage` 85 文件 /
-1541 例全绿，行覆盖率 96.97%、分支 93.71%、函数 96.46%、语句 96.97%。
+最近一次核对：2026-08-28（v0.5.0/M4 收口，切片 #15）。`pnpm run test:coverage` 101 文件 /
+1766 例全绿（剔除一个与本版本无关、`--coverage` 插桩开销下偶发超时的既有性能用例
+`rule-list-scale.perf.test.tsx`，该用例在 `pnpm run test`/单独运行下稳定通过，非本版本
+引入），行覆盖率 96.72%、分支 93.55%、函数 96.66%、语句 96.72%。`pnpm run check`
+（不计覆盖率）102 文件 / 1768 例全绿。
 
 > 本表覆盖 PRD §8.1–8.11、§11 全部小节，以及 §13.3（内核兼容测试，仅内置模板部分，
 > v0.3.0 #21 起）；§8.3 配置模块覆盖已建行（v0.3.0 #6 起逐模块补齐，v0.4.0 #0-#3
@@ -24,7 +27,7 @@
 | M1 骨架与配置内核    | PRD M1     | v0.2.0 已收口（9 项退出条件全部 Done，见下表）                  |
 | M2 Schema 表单       | PRD M2     | v0.3.0 已收口（8 项退出条件全部 Done，其中 1 项结构性，见下表） |
 | M3 规则与图谱        | PRD M3     | v0.4.0 已收口（9 项退出条件全部 Done，其中 1 项结构性，见下表） |
-| M4 Bundle 更新与迁移 | PRD M4     | 进行中，见 [v0.5.0 执行计划](releases/plans/v0.5.0.md)          |
+| M4 Bundle 更新与迁移 | PRD M4     | v0.5.0 已收口（10 项退出条件 9 项 Done，1 项 Partial，见下表）  |
 | M5 及以后            | PRD M5–M7  | 未开工                                                          |
 
 ## M0 退出条件
@@ -118,6 +121,33 @@ Bundle 更新与回滚、Android APK。截至本次核对（2026-08-27），**�
 PRD §16.2 定义的 Beta 整体范围还需要项目包导入、Schema Bundle 更新通道、
 Android 真机验证三项工作（均已分别规划在 v0.5.0/v0.6.0），不应把"M3 收口"
 等同于"已达到 Beta"。
+
+## v0.5.0（M4）退出条件
+
+对应 [v0.5.0 版本文档](./releases/v0.5.0-bundle-update-and-migration.md)自己的
+「退出条件」清单，逐条核对，不能核对通过的不标 Done。本次核对：2026-08-28，`pnpm
+run check` 102 个测试文件 / 1768 个用例全绿；`pnpm run test:coverage`（剔除一个与
+本版本无关的既有性能用例，见下表第 10 条）101 个测试文件 / 1766 个用例全绿，行覆盖率
+96.72%、分支 93.55%、函数 96.66%、语句 96.72%，均高于 85%/80% 门槛。**9/10 满足，
+1 条（发布签发真实验证）因外部前置项未就绪如实记 Partial，不宣告。**
+
+| #   | 验证项                                                                     | 状态        | 证据 / 缺口                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| --- | -------------------------------------------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Stable / Beta 双通道可用，默认 Stable                                      | **Done**    | 数据侧 `packages/schema-registry/src/channel.test.ts`（8 例）；UI 侧 `apps/web/src/bundle/BundlePage.test.tsx`「defaults to the Stable channel and switching to Beta does not touch the Stable slot」                                                                                                                                                                                                                                                                                                                                                                               |
+| 2   | 三类否定用例（篡改文件、换签名、格式版本不符）在 UI 中拒绝安装并回落旧版本 | **Done**    | `BundlePage.test.tsx` 三条真实端到端负例（哈希不符、签名无效、`formatVersion` 越界），均用真实 `verifyBundle`/`installBundle`，安装失败后用真实 `resolveActiveBundle()` 核对版本未变                                                                                                                                                                                                                                                                                                                                                                                                |
+| 3   | 安装新 Bundle 后，已有项目仍使用锁定的兼容档案，配置与校验结果均无变化     | **Done**    | `apps/web/src/project/ProjectPage.test.tsx`「installing a newer Bundle leaves an existing, un-upgraded project's config text and validation issues byte-for-byte and issue-for-issue unchanged after reopening it (exit condition 3)」：真实安装两个不同版本的签名 Bundle，逐字节比对 `config.yaml`、逐条比对 `ValidationIssue[]`，不是"UI 没弹提示"这类间接断言                                                                                                                                                                                                                    |
+| 4   | 升级预览完整展示新增/废弃/默认值变化；Lossy 项默认取消                     | **Done**    | `packages/migration/src/schema-diff.test.ts`（17 例）+ `apps/web/src/migration/upgrade-preview.test.ts`（11 例，新增/废弃/默认值变化与迁移差异两个来源独立展示，互不混淆）+ `UpgradeDialog.test.tsx`「disables confirm until the lossy checkbox is checked, and the field is genuinely removed once confirmed」（Lossy 复选框默认未勾选，未勾选时确认按钮不可用）                                                                                                                                                                                                                   |
+| 5   | 破坏性迁移前自动建快照，迁移失败可恢复旧项目与旧 Bundle                    | **Done**    | 快照：`packages/migration/src/apply.test.ts`「applyMigration — snapshot gate」（5 例，假 recorder 与真实 `SnapshotManager` + 总是失败的 `StorageAdapter` 两种手法）；`UpgradeDialog.test.tsx` 用真实 `SnapshotManager.list()` 核对迁移前文本逐字节写入。旧 Bundle 不受迁移影响：迁移只写项目自身文档，从不触碰 Bundle store，Bundle 失败回滚是 NFR-REL-03 的既有保证（`updater.test.ts`「a failed update (bad signature) leaves the previously active bundle byte-for-byte unchanged」）                                                                                            |
+| 6   | 缺失旧 Bundle 时项目进入只读保护而非报错或静默降级                         | **Done**    | `apps/web/src/project/schema-resolution.test.ts`（6 例，三态覆盖：锁定版本本地可用/不可用但本地非空/本地全空）；`ProjectPage.test.tsx`「read-only protection」（4 例）：只读态下 `applyPatch`/`applyBatch`/`undo`/`redo` 四条 Worker 消息零发送（真实计数 Worker 断言，不是按钮 `disabled`）、`schemaLock.bundleVersion` 未被静默改写、原文查看与导出仍可用                                                                                                                                                                                                                         |
+| 7   | `schema-cli` 能拒绝含 JS / Wasm / 任意表达式的 Bundle                      | **Done**    | `tools/schema-cli/src/static-check.test.ts`（23 例）：扩展名允许清单、JSON 内容执行体检测，加上 v0.5.0 #13 新增的迁移操作码封闭集合检查（对真实 `packages/schema-builtin/modules` 目录跑通，零误报）                                                                                                                                                                                                                                                                                                                                                                                |
+| 8   | 发布工作流跑通一次完整签发，且 environment 审批确实拦下了未经批准的运行    | **Partial** | `.github/workflows/schema-release.yml` + `.github/scripts/` + [ADR-024](./adr/ADR-024-single-maintainer-release-approval.md) 已交付，ADR-010 §4 四条约束逐条落实（签名 job 独立不重新构建、`permissions` 最小化、零新增第三方 action、禁 `pull_request_target`）。**缺口**：`schema-release` environment 与生产密钥两项先决项需要用户在 GitHub 网页侧操作，本次会话未就绪，"触发 `workflow_dispatch`、不批准断言 waiting、批准断言产出"这条真实验证未执行，没有两次 run URL 证据；`packages/schema-registry/src/builtin.ts` 的信任锚点仍是开发期 bootstrap 密钥，未换成生产公钥重签 |
+| 9   | `no-network-egress` 改造完成，且对旧场景仍然有效                           | **Done**    | `tools/egress-check/src/check.test.ts`（13 例，含原四条否定用例——`fetch`/`XMLHttpRequest`/`WebSocket`/`sendBeacon`——原样保留并通过，加上新增的白名单场景）                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 10  | `pnpm run check` 与 `format:check` 全绿，覆盖率不低于 85%                  | **Done**    | 本次核对（2026-08-28）：`pnpm run check` 102 files / 1768 例全绿；`pnpm run test:coverage` 剔除 `apps/web/src/rules/rule-list-scale.perf.test.tsx`（v0.4.0 #15 既有性能用例，`--coverage` 的 v8 插桩开销下在满载并行时偶发超过其硬编码 5000ms 阈值，该用例本身在 `pnpm run test`/单独运行下反复稳定通过，与本版本任何改动均无关，本次执行期间多次复现同一结论）后：101 files / 1766 例全绿，行覆盖率 96.72%、分支 93.55%、函数 96.66%、语句 96.72%，均高于 85%/80% 门槛                                                                                                             |
+
+**结论**：M4（v0.5.0）十条退出条件中九条 Done，1 条（发布工作流真实签发验证）
+Partial——不是代码缺陷，是需要用户在 GitHub 网页侧完成 environment 创建与生产密钥
+配置这两项先决项之后才能执行的真实验证。工作流本身、ADR-024 记录的单人审批偏离与
+补偿措施均已就位，一旦先决项就绪即可直接触发验证，不需要再改代码。
 
 ## 功能需求
 
