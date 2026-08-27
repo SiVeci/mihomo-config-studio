@@ -68,6 +68,7 @@ tools/
   webcrypto-probe/     Ed25519 WebCrypto 可用性实测载体        ✅ M0 已验证（ADR-013）
   upstream-watch/      上游文档 / 示例变更监控                 🚧 规划中，未建
   core-test-runner/    Mihomo 配置测试矩阵                     ✅ v1.19.29 下载+校验+内核测试 + CI job（v0.3.0 #21）
+  egress-check/        packages/** 出网白名单守卫（CI 强制）   ✅ 路径级+形态级双层校验，四条原否定用例保留（v0.5.0 #3）
 ```
 
 ## 本地开发

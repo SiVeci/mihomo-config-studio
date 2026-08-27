@@ -104,17 +104,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # NFR-SEC-01 / release blocker: domain packages must contain no outbound
-      # network calls. This is a coarse guard; it fails loudly if someone adds one.
-      - name: Reject network calls in domain packages
-        run: |
-          if grep -rnE '\b(fetch|XMLHttpRequest|WebSocket|navigator\.sendBeacon)\s*\(' \
-               --include='*.ts' --include='*.tsx' \
-               packages/ 2>/dev/null | grep -v '\.test\.ts'; then
-            echo "::error::Domain packages must not perform network I/O (NFR-SEC-01)."
-            exit 1
-          fi
-          echo "No network egress found in packages/."
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # NFR-SEC-01 / release blocker: packages/** must contain no network call
+      # outside a fixed, path-exact allowlist (v0.5.0 decision F4/F5), and the
+      # allowlisted file must never send a request body. tools/egress-check
+      # has its own unit tests (tools/egress-check/src/check.test.ts); this
+      # step just runs it against the real tree.
+      - name: Build egress checker
+        run: pnpm --filter @mcs/egress-check exec tsc -p tsconfig.json
+
+      - name: Reject network calls in packages/** outside the egress allowlist
+        run: node tools/egress-check/dist/index.js packages
 
   core-config-test:
     name: built-in templates pass the real v1.19.29 kernel config test
