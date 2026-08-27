@@ -74,4 +74,33 @@ describe('run (v0.5.0 #3)', () => {
     expect(exitCode).toBe(1);
     errorSpy.mockRestore();
   });
+
+  it('never descends into a dist/ build output directory', () => {
+    // A source doc comment mentioning "fetch(" can end up copied into a
+    // compiled .d.ts file's leading comment — dist/ must never be scanned,
+    // or a local `tsc -b` run before this tool would false-positive.
+    const sourceDir = makeSourceDir({
+      'schema-registry/src/updater.ts': 'export const noop = () => {};',
+      'schema-registry/dist/updater.d.ts': '/** calls the real fetch( here */',
+    });
+
+    expect(run(sourceDir)).toBe(0);
+  });
+
+  it('never descends into a node_modules/ directory', () => {
+    const sourceDir = makeSourceDir({
+      'schema-registry/src/clean.ts': 'export const noop = () => {};',
+      'node_modules/some-dep/index.ts': 'await fetch(url);',
+    });
+
+    expect(run(sourceDir)).toBe(0);
+  });
+
+  it('ignores .d.ts declaration files even outside a dist/-named directory', () => {
+    const sourceDir = makeSourceDir({
+      'schema-registry/types/updater.d.ts': '/** calls the real fetch( here */',
+    });
+
+    expect(run(sourceDir)).toBe(0);
+  });
 });

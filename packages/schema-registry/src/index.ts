@@ -44,6 +44,18 @@ export type {
   StoredBundle,
 } from './store.js';
 export { bundleStoreFrom } from './storage-bridge.js';
+export { applyUpdate, fetchBundle, planUpdate } from './updater.js';
+export type {
+  BundleSource,
+  FetchBundleResult,
+  FetchBundleSuccess,
+  FetchBytes,
+  PlanUpdateOptions,
+  PlanUpdateReason,
+  PlanUpdateResult,
+  UpdaterErrorCode,
+  UpdaterFailure,
+} from './updater.js';
 export {
   bytesToHex,
   canonicalManifestJson,

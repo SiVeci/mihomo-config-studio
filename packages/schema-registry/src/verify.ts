@@ -8,8 +8,11 @@ import {
  * Verifies a raw Ed25519 signature against a message. The concrete backend
  * is pluggable (ADR-013): Android WebView was measured to not support
  * `crypto.subtle`'s Ed25519 algorithm as of this version, so callers that
- * need to work there must supply an alternative implementation later
- * (deferred to v0.5.0, when networked Bundle updates actually need one).
+ * need to work there must supply an alternative implementation later. The
+ * pluggable port itself is what v0.5.0 needed (networked Bundle updates,
+ * `updater.ts`) and already has — the actual pure-JS/WASM fallback backend
+ * is Android integration work, deferred to v0.6.0 (reassessed v0.5.0 #4;
+ * was previously mis-dated "v0.5.0" here).
  */
 export interface Ed25519Verifier {
   verify(publicKey: Uint8Array, signature: Uint8Array, message: Uint8Array): Promise<boolean>;
@@ -72,7 +75,7 @@ function sortKeysDeep(value: unknown): unknown {
 }
 
 /** MAJOR.MINOR.PATCH only; positive when `a` is newer than `b`. */
-function compareVersions(a: string, b: string): number {
+export function compareVersions(a: string, b: string): number {
   const partsA = a.split('.').map(Number);
   const partsB = b.split('.').map(Number);
   const length = Math.max(partsA.length, partsB.length);
