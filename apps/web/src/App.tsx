@@ -1,6 +1,7 @@
 import { IndexedDbStorageAdapter } from '@mcs/storage';
 import { useMemo, type ReactNode } from 'react';
 
+import { BundlePage } from './bundle/BundlePage.js';
 import { t } from './i18n/index.js';
 import { ProjectPage } from './project/ProjectPage.js';
 import { HashRouter, Routes, useRoutePath } from './router.js';
@@ -20,12 +21,29 @@ function ProjectPageRoute(): ReactNode {
   return <ProjectPage adapter={adapter} client={client} />;
 }
 
+/**
+ * `/bundle` (decision F10): Bundle management is independent of whichever
+ * project happens to be open and worth bookmarking/reloading into directly
+ * — exactly the case `router.tsx`'s own doc comment names as the bar for
+ * promoting something to a real route, unlike the main column's
+ * form/rules/graph view switch (still `useState`, v0.4.0 #7). No
+ * `updateSources` is wired yet — no production Bundle host is decided
+ * until #14 — so the page's own "not configured" state covers this for now.
+ */
+function BundlePageRoute(): ReactNode {
+  const adapter = useMemo(() => new IndexedDbStorageAdapter(), []);
+  return <BundlePage adapter={adapter} />;
+}
+
 function NotFoundPage(): ReactNode {
   const path = useRoutePath();
   return <p>{t('app.notFoundPath', { path })}</p>;
 }
 
-const ROUTES: readonly Route[] = [{ path: '/', element: <ProjectPageRoute /> }];
+const ROUTES: readonly Route[] = [
+  { path: '/', element: <ProjectPageRoute /> },
+  { path: '/bundle', element: <BundlePageRoute /> },
+];
 
 export function App(): ReactNode {
   return (

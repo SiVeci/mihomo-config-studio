@@ -7,7 +7,7 @@ export {
 } from './builtin.js';
 export type { BuiltinBundle } from './builtin.js';
 export { resolveTrustAnchors } from './trust-anchors.js';
-export type { ResolveTrustAnchorsWarning } from './trust-anchors.js';
+export type { ResolveTrustAnchorsResult, ResolveTrustAnchorsWarning } from './trust-anchors.js';
 export {
   channelSlotKey,
   DEFAULT_BUNDLE_CHANNEL,
