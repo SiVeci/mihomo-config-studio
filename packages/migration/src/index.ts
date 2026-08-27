@@ -1,6 +1,8 @@
 export { loadMigrations } from './load.js';
 export type { LoadMigrationsResult } from './load.js';
 export { buildMigrationPlan, isLossyOperation, MIGRATION_OPERATION_KINDS } from './plan.js';
+export { diffSchemas, SchemaDiffError } from './schema-diff.js';
+export type { DefaultChangedEntry, SchemaDiff, SchemaDiffEntry } from './schema-diff.js';
 export type {
   DeprecateFieldOperation,
   MigrationOperation,
