@@ -182,7 +182,14 @@ export interface ModuleManifest {
   root: string[];
   version: string;
   dependsOn?: string[];
-  mihomo?: { minVersion?: string; maxTestedVersion?: string };
+  mihomo?: {
+    minVersion?: string;
+    maxTestedVersion?: string;
+    /** Commit SHA of the upstream tag this module's fields were verified against (ADR-012). */
+    upstreamCommit?: string;
+    /** Date the upstream docs/source were checked, `YYYY-MM-DD` (ADR-012). */
+    docsSnapshot?: string;
+  };
 }
 
 /**

@@ -43,65 +43,81 @@ export const BUILTIN_MODULE: SchemaModule = GENERAL_MODULE;
  * `modules/rules.json` and `modules/sub-rules.json`, the ninth and tenth
  * (and last — PRD §8.3 names ten P0 modules total). v0.5.0 #0 turned the
  * single bootstrap key into a `[current, next]` shaped array (ADR-010 §3)
- * — still the same bootstrap keypair, only its declared shape changed;
+ * — still the same bootstrap keypair, only its declared shape changed.
+ * v0.5.0 #1 added the required `mihomo` block to `BundleManifest` (PRD
+ * §8.9, ADR-012) and `upstreamCommit`/`docsSnapshot` to every module's own
+ * `module.manifest.json` (ADR-012's landing table) — both changes touch
+ * every module's serialized bytes and the manifest's signed content, so
+ * this re-issue regenerated a fresh bootstrap keypair (the v0.5.0 #0 one
+ * was itself only ever a placeholder single-entry array) and bumped
+ * `version` to `0.5.0` (the release arc this content now ships with).
  * `tools/schema-cli` must re-issue this file against the real key custody
  * workflow before any Bundle-update feature ships to users (v0.5.0 #14).
  */
 export const BUILTIN_TRUST_ANCHORS_HEX: readonly string[] = [
-  'cb9b7d5404553029d789b56101e2df9d5d6afd66078487342580b2e34445ee3c',
+  '5dcade308a5c8b24f40c0a5e7c4e0a10c6f70cbf13be442d777314750d5220fc',
 ];
 
 export const BUILTIN_MANIFEST: BundleManifest = {
   bundleId: 'builtin',
-  version: '0.4.0',
+  version: '0.5.0',
   channel: 'stable',
   formatVersion: 1,
   requiresApp: '0.1.0',
+  mihomo: {
+    minVersion: '1.19.29',
+    maxTestedVersion: '1.19.29',
+    upstreamCommit: 'e26714a181ac0e2fa803453c0a8e9a9ce94e31cb',
+    docsSnapshot: '2026-08-19',
+  },
+  // Path-sorted (localeCompare), matching what `tools/schema-cli`'s
+  // `packDirectory` produces for a real Bundle — canonicalManifestJson signs
+  // array order as-is, so this array's order is part of the signed content.
   files: [
     {
-      path: BUILTIN_MODULE_PATH,
-      sha256: '1ad10dd3d229d69053d5f7ac80c311b5a84a238bedb51c9ff57d1779e74d9418',
-    },
-    {
       path: 'modules/dns.json',
-      sha256: '8eb6a713fab06359f7ad3760f107fdc3106f54022725fcc2ac8273d839f4740b',
+      sha256: 'a3f5ccca64bcfb38c24f1ec227d043cdb3138b6da23c5c77f90713c15bbf3885',
     },
     {
-      path: 'modules/sniffer.json',
-      sha256: '9baf3d27faadc058f96b7569303ba8175a25bf47eccc196d0417fcdc533e692c',
+      path: BUILTIN_MODULE_PATH,
+      sha256: 'cf6e4ce91e964f0b5621f3c5983f4ba7545faca744fd7441fad3cdb6dbd465fb',
     },
     {
       path: 'modules/inbound.json',
-      sha256: '529d1b156059ee610b1aef6afe3787dabec325662e6ed3bffec29a3977d57672',
+      sha256: 'de2d81b1bd50b94df9d540fb29a6aff8c2ef5dc84fab81e5b3d0a1d8480c936d',
     },
     {
       path: 'modules/proxies.json',
-      sha256: 'e1e00f95cf6c020e229e7787b1cf141a4075da11806ced491affb50e60022680',
-    },
-    {
-      path: 'modules/proxy-providers.json',
-      sha256: '614e59a5ee51f069441c7d716a916b43a02347df4f1cf2573d82118fc0289f76',
+      sha256: 'e72e326de71be73a831dd920e4c3d218b4e4f952872f648a32f2122217aca153',
     },
     {
       path: 'modules/proxy-groups.json',
-      sha256: 'ed6d113b18f9da2e5b453c2d0549477efe8667225f04d671a70f7ad86ac320b0',
+      sha256: 'c0c1815beddc3c0bbdb410c9a52588762dff714c7ed7b2b6e3a73d981d06ce2b',
+    },
+    {
+      path: 'modules/proxy-providers.json',
+      sha256: 'c9dfdcb5af14952d9423b062e09734b723f1840887e9a8f0256a2e5bbf91a130',
     },
     {
       path: 'modules/rule-providers.json',
-      sha256: '9c35ee2f6c8386d8f3995c9ee994f378319295340d39bdfdb49dc749dedafe93',
+      sha256: '94488f3b9b762e4e06c2a5aedc3695f0b4d274db10f9937d87fd51fd2727d171',
     },
     {
       path: 'modules/rules.json',
-      sha256: 'db06492fec86b366c992c14a5d69e5a4a171251f302438d8c68ae3ab44400061',
+      sha256: 'b32339d90cc0a82f38ed3b9798c80e9428de609e0ad971767adbd5e1b38ac44c',
+    },
+    {
+      path: 'modules/sniffer.json',
+      sha256: 'c5389be68b6da004778ebb7b9b2e24e69f9a931107552b435b249f0d9ff7871e',
     },
     {
       path: 'modules/sub-rules.json',
-      sha256: 'db7168db853643f84222c91c9c9636dbb610c144497f83830fe550fc75a51ed4',
+      sha256: 'bc1a1dec598b97e7ee2cc1f8ffa0e112421cd404d34f312f654f1cd35ba89595',
     },
   ],
   signature:
-    '7416e9d21e1163b39c2274f05c3ea9cf85b061a29809c419ffe541fa414c5ce23ea0d84ea4cc6344c69053d24571b0e0bb0e53c3df291c86a1165a922f63340e',
-  signedAt: '2026-08-26T00:00:00Z',
+    '25d58e362c3a647f1e26193e7819d729e48939c99224199fd641037f00c3eada3213dc3d441c38006dc1d170c22c93b4f2c79f55f88b7c5592fbce586fb90e09',
+  signedAt: '2026-08-27T00:00:00Z',
 };
 
 export interface BuiltinBundle {

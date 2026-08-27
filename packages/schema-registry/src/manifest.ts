@@ -12,12 +12,28 @@ export interface BundleFileEntry {
   readonly sha256: string;
 }
 
+/**
+ * The Mihomo core version range this Bundle's content was authored and
+ * verified against (PRD §8.9 reference structure, ADR-012). Required, not
+ * optional: a Bundle with no declared upstream basis has no way for the
+ * installer or a maintainer to know what it was checked against.
+ */
+export interface BundleManifestMihomoInfo {
+  readonly minVersion: string;
+  readonly maxTestedVersion: string;
+  /** Commit SHA of the upstream tag this Bundle's content was verified against. */
+  readonly upstreamCommit: string;
+  /** Date the upstream docs/source were checked, `YYYY-MM-DD`. */
+  readonly docsSnapshot: string;
+}
+
 export interface BundleManifest {
   readonly bundleId: string;
   readonly version: string;
   readonly channel: BundleChannel;
   readonly formatVersion: number;
   readonly requiresApp: string;
+  readonly mihomo: BundleManifestMihomoInfo;
   readonly files: readonly BundleFileEntry[];
   readonly signature: string;
   readonly signedAt: string;
@@ -51,6 +67,7 @@ export function validateBundleManifest(value: unknown): BundleManifestIssue[] {
   checkChannel(value.channel, issues);
   checkFormatVersion(value.formatVersion, issues);
   checkString(value.requiresApp, 'requiresApp', issues);
+  checkMihomo(value.mihomo, issues);
   checkFiles(value.files, issues);
   checkString(value.signature, 'signature', issues);
   checkString(value.signedAt, 'signedAt', issues);
@@ -89,6 +106,21 @@ function checkFormatVersion(value: unknown, issues: BundleManifestIssue[]): void
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
     issues.push({ code: 'BUNDLE_MANIFEST_INVALID_TYPE', path: 'formatVersion' });
   }
+}
+
+function checkMihomo(value: unknown, issues: BundleManifestIssue[]): void {
+  if (value === undefined) {
+    issues.push({ code: 'BUNDLE_MANIFEST_MISSING_FIELD', path: 'mihomo' });
+    return;
+  }
+  if (!isRecord(value)) {
+    issues.push({ code: 'BUNDLE_MANIFEST_INVALID_TYPE', path: 'mihomo' });
+    return;
+  }
+  checkString(value.minVersion, 'mihomo.minVersion', issues);
+  checkString(value.maxTestedVersion, 'mihomo.maxTestedVersion', issues);
+  checkString(value.upstreamCommit, 'mihomo.upstreamCommit', issues);
+  checkString(value.docsSnapshot, 'mihomo.docsSnapshot', issues);
 }
 
 function checkFiles(value: unknown, issues: BundleManifestIssue[]): void {

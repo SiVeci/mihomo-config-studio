@@ -38,6 +38,12 @@ async function buildSignedBundle(
     channel: 'stable',
     formatVersion: 1,
     requiresApp: '0.1.0',
+    mihomo: {
+      minVersion: '1.19.29',
+      maxTestedVersion: '1.19.29',
+      upstreamCommit: 'e26714a181ac0e2fa803453c0a8e9a9ce94e31cb',
+      docsSnapshot: '2026-08-19',
+    },
     files: [{ path, sha256 }],
     signature: '',
     signedAt: '2026-08-12T00:00:00Z',
@@ -157,6 +163,12 @@ describe('verifyBundle (FR-UPD-03, NFR-SEC-04)', () => {
       channel: 'stable',
       formatVersion: 1,
       requiresApp: '0.1.0',
+      mihomo: {
+        minVersion: '1.19.29',
+        maxTestedVersion: '1.19.29',
+        upstreamCommit: 'e26714a181ac0e2fa803453c0a8e9a9ce94e31cb',
+        docsSnapshot: '2026-08-19',
+      },
       files: [
         { path: 'a.json', sha256: goodHash },
         { path: 'b.json', sha256: badHash },
@@ -330,6 +342,12 @@ describe('canonicalManifestJson', () => {
       channel: 'stable',
       formatVersion: 1,
       requiresApp: '0.1.0',
+      mihomo: {
+        minVersion: '1.19.29',
+        maxTestedVersion: '1.19.29',
+        upstreamCommit: 'e26714a181ac0e2fa803453c0a8e9a9ce94e31cb',
+        docsSnapshot: '2026-08-19',
+      },
       files: [{ path: 'x.json', sha256: 'abc' }],
       signature: 'irrelevant',
       signedAt: '2026-08-12T00:00:00Z',
@@ -342,6 +360,7 @@ describe('canonicalManifestJson', () => {
       channel: base.channel,
       version: base.version,
       bundleId: base.bundleId,
+      mihomo: base.mihomo,
       signature: 'a-completely-different-signature',
     };
 

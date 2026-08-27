@@ -6,6 +6,7 @@ import {
   type BundleChannel,
   type BundleFileEntry,
   type BundleManifest,
+  type BundleManifestMihomoInfo,
 } from '@mcs/schema-registry';
 
 import { checkExtension, checkJsonContent, type StaticCheckIssue } from './static-check.js';
@@ -17,6 +18,7 @@ export interface PackOptions {
   readonly channel: BundleChannel;
   readonly formatVersion: number;
   readonly requiresApp: string;
+  readonly mihomo: BundleManifestMihomoInfo;
   readonly signedAt: string;
 }
 
@@ -72,6 +74,7 @@ export async function packDirectory(options: PackOptions): Promise<PackResult> {
     channel: options.channel,
     formatVersion: options.formatVersion,
     requiresApp: options.requiresApp,
+    mihomo: options.mihomo,
     files,
     signature: '',
     signedAt: options.signedAt,

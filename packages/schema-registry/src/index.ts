@@ -22,6 +22,7 @@ export type {
   BundleManifest,
   BundleManifestIssue,
   BundleManifestIssueCode,
+  BundleManifestMihomoInfo,
 } from './manifest.js';
 export {
   builtinAsStoredBundle,

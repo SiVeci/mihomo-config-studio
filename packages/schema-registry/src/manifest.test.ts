@@ -143,11 +143,52 @@ describe('BundleManifest structural validation (FR-UPD-01)', () => {
         'channel',
         'formatVersion',
         'requiresApp',
+        'mihomo',
         'files',
         'signature',
         'signedAt',
       ].sort(),
     );
     expect(issues.every((issue) => issue.code === 'BUNDLE_MANIFEST_MISSING_FIELD')).toBe(true);
+  });
+
+  it('rejects a manifest missing the mihomo block entirely', () => {
+    expect(validateBundleManifest(omit(valid(), 'mihomo'))).toContainEqual({
+      code: 'BUNDLE_MANIFEST_MISSING_FIELD',
+      path: 'mihomo',
+    });
+  });
+
+  it('rejects a mihomo block that is not an object', () => {
+    expect(validateBundleManifest({ ...valid(), mihomo: 'v1.19.29' })).toContainEqual({
+      code: 'BUNDLE_MANIFEST_INVALID_TYPE',
+      path: 'mihomo',
+    });
+  });
+
+  it('rejects a mihomo block missing or mistyping any of its four fields', () => {
+    const { mihomo, ...rest } = valid();
+    expect(validateBundleManifest({ ...rest, mihomo: omit(mihomo, 'minVersion') })).toContainEqual({
+      code: 'BUNDLE_MANIFEST_MISSING_FIELD',
+      path: 'mihomo.minVersion',
+    });
+    expect(
+      validateBundleManifest({ ...rest, mihomo: { ...mihomo, maxTestedVersion: 42 } }),
+    ).toContainEqual({
+      code: 'BUNDLE_MANIFEST_INVALID_TYPE',
+      path: 'mihomo.maxTestedVersion',
+    });
+    expect(
+      validateBundleManifest({ ...rest, mihomo: omit(mihomo, 'upstreamCommit') }),
+    ).toContainEqual({
+      code: 'BUNDLE_MANIFEST_MISSING_FIELD',
+      path: 'mihomo.upstreamCommit',
+    });
+    expect(
+      validateBundleManifest({ ...rest, mihomo: { ...mihomo, docsSnapshot: '' } }),
+    ).toContainEqual({
+      code: 'BUNDLE_MANIFEST_INVALID_TYPE',
+      path: 'mihomo.docsSnapshot',
+    });
   });
 });

@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import type { BundleChannel } from '@mcs/schema-registry';
+import type { BundleChannel, BundleManifestMihomoInfo } from '@mcs/schema-registry';
 
 import { packDirectory } from './pack.js';
 import { decodePrivateKeyBase64, signManifest } from './sign.js';
@@ -13,6 +13,7 @@ export interface CliArgs {
   readonly channel: BundleChannel;
   readonly formatVersion: number;
   readonly requiresApp: string;
+  readonly mihomo: BundleManifestMihomoInfo;
   readonly outFile: string;
 }
 
@@ -23,6 +24,10 @@ const REQUIRED_FLAGS = [
   '--channel',
   '--format-version',
   '--requires-app',
+  '--mihomo-min-version',
+  '--mihomo-max-tested-version',
+  '--mihomo-upstream-commit',
+  '--mihomo-docs-snapshot',
   '--out',
 ] as const;
 
@@ -67,6 +72,12 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
     channel,
     formatVersion,
     requiresApp: requireFlag(flags, '--requires-app'),
+    mihomo: {
+      minVersion: requireFlag(flags, '--mihomo-min-version'),
+      maxTestedVersion: requireFlag(flags, '--mihomo-max-tested-version'),
+      upstreamCommit: requireFlag(flags, '--mihomo-upstream-commit'),
+      docsSnapshot: requireFlag(flags, '--mihomo-docs-snapshot'),
+    },
     outFile: requireFlag(flags, '--out'),
   };
 }
@@ -95,6 +106,7 @@ export async function run(argv: readonly string[], privateKeyBase64: string): Pr
     channel: args.channel,
     formatVersion: args.formatVersion,
     requiresApp: args.requiresApp,
+    mihomo: args.mihomo,
     signedAt: new Date().toISOString(),
   });
 

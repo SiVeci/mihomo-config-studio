@@ -9,6 +9,12 @@ const MANIFEST: BundleManifest = {
   channel: 'stable',
   formatVersion: 1,
   requiresApp: '0.1.0',
+  mihomo: {
+    minVersion: '1.19.29',
+    maxTestedVersion: '1.19.29',
+    upstreamCommit: 'e26714a181ac0e2fa803453c0a8e9a9ce94e31cb',
+    docsSnapshot: '2026-08-19',
+  },
   files: [{ path: 'a.json', sha256: '0'.repeat(64) }],
   signature: 'placeholder-ignored-by-canonicalManifestJson',
   signedAt: '2026-08-12T00:00:00Z',
