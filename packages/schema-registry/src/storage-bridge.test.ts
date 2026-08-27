@@ -1,12 +1,16 @@
 import { MemoryStorageAdapter } from '@mcs/storage';
 import { describe, expect, it } from 'vitest';
 
+import { channelSlotKey } from './channel.js';
 import type { BundleManifest } from './manifest.js';
 import { installBundle, rollbackBundle } from './store.js';
 import type { StoredBundle } from './store.js';
 import { generateTestKeyPair, type TestKeyPair } from './testing/keys.js';
 import { bundleStoreFrom } from './storage-bridge.js';
 import { bytesToHex, canonicalManifestJson, sha256Hex } from './verify.js';
+
+const STABLE_ACTIVE = channelSlotKey('stable', 'active');
+const STABLE_PREVIOUS = channelSlotKey('stable', 'previous');
 
 function manifestFixture(bundleId: string): BundleManifest {
   return {
@@ -125,12 +129,12 @@ describe('bundleStoreFrom (NFR-REL-01)', () => {
     const { manifest: v2, files: v2Files } = await buildSignedBundle(keyPair, 'v2');
     expect((await installBundle(store, v2, v2Files, options)).ok).toBe(true);
 
-    expect(((await store.read('active')) as StoredBundle).manifest.bundleId).toBe('v2');
-    expect(((await store.read('previous')) as StoredBundle).manifest.bundleId).toBe('v1');
+    expect(((await store.read(STABLE_ACTIVE)) as StoredBundle).manifest.bundleId).toBe('v2');
+    expect(((await store.read(STABLE_PREVIOUS)) as StoredBundle).manifest.bundleId).toBe('v1');
 
     const rollback = await rollbackBundle(store);
 
     expect(rollback).toEqual({ ok: true });
-    expect(((await store.read('active')) as StoredBundle).manifest.bundleId).toBe('v1');
+    expect(((await store.read(STABLE_ACTIVE)) as StoredBundle).manifest.bundleId).toBe('v1');
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { BUILTIN_BUNDLE } from './builtin.js';
+import { channelSlotKey } from './channel.js';
 import type { BundleManifest } from './manifest.js';
 import { createRegistry } from './registry.js';
 import {
@@ -20,6 +21,11 @@ const DEFAULT_OPTIONS = {
   minFormatVersion: 1,
   maxFormatVersion: 1,
 };
+
+const STABLE_ACTIVE = channelSlotKey('stable', 'active');
+const STABLE_PREVIOUS = channelSlotKey('stable', 'previous');
+const BETA_ACTIVE = channelSlotKey('beta', 'active');
+const BETA_PREVIOUS = channelSlotKey('beta', 'previous');
 
 async function buildSignedBundle(options: {
   keyPair: TestKeyPair;
@@ -79,8 +85,8 @@ describe('installBundle (FR-UPD-04, NFR-REL-03)', () => {
       code: 'BUNDLE_HASH_MISMATCH',
       path: 'modules/general.json',
     });
-    expect(await installedBundleId(store, 'active')).toBe('v1');
-    expect(await store.read('previous')).toBeNull();
+    expect(await installedBundleId(store, STABLE_ACTIVE)).toBe('v1');
+    expect(await store.read(STABLE_PREVIOUS)).toBeNull();
   });
 
   it('leaves active untouched when re-signed with a different private key', async () => {
@@ -102,7 +108,7 @@ describe('installBundle (FR-UPD-04, NFR-REL-03)', () => {
     const result = await installBundle(store, bad, badFiles, options);
 
     expect(result).toEqual({ ok: false, code: 'BUNDLE_SIGNATURE_INVALID', path: 'signature' });
-    expect(await installedBundleId(store, 'active')).toBe('v1');
+    expect(await installedBundleId(store, STABLE_ACTIVE)).toBe('v1');
   });
 
   it('leaves active untouched when formatVersion is outside the supported range', async () => {
@@ -124,7 +130,7 @@ describe('installBundle (FR-UPD-04, NFR-REL-03)', () => {
     const result = await installBundle(store, bad, badFiles, options);
 
     expect(result).toEqual({ ok: false, code: 'BUNDLE_FORMAT_UNSUPPORTED', path: 'formatVersion' });
-    expect(await installedBundleId(store, 'active')).toBe('v1');
+    expect(await installedBundleId(store, STABLE_ACTIVE)).toBe('v1');
   });
 
   it('keeps only the two most recent bundles after three installs', async () => {
@@ -137,9 +143,136 @@ describe('installBundle (FR-UPD-04, NFR-REL-03)', () => {
       expect((await installBundle(store, manifest, files, options)).ok).toBe(true);
     }
 
-    expect([...(await store.list())].sort()).toEqual(['active', 'previous']);
-    expect(await installedBundleId(store, 'active')).toBe('v3');
-    expect(await installedBundleId(store, 'previous')).toBe('v2');
+    expect([...(await store.list())].sort()).toEqual([STABLE_ACTIVE, STABLE_PREVIOUS]);
+    expect(await installedBundleId(store, STABLE_ACTIVE)).toBe('v3');
+    expect(await installedBundleId(store, STABLE_PREVIOUS)).toBe('v2');
+  });
+});
+
+describe('channel separation (FR-UPD-02, v0.5.0 #2)', () => {
+  it('installing a beta-channelled bundle never touches the stable slot-pair', async () => {
+    const store = new MemoryBundleStore();
+    const keyPair = await generateTestKeyPair();
+    const options = { ...DEFAULT_OPTIONS, trustedPublicKeys: [keyPair.publicKeyRaw] };
+    const { manifest: stableManifest, files: stableFiles } = await buildSignedBundle({
+      keyPair,
+      bundleId: 'stable-v1',
+    });
+    await installBundle(store, stableManifest, stableFiles, options);
+
+    const { manifest: betaManifest, files: betaFiles } = await buildSignedBundle({
+      keyPair,
+      bundleId: 'beta-v1',
+      manifestOverrides: { channel: 'beta' },
+    });
+    const result = await installBundle(store, betaManifest, betaFiles, options);
+
+    expect(result.ok).toBe(true);
+    expect(await installedBundleId(store, STABLE_ACTIVE)).toBe('stable-v1');
+    expect(await store.read(STABLE_PREVIOUS)).toBeNull();
+    expect(await installedBundleId(store, BETA_ACTIVE)).toBe('beta-v1');
+  });
+
+  it('the slot-pair written follows the verified manifest.channel, not whatever the caller assumed', async () => {
+    const store = new MemoryBundleStore();
+    const keyPair = await generateTestKeyPair();
+    const options = { ...DEFAULT_OPTIONS, trustedPublicKeys: [keyPair.publicKeyRaw] };
+    const { manifest, files } = await buildSignedBundle({
+      keyPair,
+      bundleId: 'beta-only',
+      manifestOverrides: { channel: 'beta' },
+    });
+
+    await installBundle(store, manifest, files, options);
+
+    // A bundle whose signed content declares `channel: 'beta'` can never end
+    // up in the stable slot-pair, regardless of how the caller found it.
+    expect(await store.read(STABLE_ACTIVE)).toBeNull();
+    expect(await installedBundleId(store, BETA_ACTIVE)).toBe('beta-only');
+  });
+
+  it('resolveActiveBundle defaults to the stable channel', async () => {
+    const store = new MemoryBundleStore();
+    const keyPair = await generateTestKeyPair();
+    const options = { ...DEFAULT_OPTIONS, trustedPublicKeys: [keyPair.publicKeyRaw] };
+    const { manifest, files } = await buildSignedBundle({
+      keyPair,
+      bundleId: 'beta-only',
+      manifestOverrides: { channel: 'beta' },
+    });
+    await installBundle(store, manifest, files, options);
+
+    // Only a beta bundle is installed, so the default (stable) resolution
+    // must fall all the way back to the built-in bundle, not surface beta.
+    const resolved = await resolveActiveBundle(store, options);
+
+    expect(resolved.manifest.bundleId).toBe(BUILTIN_BUNDLE.manifest.bundleId);
+  });
+
+  it('resolveActiveBundle honors an explicit beta channel', async () => {
+    const store = new MemoryBundleStore();
+    const keyPair = await generateTestKeyPair();
+    const options = { ...DEFAULT_OPTIONS, trustedPublicKeys: [keyPair.publicKeyRaw] };
+    const { manifest, files } = await buildSignedBundle({
+      keyPair,
+      bundleId: 'beta-only',
+      manifestOverrides: { channel: 'beta' },
+    });
+    await installBundle(store, manifest, files, options);
+
+    const resolved = await resolveActiveBundle(store, options, 'beta');
+
+    expect(resolved.manifest.bundleId).toBe('beta-only');
+  });
+
+  it('switching to beta and back to stable returns the original stable bundle untouched', async () => {
+    const store = new MemoryBundleStore();
+    const keyPair = await generateTestKeyPair();
+    const options = { ...DEFAULT_OPTIONS, trustedPublicKeys: [keyPair.publicKeyRaw] };
+    const { manifest: stableManifest, files: stableFiles } = await buildSignedBundle({
+      keyPair,
+      bundleId: 'stable-v1',
+    });
+    await installBundle(store, stableManifest, stableFiles, options);
+
+    const { manifest: betaManifest, files: betaFiles } = await buildSignedBundle({
+      keyPair,
+      bundleId: 'beta-v1',
+      manifestOverrides: { channel: 'beta' },
+    });
+    await installBundle(store, betaManifest, betaFiles, options);
+
+    const resolvedStable = await resolveActiveBundle(store, options, 'stable');
+
+    expect(resolvedStable.manifest.bundleId).toBe('stable-v1');
+  });
+
+  it('rollbackBundle only swaps within one channel — rolling back beta never touches stable', async () => {
+    const store = new MemoryBundleStore();
+    const keyPair = await generateTestKeyPair();
+    const options = { ...DEFAULT_OPTIONS, trustedPublicKeys: [keyPair.publicKeyRaw] };
+    const { manifest: stableManifest, files: stableFiles } = await buildSignedBundle({
+      keyPair,
+      bundleId: 'stable-v1',
+    });
+    await installBundle(store, stableManifest, stableFiles, options);
+
+    for (const bundleId of ['beta-v1', 'beta-v2']) {
+      const { manifest, files } = await buildSignedBundle({
+        keyPair,
+        bundleId,
+        manifestOverrides: { channel: 'beta' },
+      });
+      await installBundle(store, manifest, files, options);
+    }
+
+    const result = await rollbackBundle(store, 'beta');
+
+    expect(result).toEqual({ ok: true });
+    expect(await installedBundleId(store, BETA_ACTIVE)).toBe('beta-v1');
+    expect(await installedBundleId(store, BETA_PREVIOUS)).toBe('beta-v2');
+    expect(await installedBundleId(store, STABLE_ACTIVE)).toBe('stable-v1');
+    expect(await store.read(STABLE_PREVIOUS)).toBeNull();
   });
 });
 
@@ -156,8 +289,8 @@ describe('rollbackBundle (FR-UPD-04)', () => {
     const result = await rollbackBundle(store);
 
     expect(result).toEqual({ ok: true });
-    expect(await installedBundleId(store, 'active')).toBe('v2');
-    expect(await installedBundleId(store, 'previous')).toBe('v3');
+    expect(await installedBundleId(store, STABLE_ACTIVE)).toBe('v2');
+    expect(await installedBundleId(store, STABLE_PREVIOUS)).toBe('v3');
   });
 
   it('is reversible: rolling back twice returns to the original active bundle', async () => {
@@ -172,8 +305,8 @@ describe('rollbackBundle (FR-UPD-04)', () => {
     await rollbackBundle(store);
     await rollbackBundle(store);
 
-    expect(await installedBundleId(store, 'active')).toBe('v2');
-    expect(await installedBundleId(store, 'previous')).toBe('v1');
+    expect(await installedBundleId(store, STABLE_ACTIVE)).toBe('v2');
+    expect(await installedBundleId(store, STABLE_PREVIOUS)).toBe('v1');
   });
 
   it('refuses to roll back when there is no previous bundle, without touching active', async () => {
@@ -186,7 +319,7 @@ describe('rollbackBundle (FR-UPD-04)', () => {
     const result = await rollbackBundle(store);
 
     expect(result).toEqual({ ok: false, code: 'BUNDLE_STORE_NO_PREVIOUS' });
-    expect(await installedBundleId(store, 'active')).toBe('only');
+    expect(await installedBundleId(store, STABLE_ACTIVE)).toBe('only');
   });
 
   it('refuses to roll back on a completely empty store', async () => {
@@ -202,13 +335,13 @@ describe('rollbackBundle (FR-UPD-04)', () => {
     const keyPair = await generateTestKeyPair();
     const { manifest, files } = await buildSignedBundle({ keyPair, bundleId: 'only-previous' });
     // Populate `previous` directly, bypassing installBundle, so `active` stays empty.
-    await store.write('previous', { manifest, files });
+    await store.write(STABLE_PREVIOUS, { manifest, files });
 
     const result = await rollbackBundle(store);
 
     expect(result).toEqual({ ok: true });
-    expect(await installedBundleId(store, 'active')).toBe('only-previous');
-    expect(await store.read('previous')).toBeNull();
+    expect(await installedBundleId(store, STABLE_ACTIVE)).toBe('only-previous');
+    expect(await store.read(STABLE_PREVIOUS)).toBeNull();
   });
 });
 
@@ -235,7 +368,7 @@ describe('resolveActiveBundle (FR-UPD-01, FR-UPD-04)', () => {
     await installBundle(store, v2, v2Files, options);
 
     // Simulate on-disk corruption directly, bypassing installBundle's own verification gate.
-    await store.write('active', {
+    await store.write(STABLE_ACTIVE, {
       manifest: v2,
       files: new Map([['modules/general.json', new TextEncoder().encode('{"corrupted":true}')]]),
     });
@@ -255,8 +388,8 @@ describe('resolveActiveBundle (FR-UPD-01, FR-UPD-04)', () => {
       files: new Map(),
     };
     const { manifest: badlySigned } = await buildSignedBundle({ keyPair, bundleId: 'previous' });
-    await store.write('active', shapeInvalid);
-    await store.write('previous', {
+    await store.write(STABLE_ACTIVE, shapeInvalid);
+    await store.write(STABLE_PREVIOUS, {
       manifest: { ...badlySigned, signature: bytesToHex(new Uint8Array(64)) },
       files: new Map(),
     });

@@ -1,5 +1,6 @@
 import { BUILTIN_BUNDLE } from './builtin.js';
-import type { BundleManifest } from './manifest.js';
+import { channelSlotKey, DEFAULT_BUNDLE_CHANNEL } from './channel.js';
+import type { BundleChannel, BundleManifest } from './manifest.js';
 import { verifyBundle, type BundleVerifyFailure, type VerifyBundleOptions } from './verify.js';
 
 export interface StoredBundle {
@@ -22,9 +23,6 @@ export interface BundleStore {
   remove(key: string): Promise<void>;
 }
 
-const ACTIVE_SLOT = 'active';
-const PREVIOUS_SLOT = 'previous';
-
 export type BundleInstallResult = { readonly ok: true } | BundleVerifyFailure;
 
 /**
@@ -33,8 +31,16 @@ export type BundleInstallResult = { readonly ok: true } | BundleVerifyFailure;
  * install leaves `active` (and `previous`) exactly as they were — this is
  * what "staging" means here, not a literal third slot. On success, the old
  * `active` becomes the new `previous`, discarding whatever `previous` held
- * before — the store only ever holds two slots, so a third generation is
- * dropped automatically rather than needing an explicit prune step.
+ * before — the store only ever holds two slots per channel, so a third
+ * generation is dropped automatically rather than needing an explicit prune
+ * step.
+ *
+ * The slot-pair written is `result.manifest.channel`, never a
+ * caller-supplied value (FR-UPD-02, v0.5.0 #2): the manifest decides which
+ * channel it belongs to, not whoever called `installBundle` — otherwise a
+ * Beta-channelled bundle could be installed into the Stable slot-pair simply
+ * because the caller said so, defeating the whole point of separate
+ * channels.
  */
 export async function installBundle(
   store: BundleStore,
@@ -47,37 +53,52 @@ export async function installBundle(
     return result;
   }
 
-  const oldActive = await store.read(ACTIVE_SLOT);
+  const activeSlot = channelSlotKey(result.manifest.channel, 'active');
+  const previousSlot = channelSlotKey(result.manifest.channel, 'previous');
+
+  const oldActive = await store.read(activeSlot);
   if (oldActive) {
-    await store.write(PREVIOUS_SLOT, oldActive);
+    await store.write(previousSlot, oldActive);
   }
-  await store.write(ACTIVE_SLOT, { manifest: result.manifest, files });
+  await store.write(activeSlot, { manifest: result.manifest, files });
   return { ok: true };
 }
 
 export type BundleRollbackResult =
   { readonly ok: true } | { readonly ok: false; readonly code: 'BUNDLE_STORE_NO_PREVIOUS' };
 
-/** Swaps `active` and `previous`. Explicit failure when there is nothing to roll back to — never a silent no-op. */
-export async function rollbackBundle(store: BundleStore): Promise<BundleRollbackResult> {
-  const previous = await store.read(PREVIOUS_SLOT);
+/**
+ * Swaps `active` and `previous` within one channel's slot-pair (defaults to
+ * Stable). Explicit failure when there is nothing to roll back to — never a
+ * silent no-op. Never crosses channels: rolling back Stable can never
+ * surface a Beta install, and vice versa.
+ */
+export async function rollbackBundle(
+  store: BundleStore,
+  channel: BundleChannel = DEFAULT_BUNDLE_CHANNEL,
+): Promise<BundleRollbackResult> {
+  const activeSlot = channelSlotKey(channel, 'active');
+  const previousSlot = channelSlotKey(channel, 'previous');
+
+  const previous = await store.read(previousSlot);
   if (!previous) {
     return { ok: false, code: 'BUNDLE_STORE_NO_PREVIOUS' };
   }
 
-  const active = await store.read(ACTIVE_SLOT);
-  await store.write(ACTIVE_SLOT, previous);
+  const active = await store.read(activeSlot);
+  await store.write(activeSlot, previous);
   if (active) {
-    await store.write(PREVIOUS_SLOT, active);
+    await store.write(previousSlot, active);
   } else {
-    await store.remove(PREVIOUS_SLOT);
+    await store.remove(previousSlot);
   }
   return { ok: true };
 }
 
 /**
- * Resolves the bundle that should actually be used: `active`, falling back
- * to `previous`, falling back to the built-in bundle if both slots are
+ * Resolves the bundle that should actually be used for one channel
+ * (defaults to Stable, FR-UPD-02): that channel's `active`, falling back to
+ * its `previous`, falling back to the built-in bundle if both slots are
  * empty or fail re-verification (on-disk corruption, not just a bad
  * install — a bad install never reaches the store in the first place). The
  * built-in bundle is compiled into the app and is never itself re-verified
@@ -87,8 +108,9 @@ export async function rollbackBundle(store: BundleStore): Promise<BundleRollback
 export async function resolveActiveBundle(
   store: BundleStore,
   options: VerifyBundleOptions,
+  channel: BundleChannel = DEFAULT_BUNDLE_CHANNEL,
 ): Promise<StoredBundle> {
-  for (const slot of [ACTIVE_SLOT, PREVIOUS_SLOT]) {
+  for (const slot of [channelSlotKey(channel, 'active'), channelSlotKey(channel, 'previous')]) {
     const candidate = await store.read(slot);
     if (!candidate) continue;
     const result = await verifyBundle(candidate.manifest, candidate.files, options);

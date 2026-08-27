@@ -8,6 +8,13 @@ export {
 export type { BuiltinBundle } from './builtin.js';
 export { resolveTrustAnchors } from './trust-anchors.js';
 export type { ResolveTrustAnchorsWarning } from './trust-anchors.js';
+export {
+  channelSlotKey,
+  DEFAULT_BUNDLE_CHANNEL,
+  readBundleChannelPreference,
+  writeBundleChannelPreference,
+} from './channel.js';
+export type { BundleStoreSlot } from './channel.js';
 export { isBundleManifest, validateBundleManifest } from './manifest.js';
 export { createRegistry } from './registry.js';
 export type {
