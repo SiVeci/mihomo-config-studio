@@ -296,11 +296,30 @@ export type ModuleLocale = 'zh-CN' | 'en';
 export type ModuleI18n = Record<ModuleLocale, Record<string, string>>;
 
 /**
- * `migrations` is deliberately not part of this shape yet: the version
- * document only requires the first three additions, and a field with no
- * consumer just invites someone to start populating it early. It gets a
- * real meaning — and a real evaluator — when migration lands in v0.5.0.
+ * One operation inside a module's declarative migration rule (ADR-025). The
+ * closed opcode set and the properly-typed, per-opcode shape live in
+ * `@mcs/migration`'s `MigrationOperation` — this package cannot depend on
+ * `@mcs/migration` (the dependency runs the other way: migration depends on
+ * schema-core), so this is deliberately the loose, Bundle-content shape:
+ * `op` is a plain string checked against the closed set at runtime
+ * (`checkMigrations`, same posture `checkRuleTypes` already takes for
+ * `payloadKind`), and operation-specific fields ride the index signature
+ * until `@mcs/migration`'s `loadMigrations` converts a validated one into
+ * the real, richly-typed `MigrationOperation`.
  */
+export interface MigrationOperationSpec {
+  op: string;
+  path: string;
+  [field: string]: unknown;
+}
+
+/** From/to are the module's own `version` (`ModuleManifest.version`), not the Bundle's version — modules evolve independently. */
+export interface MigrationSpec {
+  from: string;
+  to: string;
+  operations: MigrationOperationSpec[];
+}
+
 export interface SchemaModule {
   manifest: ModuleManifest;
   schema: JsonSchema;
@@ -310,4 +329,6 @@ export interface SchemaModule {
   i18n?: ModuleI18n;
   /** A declarative rule-type catalog (ADR-021, v0.4.0 #3) — only `rules`/`sub-rules` carry this. */
   ruleTypes?: RuleTypeSpec[];
+  /** Declarative migration rules (ADR-025, v0.5.0 #6) — loaded into a real `MigrationPlan` by `@mcs/migration`'s `loadMigrations`. */
+  migrations?: MigrationSpec[];
 }

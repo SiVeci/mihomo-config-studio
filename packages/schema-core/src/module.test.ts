@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { validateModuleShape } from './module.js';
 import { sampleModule } from './testing/sample-module.js';
 import type {
+  MigrationSpec,
   ModuleExample,
   ModuleI18n,
   RuleTypeSpec,
@@ -188,6 +189,100 @@ describe('ruleTypes shape (ADR-021, v0.4.0 #3)', () => {
       };
       expect(validateModuleShape(module)).toEqual([]);
     }
+  });
+});
+
+describe('migrations shape (ADR-025, v0.5.0 #6)', () => {
+  const baseSpec: MigrationSpec = {
+    from: '1.0.0',
+    to: '1.1.0',
+    operations: [{ op: 'rename-field', path: 'a', to: 'b' }],
+  };
+
+  it('accepts a well-formed migration spec', () => {
+    const module: SchemaModule = { ...sampleModule, migrations: [baseSpec] };
+    expect(validateModuleShape(module)).toEqual([]);
+  });
+
+  it('flags an empty from', () => {
+    const module: SchemaModule = { ...sampleModule, migrations: [{ ...baseSpec, from: '' }] };
+    expect(validateModuleShape(module)).toEqual([
+      expect.objectContaining({
+        code: 'module.migration.emptyFrom',
+        location: 'migrations[0].from',
+      }),
+    ]);
+  });
+
+  it('flags an empty to', () => {
+    const module: SchemaModule = { ...sampleModule, migrations: [{ ...baseSpec, to: '' }] };
+    expect(validateModuleShape(module)).toEqual([
+      expect.objectContaining({ code: 'module.migration.emptyTo', location: 'migrations[0].to' }),
+    ]);
+  });
+
+  it('flags an operation whose op is outside the seven closed opcodes (a bundle bypassing the type system)', () => {
+    const module: SchemaModule = {
+      ...sampleModule,
+      migrations: [{ ...baseSpec, operations: [{ op: 'run-script', path: 'a' }] }],
+    };
+    expect(validateModuleShape(module)).toEqual([
+      expect.objectContaining({
+        code: 'module.migration.unknownOp',
+        location: 'migrations[0].operations[0].op',
+        messageParams: { op: 'run-script' },
+      }),
+    ]);
+  });
+
+  it('accepts every one of the seven closed opcodes', () => {
+    const opcodes = [
+      'rename-field',
+      'move-field',
+      'set-default',
+      'deprecate-field',
+      'remove-field',
+      'narrow-enum',
+      'quarantine-field',
+    ];
+    for (const op of opcodes) {
+      const module: SchemaModule = {
+        ...sampleModule,
+        migrations: [{ ...baseSpec, operations: [{ op, path: 'a' }] }],
+      };
+      expect(validateModuleShape(module)).toEqual([]);
+    }
+  });
+
+  it('flags an empty operation path', () => {
+    const module: SchemaModule = {
+      ...sampleModule,
+      migrations: [{ ...baseSpec, operations: [{ op: 'remove-field', path: '' }] }],
+    };
+    expect(validateModuleShape(module)).toEqual([
+      expect.objectContaining({
+        code: 'module.migration.emptyPath',
+        location: 'migrations[0].operations[0].path',
+      }),
+    ]);
+  });
+
+  it('reports every violation at once across multiple specs and operations, not just the first', () => {
+    const module: SchemaModule = {
+      ...sampleModule,
+      migrations: [
+        { from: '', to: '1.1.0', operations: [{ op: 'bogus', path: 'a' }] },
+        { from: '1.1.0', to: '1.2.0', operations: [{ op: 'remove-field', path: '' }] },
+      ],
+    };
+    const issues = validateModuleShape(module);
+    expect(issues.map((issue) => issue.code).sort()).toEqual(
+      [
+        'module.migration.emptyFrom',
+        'module.migration.unknownOp',
+        'module.migration.emptyPath',
+      ].sort(),
+    );
   });
 });
 

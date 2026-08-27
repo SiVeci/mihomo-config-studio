@@ -1,6 +1,7 @@
 import type { MessageParams } from '@mcs/yaml-engine';
 
 import type {
+  MigrationSpec,
   ModuleExample,
   ModuleI18n,
   RuleTypeSpec,
@@ -38,12 +39,30 @@ const RULE_PAYLOAD_KINDS = [
   'sub-rule',
   'none',
 ] as const;
+/**
+ * Mirrors `packages/migration/src/plan.ts`'s `MIGRATION_OPERATION_KINDS`
+ * (ADR-025). `schema-core` cannot depend on `@mcs/migration` — the
+ * dependency runs the other way — so this closed set is intentionally
+ * duplicated here rather than imported; `module.test.ts` and
+ * `packages/migration/src/plan.test.ts` both assert the exact seven-item
+ * list, so a drift between the two surfaces as a failing test in at least
+ * one package.
+ */
+const MIGRATION_OPCODES = [
+  'rename-field',
+  'move-field',
+  'set-default',
+  'deprecate-field',
+  'remove-field',
+  'narrow-enum',
+  'quarantine-field',
+] as const;
 
 /**
  * Check the optional additions (`rules`/`examples`/`i18n` from v0.3.0,
- * `ruleTypes` from v0.4.0 #3). The original `{ manifest, schema, ui }` shape
- * is unchecked here: it is already TS-required, and nothing about it
- * changed in this slice.
+ * `ruleTypes` from v0.4.0 #3, `migrations` from v0.5.0 #6). The original
+ * `{ manifest, schema, ui }` shape is unchecked here: it is already
+ * TS-required, and nothing about it changed in this slice.
  */
 export function validateModuleShape(module: SchemaModule): ModuleShapeIssue[] {
   const issues: ModuleShapeIssue[] = [];
@@ -52,8 +71,63 @@ export function validateModuleShape(module: SchemaModule): ModuleShapeIssue[] {
   if (module.examples) checkExamples(module.examples, issues);
   if (module.i18n) checkI18n(module.i18n, issues);
   if (module.ruleTypes) checkRuleTypes(module.ruleTypes, issues);
+  if (module.migrations) checkMigrations(module.migrations, issues);
 
   return issues;
+}
+
+/**
+ * Shallow, structural only: is `op` one of the seven closed opcodes, and are
+ * the fields every opcode needs regardless of its own kind (`from`/`to` on
+ * the spec, `path` on each operation) non-empty. Per-opcode fields (a
+ * `rename-field`'s `to`, a `narrow-enum`'s `allowed`, ...) are
+ * `@mcs/migration`'s `loadMigrations` concern, which has the richer,
+ * fully-typed `MigrationOperation` union to validate against — duplicating
+ * that here would be the same shape twice, validated two different ways.
+ */
+function checkMigrations(migrations: MigrationSpec[], issues: ModuleShapeIssue[]): void {
+  migrations.forEach((spec, specIndex) => {
+    const location = `migrations[${specIndex}]`;
+
+    if (spec.from === '') {
+      issues.push({
+        severity: 'error',
+        code: 'module.migration.emptyFrom',
+        location: `${location}.from`,
+        messageKey: 'module.migration.emptyFrom',
+      });
+    }
+    if (spec.to === '') {
+      issues.push({
+        severity: 'error',
+        code: 'module.migration.emptyTo',
+        location: `${location}.to`,
+        messageKey: 'module.migration.emptyTo',
+      });
+    }
+
+    spec.operations.forEach((operation, opIndex) => {
+      const opLocation = `${location}.operations[${opIndex}]`;
+
+      if (!(MIGRATION_OPCODES as readonly string[]).includes(operation.op)) {
+        issues.push({
+          severity: 'error',
+          code: 'module.migration.unknownOp',
+          location: `${opLocation}.op`,
+          messageKey: 'module.migration.unknownOp',
+          messageParams: { op: operation.op },
+        });
+      }
+      if (operation.path === '') {
+        issues.push({
+          severity: 'error',
+          code: 'module.migration.emptyPath',
+          location: `${opLocation}.path`,
+          messageKey: 'module.migration.emptyPath',
+        });
+      }
+    });
+  });
 }
 
 function checkRules(rules: ValidationRule[], issues: ModuleShapeIssue[]): void {

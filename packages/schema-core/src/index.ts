@@ -34,6 +34,8 @@ export type {
   JsonSchema,
   JsonSchemaType,
   KnownFormat,
+  MigrationOperationSpec,
+  MigrationSpec,
   ModuleExample,
   ModuleI18n,
   ModuleLocale,

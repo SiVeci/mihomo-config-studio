@@ -1,3 +1,5 @@
+export { loadMigrations } from './load.js';
+export type { LoadMigrationsResult } from './load.js';
 export { buildMigrationPlan, isLossyOperation, MIGRATION_OPERATION_KINDS } from './plan.js';
 export type {
   DeprecateFieldOperation,
