@@ -8,6 +8,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@mcs/schema-core": "workspace:*"
+    "@mcs/schema-core": "workspace:*",
+    "@mcs/storage": "workspace:*",
+    "@mcs/yaml-engine": "workspace:*"
   }
 }

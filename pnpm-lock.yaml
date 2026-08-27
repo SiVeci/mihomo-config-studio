@@ -168,6 +168,12 @@ importers:
       '@mcs/schema-core':
         specifier: workspace:*
         version: link:../schema-core
+      '@mcs/storage':
+        specifier: workspace:*
+        version: link:../storage
+      '@mcs/yaml-engine':
+        specifier: workspace:*
+        version: link:../yaml-engine
 
   packages/project-format:
     devDependencies:
