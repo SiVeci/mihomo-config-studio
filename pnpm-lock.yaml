@@ -163,6 +163,12 @@ importers:
         specifier: workspace:*
         version: link:../test-fixtures
 
+  packages/migration:
+    dependencies:
+      '@mcs/schema-core':
+        specifier: workspace:*
+        version: link:../schema-core
+
   packages/project-format:
     devDependencies:
       '@mcs/test-fixtures':
@@ -270,6 +276,8 @@ importers:
       '@mcs/templates':
         specifier: workspace:*
         version: link:../../packages/templates
+
+  tools/egress-check: {}
 
   tools/schema-cli:
     dependencies:

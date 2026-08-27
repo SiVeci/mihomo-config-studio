@@ -1,0 +1,13 @@
+{
+  "name": "@mcs/migration",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Declarative migration plans and preview (PRD §9.2, ADR-025).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@mcs/schema-core": "workspace:*"
+  }
+}

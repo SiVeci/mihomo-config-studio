@@ -7,6 +7,7 @@
     { "path": "./packages/form-renderer" },
     { "path": "./packages/config-model" },
     { "path": "./packages/graph" },
+    { "path": "./packages/migration" },
     { "path": "./packages/project-format" },
     { "path": "./packages/schema-builtin" },
     { "path": "./packages/schema-registry" },

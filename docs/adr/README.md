@@ -28,6 +28,7 @@
 | [ADR-021](./ADR-021-declarative-rule-type-catalog.md)       | 声明式规则类型目录                                  | Accepted | v0.4.0 切片 #3  |
 | [ADR-022](./ADR-022-self-built-virtualization-and-graph.md) | 虚拟化与关系图一律自建，不引入新运行时依赖          | Accepted | v0.4.0 切片 #7  |
 | [ADR-023](./ADR-023-atomic-batch-edit.md)                   | 批量编辑是一次原子写入，不是合并窗口                | Accepted | v0.4.0 切片 #10 |
+| [ADR-025](./ADR-025-declarative-migration-opcodes.md)       | 声明式迁移操作码的封闭集合                          | Accepted | v0.5.0 切片 #5  |
 
 ADR-001 至 ADR-005 直接来自 PRD §17，本仓库补全其背景与工程约束。
 ADR-006 起为实施阶段新增的决策。

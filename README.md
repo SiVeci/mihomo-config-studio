@@ -55,7 +55,7 @@ packages/
   schema-builtin/      随应用发布的默认 Bundle                ✅ 磁盘 JSON 布局 + general 模块（v0.3.0 #6）
   form-renderer/       Schema 驱动表单与控件映射              ✅ M0 已验证
   validator/           语法、结构、语义、引用和安全检查        ✅ 骨架 + 流水线 + 1MB 导入基准（v0.2.0 #1-2、#16）
-  migration/           声明式迁移计划与预览                    🚧 规划中（v0.5.0）
+  migration/           声明式迁移计划与预览                    ✅ `MigrationPlan` 与封闭操作码（v0.5.0 #5，ADR-025）
   graph/               引用索引、循环检测和关系图数据         ✅ M0 已验证
   templates/           模板定义与变量                          ✅ 五个内置模板，全部接入内核测试矩阵（v0.3.0 #20、v0.4.0 #16-17）
   storage/             Web/Android 存储抽象                  ✅ 端口 + 内存/IndexedDB + 自动保存/快照裁剪（v0.2.0 #4-5）
