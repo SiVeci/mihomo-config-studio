@@ -115,6 +115,84 @@ describe('checkJsonContent (FR-UPD-07, NFR-SEC-05)', () => {
   });
 });
 
+describe('checkJsonContent / migration opcodes (ADR-025, FR-UPD-07, v0.5.0 #13)', () => {
+  it('accepts every real closed-set opcode', () => {
+    const content = JSON.stringify({
+      migrations: [
+        {
+          from: '1.0.0',
+          to: '2.0.0',
+          operations: [
+            { op: 'rename-field', path: 'a', to: 'b' },
+            { op: 'move-field', path: 'a', to: 'b.c' },
+            { op: 'set-default', path: 'd', value: 1 },
+            { op: 'deprecate-field', path: 'e', sinceVersion: '2.0.0' },
+            { op: 'remove-field', path: 'f' },
+            { op: 'narrow-enum', path: 'g', allowed: ['x'] },
+            { op: 'quarantine-field', path: 'h' },
+          ],
+        },
+      ],
+    });
+
+    expect(checkJsonContent('module.json', content)).toBeNull();
+  });
+
+  it('rejects an operation-shaped object whose op is not in the closed set — the real gap this slice closes: a plain string alone previously passed', () => {
+    const content = JSON.stringify({
+      migrations: [{ from: '1.0.0', to: '2.0.0', operations: [{ op: 'run-script', path: 'x' }] }],
+    });
+
+    expect(checkJsonContent('module.json', content)).toEqual({
+      code: 'SCHEMA_CLI_UNKNOWN_MIGRATION_OPCODE',
+      path: 'module.json.migrations[0].operations[0].op',
+    });
+  });
+
+  it('finds an unknown opcode nested anywhere inside a "migrations" subtree, wherever that subtree itself lives in the file', () => {
+    const content = JSON.stringify({
+      nested: { migrations: { deep: [{ op: 'eval-js', path: 'x' }] } },
+    });
+
+    expect(checkJsonContent('module.json', content)).toEqual({
+      code: 'SCHEMA_CLI_UNKNOWN_MIGRATION_OPCODE',
+      path: 'module.json.nested.migrations.deep[0].op',
+    });
+  });
+
+  it('does not flag an object that merely has an "op" key without a sibling "path" (not migration-operation-shaped)', () => {
+    const content = JSON.stringify({ migrations: { op: 'not-a-migration-operation' } });
+
+    expect(checkJsonContent('module.json', content)).toBeNull();
+  });
+
+  it('does not flag a plain string value named "op" nested under an unrelated key', () => {
+    const content = JSON.stringify({ migrations: { opcode: 'run-script' } });
+
+    expect(checkJsonContent('module.json', content)).toBeNull();
+  });
+
+  it('does not flag an "op"+"path"-shaped object outside a "migrations" subtree — real false positive found against the shipping built-in modules: validation.rules.json\'s Condition objects (condition.ts) also carry op/path from their own, unrelated closed operator set', () => {
+    const content = JSON.stringify({
+      when: { op: 'eq', path: 'mode', value: 'rule' },
+    });
+
+    expect(checkJsonContent('validation.rules.json', content)).toBeNull();
+  });
+
+  it('still catches an unrelated Condition-shaped false alarm risk correctly: a real migrations entry sitting alongside an op/path Condition in the same file only flags the migrations one', () => {
+    const content = JSON.stringify({
+      when: { op: 'eq', path: 'mode', value: 'rule' },
+      migrations: [{ from: '1.0.0', to: '2.0.0', operations: [{ op: 'run-script', path: 'x' }] }],
+    });
+
+    expect(checkJsonContent('module.json', content)).toEqual({
+      code: 'SCHEMA_CLI_UNKNOWN_MIGRATION_OPCODE',
+      path: 'module.json.migrations[0].operations[0].op',
+    });
+  });
+});
+
 describe('checkFile', () => {
   it('rejects on extension before ever parsing the content', () => {
     expect(checkFile('payload.js', 'not even json')).toEqual({

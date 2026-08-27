@@ -1,5 +1,7 @@
 import { extname } from 'node:path';
 
+import { MIGRATION_OPERATION_KINDS } from '@mcs/migration';
+
 /**
  * Pure content checks — no filesystem access here (`pack.ts` owns reading
  * the source tree). Allowlist rather than blocklist (FR-UPD-07): only
@@ -10,7 +12,10 @@ import { extname } from 'node:path';
  * or a module specifier" — not a general malware scanner.
  */
 export type StaticCheckIssueCode =
-  'SCHEMA_CLI_DISALLOWED_EXTENSION' | 'SCHEMA_CLI_INVALID_JSON' | 'SCHEMA_CLI_EXECUTABLE_CONTENT';
+  | 'SCHEMA_CLI_DISALLOWED_EXTENSION'
+  | 'SCHEMA_CLI_INVALID_JSON'
+  | 'SCHEMA_CLI_EXECUTABLE_CONTENT'
+  | 'SCHEMA_CLI_UNKNOWN_MIGRATION_OPCODE';
 
 export interface StaticCheckIssue {
   readonly code: StaticCheckIssueCode;
@@ -52,7 +57,9 @@ export function checkJsonContent(relativePath: string, jsonText: string): Static
   } catch {
     return { code: 'SCHEMA_CLI_INVALID_JSON', path: relativePath };
   }
-  return findExecutableValue(parsed, relativePath);
+  return (
+    findExecutableValue(parsed, relativePath) ?? findUnknownMigrationOpcode(parsed, relativePath)
+  );
 }
 
 function findExecutableValue(value: unknown, path: string): StaticCheckIssue | null {
@@ -69,6 +76,78 @@ function findExecutableValue(value: unknown, path: string): StaticCheckIssue | n
   if (value !== null && typeof value === 'object') {
     for (const [key, child] of Object.entries(value)) {
       const issue = findExecutableValue(child, `${path}.${key}`);
+      if (issue) return issue;
+    }
+    return null;
+  }
+  return null;
+}
+
+const KNOWN_MIGRATION_OPCODES: ReadonlySet<string> = new Set(MIGRATION_OPERATION_KINDS);
+
+/** An object shaped like a migration operation (ADR-025's `{ op, path, ... }`). Only meaningful *inside* a `migrations` subtree — `validation.rules.json`'s `Condition` objects (`condition.ts`) also carry `op`/`path` keys from their own, unrelated closed operator set, so this shape alone is not sufficient signal on its own (real false positive found against the actual shipping built-in modules while building this check: `visibleWhen`/`when` conditions were flagged). */
+function looksLikeMigrationOperation(value: unknown): value is { op: unknown } {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    'op' in value &&
+    'path' in value &&
+    typeof (value as Record<string, unknown>).op === 'string'
+  );
+}
+
+/**
+ * Finds the module's `migrations` key wherever it appears in the tree (a
+ * Bundle author could nest it under any file, not just a fixed path) and, once
+ * inside that specific subtree, checks every operation-shaped object's `op`
+ * against the closed set (ADR-025). Deliberately does **not** apply the
+ * opcode check outside a `migrations` subtree — `op`+`path` alone is not
+ * unique to migration operations (see `looksLikeMigrationOperation`'s own
+ * note). FR-UPD-07's real gap this closes: a declared `{"op": "run-script",
+ * ...}` inside `migrations` previously passed static check outright, since it
+ * is — on its own — just an ordinary string value, not code.
+ */
+function findUnknownMigrationOpcode(value: unknown, path: string): StaticCheckIssue | null {
+  if (Array.isArray(value)) {
+    for (const [index, item] of value.entries()) {
+      const issue = findUnknownMigrationOpcode(item, `${path}[${index}]`);
+      if (issue) return issue;
+    }
+    return null;
+  }
+  if (value !== null && typeof value === 'object') {
+    for (const [key, child] of Object.entries(value)) {
+      if (key === 'migrations') {
+        const issue = findUnknownOpcodeWithinMigrations(child, `${path}.${key}`);
+        if (issue) return issue;
+        continue;
+      }
+      const issue = findUnknownMigrationOpcode(child, `${path}.${key}`);
+      if (issue) return issue;
+    }
+    return null;
+  }
+  return null;
+}
+
+function findUnknownOpcodeWithinMigrations(value: unknown, path: string): StaticCheckIssue | null {
+  if (looksLikeMigrationOperation(value)) {
+    const op = value.op as string;
+    if (!KNOWN_MIGRATION_OPCODES.has(op)) {
+      return { code: 'SCHEMA_CLI_UNKNOWN_MIGRATION_OPCODE', path: `${path}.op` };
+    }
+  }
+  if (Array.isArray(value)) {
+    for (const [index, item] of value.entries()) {
+      const issue = findUnknownOpcodeWithinMigrations(item, `${path}[${index}]`);
+      if (issue) return issue;
+    }
+    return null;
+  }
+  if (value !== null && typeof value === 'object') {
+    for (const [key, child] of Object.entries(value)) {
+      const issue = findUnknownOpcodeWithinMigrations(child, `${path}.${key}`);
       if (issue) return issue;
     }
     return null;

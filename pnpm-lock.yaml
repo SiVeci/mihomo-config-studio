@@ -290,6 +290,12 @@ importers:
 
   tools/schema-cli:
     dependencies:
+      '@mcs/migration':
+        specifier: workspace:*
+        version: link:../../packages/migration
+      '@mcs/schema-core':
+        specifier: workspace:*
+        version: link:../../packages/schema-core
       '@mcs/schema-registry':
         specifier: workspace:*
         version: link:../../packages/schema-registry

@@ -63,7 +63,7 @@ packages/
   ui/                  通用 UI、主题与无障碍组件               ✅ 设计令牌 + 文字色层 + 对比度断言（v0.2.0 #7-8）
   test-fixtures/       官方样例、边界样例和 Golden Files      ✅ 含确定性大语料生成器（v0.2.0 #16）
 tools/
-  schema-cli/          Bundle 校验、签名、差异和发布           ✅ M0 已验证
+  schema-cli/          Bundle 校验、签名、差异和发布           ✅ `pack`/`check`/`diff`/`sign` 子命令，迁移操作码封闭集合检查（v0.5.0 #13，ADR-025）
   android-manifest-check/ Android 清单 VPN 权限断言（CI 强制） ✅ M0 已验证
   webcrypto-probe/     Ed25519 WebCrypto 可用性实测载体        ✅ M0 已验证（ADR-013）
   upstream-watch/      上游文档 / 示例变更监控                 🚧 规划中，未建

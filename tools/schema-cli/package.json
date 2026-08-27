@@ -8,6 +8,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@mcs/migration": "workspace:*",
+    "@mcs/schema-core": "workspace:*",
     "@mcs/schema-registry": "workspace:*"
   }
 }
