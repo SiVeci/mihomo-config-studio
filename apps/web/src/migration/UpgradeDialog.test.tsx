@@ -39,7 +39,7 @@ describe('UpgradeDialog — up to date (v0.5.0 #11)', () => {
     const store = bundleStoreFrom(adapter);
     const keyPair = await generateTestKeyPair();
     const trustedPublicKeys = [keyPair.publicKeyRaw];
-    const options = defaultVerifyOptions(trustedPublicKeys);
+    const options = await defaultVerifyOptions(trustedPublicKeys);
 
     const v1 = await buildSignedBundle({
       keyPair,
@@ -97,7 +97,7 @@ describe('UpgradeDialog — real upgrade preview and execution', () => {
     const store = bundleStoreFrom(adapter);
     const keyPair = await generateTestKeyPair();
     const trustedPublicKeys = [keyPair.publicKeyRaw];
-    const options = defaultVerifyOptions(trustedPublicKeys);
+    const options = await defaultVerifyOptions(trustedPublicKeys);
 
     const v1 = await buildSignedBundle({
       keyPair,
@@ -172,7 +172,7 @@ describe('UpgradeDialog — real upgrade preview and execution', () => {
     const store = bundleStoreFrom(adapter);
     const keyPair = await generateTestKeyPair();
     const trustedPublicKeys = [keyPair.publicKeyRaw];
-    const options = defaultVerifyOptions(trustedPublicKeys);
+    const options = await defaultVerifyOptions(trustedPublicKeys);
 
     const v1 = await buildSignedBundle({
       keyPair,
@@ -234,7 +234,7 @@ describe('UpgradeDialog — real upgrade preview and execution', () => {
     const store = bundleStoreFrom(adapter);
     const keyPair = await generateTestKeyPair();
     const trustedPublicKeys = [keyPair.publicKeyRaw];
-    const options = defaultVerifyOptions(trustedPublicKeys);
+    const options = await defaultVerifyOptions(trustedPublicKeys);
 
     const v1 = await buildSignedBundle({
       keyPair,

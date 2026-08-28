@@ -8,11 +8,14 @@ import {
  * Verifies a raw Ed25519 signature against a message. The concrete backend
  * is pluggable (ADR-013): Android WebView was measured to not support
  * `crypto.subtle`'s Ed25519 algorithm as of this version, so callers that
- * need to work there must supply an alternative implementation later. The
- * pluggable port itself is what v0.5.0 needed (networked Bundle updates,
- * `updater.ts`) and already has — the actual pure-JS/WASM fallback backend
- * is Android integration work, deferred to v0.6.0 (reassessed v0.5.0 #4;
- * was previously mis-dated "v0.5.0" here).
+ * need to work there must supply an alternative implementation. The pure-JS
+ * fallback ADR-013 deferred to v0.6.0 has landed (#10, ADR-028) —
+ * `apps/web/src/bundle/noble-verifier.ts`'s `NobleEd25519Verifier`, selected
+ * over this file's own `SubtleCryptoEd25519Verifier` by a startup capability
+ * probe (`apps/web/src/bundle/verify-options.ts`'s `resolveEd25519Verifier`).
+ * This package stays the single coupling point either way: it depends only
+ * on the interface below, never on a concrete backend or on `@noble/ed25519`
+ * itself (`packages/**` stays free of that dependency by design, ADR-028).
  */
 export interface Ed25519Verifier {
   verify(publicKey: Uint8Array, signature: Uint8Array, message: Uint8Array): Promise<boolean>;

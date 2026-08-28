@@ -1710,7 +1710,7 @@ describe('ProjectPage / schema-lock (ADR-004, v0.5.0 #11, decision F14/F15)', ()
     const store = bundleStoreFrom(adapter);
     const keyPair = await generateTestKeyPair();
     const trustedPublicKeys = [keyPair.publicKeyRaw];
-    const options = defaultVerifyOptions(trustedPublicKeys);
+    const options = await defaultVerifyOptions(trustedPublicKeys);
 
     // v1 has both `general` and `rules` modules — same as the real built-in
     // bundle, `rules` claims its root but does not validate each list item's
@@ -1781,7 +1781,7 @@ describe('ProjectPage / schema-lock (ADR-004, v0.5.0 #11, decision F14/F15)', ()
     const store = bundleStoreFrom(adapter);
     const keyPair = await generateTestKeyPair();
     const trustedPublicKeys = [keyPair.publicKeyRaw];
-    const options = defaultVerifyOptions(trustedPublicKeys);
+    const options = await defaultVerifyOptions(trustedPublicKeys);
 
     const v1 = await buildSignedBundle({
       keyPair,
@@ -1881,7 +1881,7 @@ describe('ProjectPage / read-only protection (ADR-004 point 6, PRD §9.5 point 3
     const store = bundleStoreFrom(adapter);
     const keyPair = await generateTestKeyPair();
     const trustedPublicKeys = [keyPair.publicKeyRaw];
-    const options = defaultVerifyOptions(trustedPublicKeys);
+    const options = await defaultVerifyOptions(trustedPublicKeys);
 
     const v1 = await buildSignedBundle({ keyPair, bundleId: 'v1', version: '1.0.0' });
     expect((await installBundle(store, v1.manifest, v1.files, options)).ok).toBe(true);

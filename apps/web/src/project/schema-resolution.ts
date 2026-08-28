@@ -54,7 +54,7 @@ export async function resolveProjectSchema(
   trustedPublicKeys?: readonly Uint8Array[],
 ): Promise<ResolvedProjectSchema> {
   const store = bundleStoreFrom(adapter);
-  const options = defaultVerifyOptions(trustedPublicKeys);
+  const options = await defaultVerifyOptions(trustedPublicKeys);
 
   let schemaLock = await getProjectSchemaLock(adapter, projectId);
   if (!schemaLock) {

@@ -74,6 +74,17 @@ describe('v0.3.0 closed loop: apply template -> form edit -> undo -> redo -> mod
 
     fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
     await screen.findByLabelText(t('project.nameLabel'));
+    // The new project's schema-resolution effect (`ProjectPage.tsx`,
+    // `resolveProjectSchema`) is still in flight here — v0.6.0 #10 added an
+    // extra await to it (`resolveEd25519Verifier`'s startup capability
+    // probe), which was enough to let that effect's own `setConfigText`
+    // land *after* the import below instead of before, silently reverting
+    // it back to the pre-import default. Waiting for the module section it
+    // populates guarantees its `setConfigText` call (earlier in the same
+    // `.then()`) has already happened before the import fires.
+    await waitFor(() => {
+      expect(document.querySelector('[data-module-section="general"]')).not.toBeNull();
+    });
 
     // 1. Apply the "basic proxy configuration" template (PRD §8.8) via the
     // existing paste-import path (FR-YAML-01) — its real, on-disk content,

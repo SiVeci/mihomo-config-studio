@@ -88,24 +88,25 @@ export function UpgradeDialog({
   useEffect(() => {
     let cancelled = false;
     const store = bundleStoreFrom(adapter);
-    const options = defaultVerifyOptions(trustedPublicKeys);
-    void resolveActiveBundle(store, options).then((active) => {
-      if (cancelled) return;
-      const newModules = createRegistry(active).modules();
-      const newLock: McsProjSchemaLock = {
-        bundleVersion: active.manifest.version,
-        compatibilityProfile: active.manifest.mihomo.minVersion,
-      };
-      setTarget({ modules: newModules, schemaLock: newLock });
-      setPreview(
-        buildUpgradePreview(
-          oldModules,
-          newModules,
-          schemaLock.bundleVersion,
-          newLock.bundleVersion,
-        ),
-      );
-    });
+    void defaultVerifyOptions(trustedPublicKeys)
+      .then((options) => resolveActiveBundle(store, options))
+      .then((active) => {
+        if (cancelled) return;
+        const newModules = createRegistry(active).modules();
+        const newLock: McsProjSchemaLock = {
+          bundleVersion: active.manifest.version,
+          compatibilityProfile: active.manifest.mihomo.minVersion,
+        };
+        setTarget({ modules: newModules, schemaLock: newLock });
+        setPreview(
+          buildUpgradePreview(
+            oldModules,
+            newModules,
+            schemaLock.bundleVersion,
+            newLock.bundleVersion,
+          ),
+        );
+      });
     return () => {
       cancelled = true;
     };

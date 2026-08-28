@@ -67,6 +67,17 @@ describe('v0.2.0 closed loop: import -> edit -> diff -> export, no Schema module
     // #14) is not wired to any real module and keeps its permanent
     // "not available yet" placeholder throughout this loop.
     expect(screen.getByText(t('editor.structuredViewPlaceholder'))).toBeDefined();
+    // The new project's schema-resolution effect (`ProjectPage.tsx`,
+    // `resolveProjectSchema`) is still in flight here — v0.6.0 #10 added an
+    // extra await to it (`resolveEd25519Verifier`'s startup capability
+    // probe), which was enough to let that effect's own `setConfigText`
+    // land *after* the import below instead of before, silently reverting
+    // it back to the pre-import default. Waiting for the module section it
+    // populates guarantees its `setConfigText` call (earlier in the same
+    // `.then()`) has already happened before the import fires.
+    await waitFor(() => {
+      expect(document.querySelector('[data-module-section="general"]')).not.toBeNull();
+    });
 
     // 1. Import: paste YAML text (FR-YAML-01).
     const importedYaml = 'mode: rule\nport: 7890\nlog-level: info\n';

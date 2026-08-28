@@ -21,6 +21,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { t, type TranslationKey } from '../i18n/index.js';
 import { BUNDLE_TRUST_ANCHORS } from './trust-anchors.js';
+import { resolveEd25519Verifier } from './verify-options.js';
 import './BundlePage.css';
 
 /** Matches `apps/web/package.json`'s own `version` — the same value every `requiresApp` fixture/test in this repo already assumes. */
@@ -77,13 +78,14 @@ const ERROR_CODES: Record<string, true> = {
   'bundle.error.BUNDLE_STORE_NO_PREVIOUS': true,
 };
 
-function verifyOptions(channel: BundleChannel, trustedPublicKeys: readonly Uint8Array[]) {
+async function verifyOptions(channel: BundleChannel, trustedPublicKeys: readonly Uint8Array[]) {
   return {
     currentAppVersion: CURRENT_APP_VERSION,
     minFormatVersion: MIN_FORMAT_VERSION,
     maxFormatVersion: MAX_FORMAT_VERSION,
     trustedPublicKeys,
     channel,
+    verifier: await resolveEd25519Verifier(),
   };
 }
 
@@ -111,7 +113,7 @@ export function BundlePage({
   const refresh = useCallback(
     async (forChannel: BundleChannel) => {
       const generation = ++refreshGeneration.current;
-      const options = verifyOptions(forChannel, trustAnchors);
+      const options = await verifyOptions(forChannel, trustAnchors);
       const [resolved, previous] = await Promise.all([
         resolveActiveBundle(store, options, forChannel),
         store.read(channelSlotKey(forChannel, 'previous')),
@@ -178,7 +180,11 @@ export function BundlePage({
         return;
       }
 
-      const result = await applyUpdate(store, candidate, verifyOptions(channel, trustAnchors));
+      const result = await applyUpdate(
+        store,
+        candidate,
+        await verifyOptions(channel, trustAnchors),
+      );
       if (!result.ok) {
         setInstallOutcome({ kind: 'error', code: result.code, path: result.path });
         return;

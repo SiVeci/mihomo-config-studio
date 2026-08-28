@@ -37,7 +37,7 @@ describe('resolveProjectSchema (ADR-004, v0.5.0 #11, decision F14)', () => {
     const store = bundleStoreFrom(adapter);
     const keyPair = await generateTestKeyPair();
     const trustedPublicKeys = [keyPair.publicKeyRaw];
-    const options = defaultVerifyOptions(trustedPublicKeys);
+    const options = await defaultVerifyOptions(trustedPublicKeys);
 
     const v1 = await buildSignedBundle({
       keyPair,
@@ -99,7 +99,7 @@ describe('resolveProjectSchema (ADR-004, v0.5.0 #11, decision F14)', () => {
     const store = bundleStoreFrom(adapter);
     const keyPair = await generateTestKeyPair();
     const trustedPublicKeys = [keyPair.publicKeyRaw];
-    const options = defaultVerifyOptions(trustedPublicKeys);
+    const options = await defaultVerifyOptions(trustedPublicKeys);
     const v2 = await buildSignedBundle({ keyPair, bundleId: 'v2', version: '2.0.0' });
     await installBundle(store, v2.manifest, v2.files, options);
     await saveProjectSchemaLock(adapter, 'p1', {
