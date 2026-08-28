@@ -1,14 +1,17 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 /**
- * M0-5 spike shell — verifies SAF open/save, ACTION_SEND share, and private
- * `filesDir` storage work through Capacitor, nothing more. Not the product
- * app id; the real one is decided when this shell is replaced in v0.6.0.
+ * Product shell (v0.6.0 #3), replacing the M0-5 spike. `appId` is
+ * unchangeable after first release (changing it means users must uninstall
+ * and reinstall) — `studio.mihomoconfig.app` per the version plan's Q1
+ * default. `webDir` points at `apps/web`'s own build output: this app loads
+ * the same build artifact the Web deployment serves (ADR-001/ADR-026 —
+ * one build, two hosts), not a separate Android-only bundle.
  */
 const config: CapacitorConfig = {
-  appId: 'studio.mihomoconfig.m0spike',
-  appName: 'MCS M0 Spike',
-  webDir: 'dist',
+  appId: 'studio.mihomoconfig.app',
+  appName: 'Mihomo 配置工坊',
+  webDir: '../web/dist',
 };
 
 export default config;

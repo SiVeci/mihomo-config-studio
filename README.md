@@ -52,7 +52,7 @@ v0.6.0）进行中**：见[版本执行计划](docs/releases/plans/v0.6.0.md)。
 ```text
 apps/
   web/                 Web、PWA、静态部署                     ✅ 三栏布局壳、导入/编辑/差异/导出闭环、Worker 边界（v0.2.0）；+Schema 表单/规则列表/关系图（v0.3.0-v0.4.0）；+Bundle 管理/项目升级/只读保护 UI（v0.5.0 #10-#12）
-  android/             Capacitor Android 壳与原生适配         🚧 M0-5 模拟器验证，Partial（真机推迟 v0.6.0）
+  android/             Capacitor Android 壳与原生适配         🚧 产品壳（appId `studio.mihomoconfig.app`、minSdk 29），加载 `apps/web` 构建产物；模拟器验证，Partial（真机推迟）
 packages/
   config-model/        领域实体、引用和项目模型               ✅ M0 已验证
   yaml-engine/         AST 解析、局部修改、序列化、差异        ✅ M0 已验证

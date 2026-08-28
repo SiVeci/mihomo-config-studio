@@ -1,4 +1,4 @@
-package studio.mihomoconfig.m0spike;
+package studio.mihomoconfig.app;
 
 import android.os.Bundle;
 import com.getcapacitor.BridgeActivity;

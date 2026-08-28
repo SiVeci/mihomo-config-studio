@@ -9,6 +9,7 @@
     "build": "vite build"
   },
   "dependencies": {
+    "@capacitor/core": "7.6.8",
     "@mcs/config-model": "workspace:*",
     "@mcs/form-renderer": "workspace:*",
     "@mcs/graph": "workspace:*",

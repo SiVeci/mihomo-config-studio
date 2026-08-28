@@ -1,4 +1,4 @@
-package com.getcapacitor.myapp;
+package studio.mihomoconfig.app;
 
 import static org.junit.Assert.*;
 
