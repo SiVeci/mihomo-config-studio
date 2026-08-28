@@ -44,7 +44,8 @@ sub-rules）补齐，规则列表（重排、批量操作）、关系图（导�
 本身与 [ADR-024](docs/adr/ADR-024-single-maintainer-release-approval.md) 已就位，
 真实签发与审批拦截验证需要 GitHub Environment/生产密钥两项先决项由用户在网页侧
 完成后才能执行），如实记录不宣告，见[需求追踪表](docs/requirements-traceability.md)
-与[版本执行计划](docs/releases/plans/v0.5.0.md)。尚未发布可用版本。
+与[版本执行计划](docs/releases/plans/v0.5.0.md)。**M5（Android 集成与 PWA，
+v0.6.0）进行中**：见[版本执行计划](docs/releases/plans/v0.6.0.md)。尚未发布可用版本。
 
 ## 仓库结构
 

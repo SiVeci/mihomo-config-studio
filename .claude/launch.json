@@ -4,8 +4,15 @@
     {
       "name": "mcs-web",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@mcs/web", "dev"],
-      "port": 5173
+      "runtimeArgs": ["--filter", "@mcs/web", "exec", "vite", "--port", "5402"],
+      "port": 5402,
+      "autoPort": true
+    },
+    {
+      "name": "mcs-web-preview",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@mcs/web", "exec", "vite", "preview", "--port", "5401"],
+      "port": 5401
     }
   ]
 }

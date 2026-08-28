@@ -71,6 +71,13 @@ const CONTAINER_HEIGHT = 320;
  * rules" scenario (v0.4.0 #15). The corpus is `generateScaleCorpus()`'s
  * default, the exact shape `scale.bench.ts` measures, so these two results
  * are directly comparable to that baseline.
+ *
+ * Both `it()`s below pass an explicit 60s per-test timeout (v0.6.0 #0):
+ * under `pnpm run test:coverage`'s v8 instrumentation, `setUp()` alone
+ * (generating the 10,000-row corpus + first render) approaches the 5s
+ * default, unrelated to what the assertions measure. This raises the wall
+ * clock budget for the *test*, not the 100ms performance assertions below,
+ * which are untouched.
  */
 describe('rule list at v0.4.0 scale — 1,000 entities + 10,000 rules (NFR-PERF-04/03)', () => {
   function setUp() {
@@ -104,7 +111,7 @@ describe('rule list at v0.4.0 scale — 1,000 entities + 10,000 rules (NFR-PERF-
     const rows = screen.getAllByRole('row');
     expect(rows.length).toBeLessThan(100);
     expect(rows.length).toBeGreaterThan(0);
-  });
+  }, 60_000);
 
   it(`keyboard reorder dispatch stays well under 100ms across ${SAMPLE_COUNT} consecutive moves at 10,000-row scale`, () => {
     const { grid } = setUp();
@@ -127,5 +134,5 @@ describe('rule list at v0.4.0 scale — 1,000 entities + 10,000 rules (NFR-PERF-
 
     expect(median).toBeLessThan(100);
     expect(max).toBeLessThan(100);
-  });
+  }, 60_000);
 });

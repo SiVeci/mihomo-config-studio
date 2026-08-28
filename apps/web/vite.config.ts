@@ -13,5 +13,10 @@ export default defineConfig({
     // but is not worth relying on). Unset until #14 has a real production
     // public key to inject.
     __TRUST_ANCHOR_OVERRIDES__: JSON.stringify(process.env.MCS_TRUST_ANCHOR_OVERRIDES_JSON ?? null),
+    // Build-time Bundle update source override (v0.6.0 #0): read by
+    // apps/web/src/bundle/update-sources.ts. Same `JSON.stringify`-at-config-eval
+    // reasoning as __TRUST_ANCHOR_OVERRIDES__ above. Unset in production until
+    // #12 decides whether a remote source is configured for Beta.
+    __BUNDLE_UPDATE_SOURCES__: JSON.stringify(process.env.MCS_BUNDLE_UPDATE_SOURCES_JSON ?? null),
   },
 });

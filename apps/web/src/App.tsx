@@ -2,6 +2,7 @@ import { IndexedDbStorageAdapter } from '@mcs/storage';
 import { useMemo, type ReactNode } from 'react';
 
 import { BundlePage } from './bundle/BundlePage.js';
+import { resolveUpdateSources } from './bundle/update-sources.js';
 import { t } from './i18n/index.js';
 import { ProjectPage } from './project/ProjectPage.js';
 import { HashRouter, Routes, useRoutePath } from './router.js';
@@ -26,13 +27,15 @@ function ProjectPageRoute(): ReactNode {
  * project happens to be open and worth bookmarking/reloading into directly
  * — exactly the case `router.tsx`'s own doc comment names as the bar for
  * promoting something to a real route, unlike the main column's
- * form/rules/graph view switch (still `useState`, v0.4.0 #7). No
- * `updateSources` is wired yet — no production Bundle host is decided
- * until #14 — so the page's own "not configured" state covers this for now.
+ * form/rules/graph view switch (still `useState`, v0.4.0 #7).
+ * `updateSources` is the build-time source map (v0.6.0 #0's local dev
+ * source now, #12's GitHub Releases source later); a channel absent from
+ * it renders the page's own "not configured" state.
  */
 function BundlePageRoute(): ReactNode {
   const adapter = useMemo(() => new IndexedDbStorageAdapter(), []);
-  return <BundlePage adapter={adapter} />;
+  const updateSources = useMemo(() => resolveUpdateSources(), []);
+  return <BundlePage adapter={adapter} updateSources={updateSources} />;
 }
 
 function NotFoundPage(): ReactNode {
