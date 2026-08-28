@@ -1260,6 +1260,30 @@ describe('ProjectPage / narrow-screen layout (PRD §7.3, v0.6.0 #6)', () => {
     ).toBe('page');
   });
 
+  it('clicking 配置 after 关系 switches back to the form view — real-device regression (v0.6.0 #8): the tap was a silent no-op when mainView was never reset, only found by an actual tap doing nothing on an emulator', async () => {
+    await setUpSelectedProject();
+    fireEvent.click(screen.getByRole('button', { name: t('bottomNav.graphTab') }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('tab', { name: t('project.graphViewTab') }).getAttribute('aria-selected'),
+      ).toBe('true'),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: t('bottomNav.configTab') }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('tab', { name: t('project.formViewTab') }).getAttribute('aria-selected'),
+      ).toBe('true'),
+    );
+    expect(
+      screen.getByRole('button', { name: t('bottomNav.configTab') }).getAttribute('aria-current'),
+    ).toBe('page');
+    expect(
+      screen.getByRole('button', { name: t('bottomNav.graphTab') }).getAttribute('aria-current'),
+    ).toBeNull();
+  });
+
   it('clicking 问题 in BottomNav mounts the issue panel only on a narrow viewport (jsdom has no matchMedia by default, so this needs it mocked)', async () => {
     (window as unknown as { matchMedia: (query: string) => object }).matchMedia = (
       query: string,

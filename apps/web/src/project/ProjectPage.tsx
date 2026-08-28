@@ -42,6 +42,7 @@ import { BottomNav } from '../layout/BottomNav.js';
 import type { BottomNavPage } from '../layout/BottomNav.js';
 import { StatusBar } from '../layout/StatusBar.js';
 import { useNarrowViewport } from '../layout/useNarrowViewport.js';
+import { registerBackgroundFlush } from '../platform/lifecycle.js';
 import { collectRuleEntityNames } from '../rules/entity-names.js';
 import { RuleListPage } from '../rules/RuleListPage.js';
 import type {
@@ -410,21 +411,10 @@ export function ProjectPage({
   }, [adapter, selectedId]);
 
   useEffect(() => {
-    function handleVisibilityChange(): void {
-      if (document.visibilityState !== 'hidden') return;
+    return registerBackgroundFlush(() => {
       void manifestAutoSaverRef.current?.flush();
       void configAutoSaverRef.current?.flush();
-    }
-    function handleBeforeUnload(): void {
-      void manifestAutoSaverRef.current?.flush();
-      void configAutoSaverRef.current?.flush();
-    }
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
+    });
   }, []);
 
   useEffect(() => {
@@ -494,7 +484,14 @@ export function ProjectPage({
    * (`activeMobilePage`) because 配置/关系 share one — the existing `mainView`
    * tablist (v0.4.0 #7) already switches between them, so 关系 just also
    * points `mainView` at `'graph'` rather than getting a fourth,
-   * duplicate content area.
+   * duplicate content area. Both branches must set `mainView` explicitly
+   * (not just `activeMobilePage`) — a real bug found on an actual device
+   * (v0.6.0 #8): tapping 配置 while already on 关系 left `activeMobilePage`
+   * unchanged (already `'main'`) and, without this line, `mainView` too,
+   * so the tap was a silent no-op and 配置 became permanently unreachable
+   * from the graph view. `BottomNav`'s own `active` indicator is derived
+   * from `mainView` for the same reason, so it was silently stuck on 关系
+   * too — nothing about it looked broken until an actual tap did nothing.
    */
   function handleBottomNavigate(page: BottomNavPage): void {
     if (page === 'graph') {
@@ -504,6 +501,7 @@ export function ProjectPage({
     }
     if (page === 'config') {
       setActiveMobilePage('main');
+      setMainView('form');
       return;
     }
     setActiveMobilePage(page);

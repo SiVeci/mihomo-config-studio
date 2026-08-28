@@ -1,22 +1,33 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createCapacitorPlatformFileService, isNativePlatform } from './capacitor.js';
+import {
+  createCapacitorPlatformFileService,
+  isNativePlatform,
+  onAppStateChange,
+} from './capacitor.js';
 
 // `vi.mock`'s factory is hoisted above ordinary `const` declarations, so the
 // mock fns it closes over must be created through `vi.hoisted` too — a plain
 // `const openDocument = vi.fn()` above `vi.mock` would still throw a
 // temporal-dead-zone ReferenceError at import time.
-const { openDocument, createDocument, shareText, isNativePlatformMock } = vi.hoisted(() => ({
-  openDocument: vi.fn(),
-  createDocument: vi.fn(),
-  shareText: vi.fn(),
-  isNativePlatformMock: vi.fn(() => false),
-}));
+const { openDocument, createDocument, shareText, isNativePlatformMock, addListener } = vi.hoisted(
+  () => ({
+    openDocument: vi.fn(),
+    createDocument: vi.fn(),
+    shareText: vi.fn(),
+    isNativePlatformMock: vi.fn(() => false),
+    addListener: vi.fn(),
+  }),
+);
 
 vi.mock('@capacitor/core', () => ({
   Capacitor: { isNativePlatform: () => isNativePlatformMock() },
   registerPlugin: () => ({ openDocument, createDocument, shareText }),
+}));
+
+vi.mock('@capacitor/app', () => ({
+  App: { addListener },
 }));
 
 afterEach(() => {
@@ -135,5 +146,41 @@ describe('shareDocument (ADR-026)', () => {
     });
 
     expect(outcome).toEqual({ kind: 'failed', code: 'SHARE_FAILED' });
+  });
+});
+
+describe('onAppStateChange (v0.6.0 #8, NFR-REL-02) — the second flush signal lifecycle.ts wires in alongside visibilitychange', () => {
+  it('forwards isActive from the native AppState payload to the callback', () => {
+    let nativeCallback: ((state: { isActive: boolean }) => void) | undefined;
+    addListener.mockImplementation((_eventName: string, callback: typeof nativeCallback) => {
+      nativeCallback = callback;
+      return Promise.resolve({ remove: vi.fn() });
+    });
+    const callback = vi.fn();
+
+    onAppStateChange(callback);
+    nativeCallback?.({ isActive: false });
+
+    expect(callback).toHaveBeenCalledWith(false);
+  });
+
+  it('registers for the appStateChange event specifically', () => {
+    addListener.mockReturnValue(Promise.resolve({ remove: vi.fn() }));
+
+    onAppStateChange(vi.fn());
+
+    expect(addListener).toHaveBeenCalledWith('appStateChange', expect.any(Function));
+  });
+
+  it('returns a synchronous unsubscribe function that removes the listener once the async registration resolves', async () => {
+    const remove = vi.fn().mockResolvedValue(undefined);
+    addListener.mockReturnValue(Promise.resolve({ remove }));
+
+    const unsubscribe = onAppStateChange(vi.fn());
+    unsubscribe();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(remove).toHaveBeenCalledOnce();
   });
 });

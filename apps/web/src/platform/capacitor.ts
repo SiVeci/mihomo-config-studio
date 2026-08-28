@@ -1,3 +1,4 @@
+import { App } from '@capacitor/app';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 
 import type {
@@ -20,6 +21,21 @@ import type {
  */
 export function isNativePlatform(): boolean {
   return Capacitor.isNativePlatform();
+}
+
+/**
+ * v0.6.0 #8: the second flush signal `lifecycle.ts` needs alongside
+ * `visibilitychange` (NFR-REL-02) — `App.addListener` registers
+ * asynchronously (it returns `Promise<PluginListenerHandle>`, a bridge
+ * round-trip), but callers need a synchronous unsubscribe function to
+ * return from a `useEffect` cleanup, so the promise is chained onto rather
+ * than awaited here.
+ */
+export function onAppStateChange(callback: (isActive: boolean) => void): () => void {
+  const handle = App.addListener('appStateChange', (state) => callback(state.isActive));
+  return () => {
+    void handle.then((listener) => listener.remove());
+  };
 }
 
 /** Matches `SafFilePlugin.kt`'s `openDocument`/`createDocument` result shape exactly. */
