@@ -84,10 +84,25 @@ async function saveDocumentCapacitor(options: SaveDocumentOptions): Promise<Save
 }
 
 /**
- * `ACTION_SEND`'s chooser gives the calling app no reliable callback for
- * "the user backed out without picking a target" (a platform limitation,
- * not an oversight here) — cancel/failure distinction is v0.6.0 #5's job.
- * For now: the native call succeeding means the chooser was shown.
+ * v0.6.0 #5's considered decision on `shareDocument`'s failure/cancel split
+ * (revisiting the placeholder #3 left here): `ACTION_SEND`'s chooser gives
+ * the calling app no reliable signal for "the user backed out without
+ * picking a target" — not `startActivityForResult`'s result code (the
+ * chooser typically finishes without ever calling `setResult` once it has
+ * launched a target, so `RESULT_CANCELED` cannot be trusted to mean
+ * "nothing was picked"), and not a `PendingIntent`-based chooser callback
+ * either (that fires only once a target is *chosen*, never on a plain
+ * back-out, so it cannot positively confirm cancellation any more than
+ * silence can). Building a `BroadcastReceiver`-based "was anything picked"
+ * signal was considered and rejected: it only narrows the ambiguity, adds
+ * real lifecycle-management risk (receiver registration tied to the
+ * hosting `Activity`), and the one thing that actually matters per PRD §12
+ * — "cancelling is not a failure, never show an error for it" — already
+ * holds today without it, because this function only ever resolves
+ * `failed` for a genuine thrown error, never for silence. A future
+ * WorkManager/JobIntentService-based completion signal could close this
+ * gap properly if it ever becomes worth the complexity; nothing here rules
+ * that out.
  */
 async function shareDocumentCapacitor(
   options: ShareDocumentOptions,

@@ -1,27 +1,38 @@
-import { describeSensitivity, MCSPROJ_FORMAT_VERSION, writeMcsproj } from '@mcs/project-format';
-import type {
-  McsProject,
-  McsProjQuarantine,
-  McsProjSchemaLock,
-  SensitivityFinding,
-  SensitivityKind,
-} from '@mcs/project-format';
-import { useMemo, type ReactNode } from 'react';
+import { writeMcsproj } from '@mcs/project-format';
+import type { McsProjQuarantine, McsProjSchemaLock } from '@mcs/project-format';
+import { useMemo, useState, type ReactNode } from 'react';
 
 import { t } from '../i18n/index.js';
-import type { TranslationKey } from '../i18n/index.js';
 import { resolvePlatformFileService } from '../platform/index.js';
-import type { SaveDocumentOptions, SaveDocumentOutcome } from '../platform/index.js';
+import type {
+  PlatformCapabilities,
+  SaveDocumentOptions,
+  SaveDocumentOutcome,
+  ShareDocumentOptions,
+  ShareDocumentOutcome,
+} from '../platform/index.js';
 import type { ProjectRecord } from '../project/model.js';
 import { hasBlockingIssues } from '../worker/protocol.js';
 import type { ValidationIssue } from '../worker/protocol.js';
+import { ShareDialog } from './ShareDialog.js';
+import {
+  buildMcsProject,
+  dedupeSensitivityKinds,
+  findSensitivity,
+  SENSITIVITY_LABEL_KEY,
+} from './sensitivity.js';
 import './ExportDialog.css';
 
 export type SaveDocument = (options: SaveDocumentOptions) => Promise<SaveDocumentOutcome>;
+export type ShareDocument = (options: ShareDocumentOptions) => Promise<ShareDocumentOutcome>;
 
 /** Production default: the real platform port (ADR-026) — `showSaveFilePicker` when available, Blob + `<a download>` otherwise, chosen inside `saveDocument` itself, never here. */
 async function defaultSaveDocument(options: SaveDocumentOptions): Promise<SaveDocumentOutcome> {
   return resolvePlatformFileService().saveDocument(options);
+}
+
+async function defaultShareDocument(options: ShareDocumentOptions): Promise<ShareDocumentOutcome> {
+  return resolvePlatformFileService().shareDocument(options);
 }
 
 export interface ExportDialogProps {
@@ -33,46 +44,10 @@ export interface ExportDialogProps {
   readonly onClose: () => void;
   /** Test-only override; production code leaves this unset so every export goes through the real platform port. */
   readonly saveDocument?: SaveDocument;
-}
-
-const SENSITIVITY_LABEL_KEY: Record<SensitivityKind, TranslationKey> = {
-  'subscription-url': 'export.sensitivity.subscriptionUrl',
-  password: 'export.sensitivity.password',
-  uuid: 'export.sensitivity.uuid',
-  'private-key': 'export.sensitivity.privateKey',
-};
-
-/**
- * v0.2.0 has no persisted UI state (#6's own note: nothing concrete to store
- * in `uiState` yet), so that one `McsProject` field is still a fixed
- * placeholder. `schemaLock`/`quarantine` are real as of v0.5.0 #11 — the
- * project's own persisted lock and quarantine, not derived here.
- */
-function buildMcsProject(
-  project: ProjectRecord,
-  configText: string,
-  schemaLock: McsProjSchemaLock,
-  quarantine: McsProjQuarantine,
-): McsProject {
-  return {
-    manifest: {
-      formatVersion: MCSPROJ_FORMAT_VERSION,
-      id: project.id,
-      name: project.name,
-      description: project.description,
-      targetProfile: project.targetProfile,
-      createdAt: project.createdAt,
-      updatedAt: project.updatedAt,
-    },
-    configText,
-    uiState: {},
-    schemaLock,
-    quarantine,
-  };
-}
-
-function dedupeKinds(findings: readonly SensitivityFinding[]): SensitivityKind[] {
-  return [...new Set(findings.map((finding) => finding.kind))];
+  /** Test-only override, forwarded to `ShareDialog`; production code leaves this unset. */
+  readonly shareDocument?: ShareDocument;
+  /** Test-only override; production code leaves this unset so the "分享" button's visibility reflects the real platform (FR-AND-03 is Android-only — `capabilities.canShare` is false on Web). */
+  readonly capabilities?: PlatformCapabilities;
 }
 
 /**
@@ -89,6 +64,12 @@ function dedupeKinds(findings: readonly SensitivityFinding[]): SensitivityKind[]
  * does not yet branch its own copy on `saved`/`downloaded`/`cancelled`
  * (v0.6.0 #7 adds the button-label distinction, PRD §11.4); today it only
  * needs the port to keep working on every platform, silently.
+ *
+ * The "分享" entry (v0.6.0 #5, FR-AND-03) only renders when
+ * `capabilities.canShare` is true — Android-only, never on Web — and opens
+ * `ShareDialog` rather than sharing directly, so the sensitivity warning
+ * (NFR-SEC-08) and failure/retry handling (PRD §12) live in one place
+ * shared with nothing to duplicate against.
  */
 export function ExportDialog({
   project,
@@ -98,10 +79,13 @@ export function ExportDialog({
   quarantine,
   onClose,
   saveDocument = defaultSaveDocument,
+  shareDocument = defaultShareDocument,
+  capabilities = resolvePlatformFileService().capabilities,
 }: ExportDialogProps): ReactNode {
+  const [showShareDialog, setShowShareDialog] = useState(false);
   const blocking = hasBlockingIssues(issues);
   const findings = useMemo(
-    () => describeSensitivity(buildMcsProject(project, configText, schemaLock, quarantine)),
+    () => findSensitivity(project, configText, schemaLock, quarantine),
     [project, configText, schemaLock, quarantine],
   );
 
@@ -130,6 +114,20 @@ export function ExportDialog({
     });
   }
 
+  if (showShareDialog) {
+    return (
+      <ShareDialog
+        project={project}
+        configText={configText}
+        schemaLock={schemaLock}
+        quarantine={quarantine}
+        onClose={() => setShowShareDialog(false)}
+        shareDocument={shareDocument}
+        saveDocument={saveDocument}
+      />
+    );
+  }
+
   return (
     <section className="export-dialog" role="dialog" aria-label={t('export.title')}>
       <h2 className="export-dialog__title">{t('export.title')}</h2>
@@ -138,7 +136,7 @@ export function ExportDialog({
         <div className="export-dialog__sensitivity">
           <p className="export-dialog__sensitivity-title">{t('export.sensitivityTitle')}</p>
           <ul className="export-dialog__sensitivity-list">
-            {dedupeKinds(findings).map((kind) => (
+            {dedupeSensitivityKinds(findings).map((kind) => (
               <li key={kind}>{t(SENSITIVITY_LABEL_KEY[kind])}</li>
             ))}
           </ul>
@@ -157,6 +155,11 @@ export function ExportDialog({
         {blocking && (
           <button type="button" onClick={() => void handleExportDraft()}>
             {t('export.draftButton')}
+          </button>
+        )}
+        {capabilities.canShare && (
+          <button type="button" disabled={blocking} onClick={() => setShowShareDialog(true)}>
+            {t('export.shareButton')}
           </button>
         )}
         <button type="button" onClick={onClose}>

@@ -242,3 +242,56 @@ describe('ExportDialog / sensitivity warnings (NFR-SEC-08)', () => {
     expect(screen.queryByText(secretPassword, { exact: false })).toBeNull();
   });
 });
+
+describe('ExportDialog / share entry point (v0.6.0 #5, FR-AND-03, ADR-026)', () => {
+  it('does not render a share button when capabilities.canShare is false (the real default under a plain Web platform)', () => {
+    render(
+      <ExportDialog
+        project={PROJECT}
+        schemaLock={SCHEMA_LOCK}
+        quarantine={QUARANTINE}
+        configText={'mode: rule\n'}
+        issues={[]}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: t('export.shareButton') })).toBeNull();
+  });
+
+  it('renders a share button and opens ShareDialog when capabilities.canShare is true', () => {
+    render(
+      <ExportDialog
+        project={PROJECT}
+        schemaLock={SCHEMA_LOCK}
+        quarantine={QUARANTINE}
+        configText={'mode: rule\n'}
+        issues={[]}
+        onClose={vi.fn()}
+        capabilities={{ canSaveViaSystemPicker: true, canShare: true }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: t('export.shareButton') }));
+
+    expect(screen.getByRole('dialog', { name: t('share.title') })).toBeDefined();
+  });
+
+  it('disables the share button while a blocking issue is present, same as the other export actions', () => {
+    render(
+      <ExportDialog
+        project={PROJECT}
+        schemaLock={SCHEMA_LOCK}
+        quarantine={QUARANTINE}
+        configText={'mode: rule\n  bad: indent'}
+        issues={[BLOCKING_ISSUE]}
+        onClose={vi.fn()}
+        capabilities={{ canSaveViaSystemPicker: true, canShare: true }}
+      />,
+    );
+
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', { name: t('export.shareButton') }).disabled,
+    ).toBe(true);
+  });
+});
