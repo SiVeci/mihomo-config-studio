@@ -1,5 +1,5 @@
 import { IndexedDbStorageAdapter } from '@mcs/storage';
-import { useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, type ReactNode } from 'react';
 
 import { BundlePage } from './bundle/BundlePage.js';
 import { resolveUpdateSources } from './bundle/update-sources.js';
@@ -49,7 +49,27 @@ const ROUTES: readonly Route[] = [
   { path: '/bundle', element: <BundlePageRoute /> },
 ];
 
+/**
+ * NFR-PERF-01 (v0.6.0 #11): `adb shell am start -W`'s `TotalTime` only
+ * covers the Activity becoming visible — the WebView's own React tree
+ * hasn't mounted yet at that point, so it cannot answer "can the user
+ * actually do anything." A `useEffect` (not `useLayoutEffect`) fires after
+ * the browser has committed and painted this first render, the earliest
+ * point anything on screen is real and clickable — as close to "time to
+ * interactive" as a single client-rendered mark can get without
+ * instrumenting every async data load on the page. `console.warn` (not
+ * `.log`) because `no-console` allows only `warn`/`error`; read back via
+ * `adb logcat`, not surfaced to the user.
+ */
+function useReportFirstInteractive(): void {
+  useEffect(() => {
+    performance.mark('mcs-first-interactive');
+    console.warn(`MCS_FIRST_INTERACTIVE_MS=${Math.round(performance.now())}`);
+  }, []);
+}
+
 export function App(): ReactNode {
+  useReportFirstInteractive();
   return (
     <HashRouter>
       <Routes routes={ROUTES} notFound={<NotFoundPage />} />
