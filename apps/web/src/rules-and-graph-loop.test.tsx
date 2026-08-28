@@ -78,8 +78,9 @@ describe('v0.4.0 closed loop: import -> reorder -> batch replace -> undo -> grap
       <ProjectPage
         client={client}
         adapter={adapter}
-        downloadFile={(content, filename, mimeType) => {
-          downloads.push({ content, filename, mimeType });
+        saveDocument={async ({ suggestedName, content, mimeType }) => {
+          downloads.push({ content, filename: suggestedName, mimeType });
+          return { kind: 'saved', name: suggestedName };
         }}
       />,
     );

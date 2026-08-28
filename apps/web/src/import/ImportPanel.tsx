@@ -1,6 +1,8 @@
-import { useState, type ChangeEvent, type DragEvent, type ReactNode } from 'react';
+import { useState, type DragEvent, type ReactNode } from 'react';
 
 import { t } from '../i18n/index.js';
+import { resolvePlatformFileService } from '../platform/index.js';
+import type { OpenDocumentOptions, OpenDocumentOutcome } from '../platform/index.js';
 import { hasBlockingIssues } from '../worker/protocol.js';
 import type { ParseResponse, PreviewProviderResponse } from '../worker/protocol.js';
 import './ImportPanel.css';
@@ -15,35 +17,53 @@ export interface ImportWorkerClient {
   previewProvider(text: string): Promise<PreviewProviderResponse>;
 }
 
+type OpenDocument = (options: OpenDocumentOptions) => Promise<OpenDocumentOutcome>;
+
+async function defaultOpenDocument(options: OpenDocumentOptions): Promise<OpenDocumentOutcome> {
+  return resolvePlatformFileService().openDocument(options);
+}
+
+const YAML_ACCEPT_EXTENSIONS = ['.yaml', '.yml'];
+
 export interface ImportPanelProps {
   readonly client: ImportWorkerClient;
   /** Called with the raw text once it has parsed without a blocking issue. */
   readonly onImport: (text: string) => void;
+  /** Test-only override; production code leaves this unset so both file buttons resolve through the real platform port (`resolvePlatformFileService`, ADR-026). */
+  readonly openDocument?: OpenDocument;
 }
 
 type Status = 'idle' | 'success' | 'error';
 type ProviderPreviewStatus = 'idle' | 'success' | 'error';
 
 /**
- * Three entry points for FR-YAML-01: file picker, drag-and-drop, and a plain
- * paste box. Every path only ever *reads* the source (`File.text()`) and
- * hands the text to the Worker for parsing (#10) — there is no code path
- * anywhere here that requests a writable file handle or otherwise touches
- * the original file, which is what makes NFR-REL-04 (never overwrite the
- * imported file) true by construction rather than by a runtime check. The
- * structural test in `ImportPanel.test.tsx` asserts this file never mentions
- * a write-capable File System Access API, so a future edit that adds one
- * cannot land silently.
+ * Three entry points for FR-YAML-01: the platform file picker (ADR-026's
+ * `PlatformFileService.openDocument` — `<input type=file>` on Web,
+ * Android's SAF picker from v0.6.0 #3 on), drag-and-drop, and a plain paste
+ * box. Every path only ever *reads* the source and hands the text to the
+ * Worker for parsing (#10) — there is no code path anywhere here that
+ * requests a writable file handle or otherwise touches the original file,
+ * which is what makes NFR-REL-04 (never overwrite the imported file) true
+ * by construction rather than by a runtime check. The structural test in
+ * `ImportPanel.test.tsx` asserts this file never mentions a write-capable
+ * File System Access API, so a future edit that adds one cannot land
+ * silently. Drag-and-drop keeps using `File.text()` directly — it is a
+ * Web-only affordance (no Android drag source), harmless to leave as plain
+ * DOM rather than routing through the port too.
  *
  * A fourth, unrelated entry point lives here too (PRD §8.11, ADR-005,
  * v0.3.0 #17): local Provider file preview. It shares this file because it
- * shares the exact same `File.text()`-only read path and the same NFR-REL-04
+ * shares the exact same read-only path and the same NFR-REL-04
  * guarantee — but it never calls `onImport`, so a previewed Provider file
  * can never end up merged into the open project by accident. ADR-005 also
  * means this file must never gain a network request of its own for either
  * feature; `ImportPanel.test.tsx` has a matching structural scan for that.
  */
-export function ImportPanel({ client, onImport }: ImportPanelProps): ReactNode {
+export function ImportPanel({
+  client,
+  onImport,
+  openDocument = defaultOpenDocument,
+}: ImportPanelProps): ReactNode {
   const [pasteText, setPasteText] = useState('');
   const [status, setStatus] = useState<Status>('idle');
   const [providerPreviewStatus, setProviderPreviewStatus] = useState<ProviderPreviewStatus>('idle');
@@ -65,10 +85,11 @@ export function ImportPanel({ client, onImport }: ImportPanelProps): ReactNode {
     await attemptImport(text);
   }
 
-  function handleFileInputChange(event: ChangeEvent<HTMLInputElement>): void {
-    const file = event.target.files?.[0];
-    event.target.value = ''; // allow re-selecting the same file name later
-    if (file) void handleFile(file);
+  async function handleOpenFileClick(): Promise<void> {
+    const outcome = await openDocument({ acceptExtensions: YAML_ACCEPT_EXTENSIONS });
+    if (outcome.kind === 'opened') {
+      await attemptImport(outcome.text);
+    }
   }
 
   function handleDragOver(event: DragEvent<HTMLDivElement>): void {
@@ -81,19 +102,19 @@ export function ImportPanel({ client, onImport }: ImportPanelProps): ReactNode {
     if (file) void handleFile(file);
   }
 
-  async function handleProviderFile(file: File): Promise<void> {
+  async function handleProviderPreview(text: string): Promise<void> {
     setProviderPreview(null);
     setProviderPreviewStatus('idle');
-    const text = await file.text();
     const { preview } = await client.previewProvider(text);
     setProviderPreview(preview);
     setProviderPreviewStatus(preview ? 'success' : 'error');
   }
 
-  function handleProviderFileInputChange(event: ChangeEvent<HTMLInputElement>): void {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (file) void handleProviderFile(file);
+  async function handleOpenProviderFileClick(): Promise<void> {
+    const outcome = await openDocument({ acceptExtensions: YAML_ACCEPT_EXTENSIONS });
+    if (outcome.kind === 'opened') {
+      await handleProviderPreview(outcome.text);
+    }
   }
 
   return (
@@ -102,16 +123,13 @@ export function ImportPanel({ client, onImport }: ImportPanelProps): ReactNode {
 
       <div className="import-panel__dropzone" onDragOver={handleDragOver} onDrop={handleDrop}>
         <p className="import-panel__drop-hint">{t('import.dropHint')}</p>
-        <label className="import-panel__file-label" htmlFor="import-file-input">
+        <button
+          type="button"
+          className="import-panel__file-button"
+          onClick={() => void handleOpenFileClick()}
+        >
           {t('import.fileButton')}
-        </label>
-        <input
-          id="import-file-input"
-          className="import-panel__file-input"
-          type="file"
-          accept=".yaml,.yml"
-          onChange={handleFileInputChange}
-        />
+        </button>
       </div>
 
       <label className="import-panel__label" htmlFor="import-paste">
@@ -148,16 +166,13 @@ export function ImportPanel({ client, onImport }: ImportPanelProps): ReactNode {
         <p className="import-panel__provider-preview-notice">
           {t('providerPreview.notAppliedNotice')}
         </p>
-        <label className="import-panel__file-label" htmlFor="provider-preview-file-input">
+        <button
+          type="button"
+          className="import-panel__file-button"
+          onClick={() => void handleOpenProviderFileClick()}
+        >
           {t('providerPreview.fileButton')}
-        </label>
-        <input
-          id="provider-preview-file-input"
-          className="import-panel__file-input"
-          type="file"
-          accept=".yaml,.yml"
-          onChange={handleProviderFileInputChange}
-        />
+        </button>
 
         {providerPreviewStatus === 'success' && providerPreview && (
           <div className="import-panel__provider-preview-result">

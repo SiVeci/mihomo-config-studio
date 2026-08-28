@@ -10,40 +10,18 @@ import { useMemo, type ReactNode } from 'react';
 
 import { t } from '../i18n/index.js';
 import type { TranslationKey } from '../i18n/index.js';
+import { resolvePlatformFileService } from '../platform/index.js';
+import type { SaveDocumentOptions, SaveDocumentOutcome } from '../platform/index.js';
 import type { ProjectRecord } from '../project/model.js';
 import { hasBlockingIssues } from '../worker/protocol.js';
 import type { ValidationIssue } from '../worker/protocol.js';
 import './ExportDialog.css';
 
-/**
- * Injectable so tests can assert on what would have been downloaded
- * (filename, MIME type, content) without needing jsdom to implement
- * `URL.createObjectURL` — it doesn't (see `ExportDialog.test.tsx`).
- */
-export type DownloadFile = (
-  content: Uint8Array | string,
-  filename: string,
-  mimeType: string,
-) => void;
+export type SaveDocument = (options: SaveDocumentOptions) => Promise<SaveDocumentOutcome>;
 
-function defaultDownloadFile(
-  content: Uint8Array | string,
-  filename: string,
-  mimeType: string,
-): void {
-  // `Blob`'s `BlobPart` wants an `ArrayBuffer`-backed view specifically;
-  // `Uint8Array` alone is typed generically over `ArrayBufferLike` (which
-  // also covers `SharedArrayBuffer`) since TS 5.7. `writeMcsproj`'s output
-  // is always a fresh, plain `ArrayBuffer` at runtime — copy-constructing
-  // re-asserts that in the type system rather than casting past it.
-  const blobPart = typeof content === 'string' ? content : new Uint8Array(content);
-  const blob = new Blob([blobPart], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
+/** Production default: the real platform port (ADR-026) — `showSaveFilePicker` when available, Blob + `<a download>` otherwise, chosen inside `saveDocument` itself, never here. */
+async function defaultSaveDocument(options: SaveDocumentOptions): Promise<SaveDocumentOutcome> {
+  return resolvePlatformFileService().saveDocument(options);
 }
 
 export interface ExportDialogProps {
@@ -53,7 +31,8 @@ export interface ExportDialogProps {
   readonly schemaLock: McsProjSchemaLock;
   readonly quarantine: McsProjQuarantine;
   readonly onClose: () => void;
-  readonly downloadFile?: DownloadFile;
+  /** Test-only override; production code leaves this unset so every export goes through the real platform port. */
+  readonly saveDocument?: SaveDocument;
 }
 
 const SENSITIVITY_LABEL_KEY: Record<SensitivityKind, TranslationKey> = {
@@ -103,6 +82,13 @@ function dedupeKinds(findings: readonly SensitivityFinding[]): SensitivityKind[]
  * export never silently reformats what the user is looking at) and exposes
  * a single "invalid draft" export instead, marked by a filename suffix so
  * it can't be mistaken for a usable configuration.
+ *
+ * All three exports go through `saveDocument` (ADR-026) rather than a
+ * direct download — the same UI code this dialog already is works
+ * unmodified once Android's SAF implementation lands in #3. This dialog
+ * does not yet branch its own copy on `saved`/`downloaded`/`cancelled`
+ * (v0.6.0 #7 adds the button-label distinction, PRD §11.4); today it only
+ * needs the port to keep working on every platform, silently.
  */
 export function ExportDialog({
   project,
@@ -111,7 +97,7 @@ export function ExportDialog({
   schemaLock,
   quarantine,
   onClose,
-  downloadFile = defaultDownloadFile,
+  saveDocument = defaultSaveDocument,
 }: ExportDialogProps): ReactNode {
   const blocking = hasBlockingIssues(issues);
   const findings = useMemo(
@@ -119,17 +105,29 @@ export function ExportDialog({
     [project, configText, schemaLock, quarantine],
   );
 
-  function handleExportYaml(): void {
-    downloadFile(configText, `${project.name}.yaml`, 'text/yaml');
+  async function handleExportYaml(): Promise<void> {
+    await saveDocument({
+      suggestedName: `${project.name}.yaml`,
+      content: configText,
+      mimeType: 'text/yaml',
+    });
   }
 
   async function handleExportMcsproj(): Promise<void> {
     const bytes = await writeMcsproj(buildMcsProject(project, configText, schemaLock, quarantine));
-    downloadFile(bytes, `${project.name}.mcsproj`, 'application/zip');
+    await saveDocument({
+      suggestedName: `${project.name}.mcsproj`,
+      content: bytes,
+      mimeType: 'application/zip',
+    });
   }
 
-  function handleExportDraft(): void {
-    downloadFile(configText, `${project.name}.invalid-draft.yaml`, 'text/yaml');
+  async function handleExportDraft(): Promise<void> {
+    await saveDocument({
+      suggestedName: `${project.name}.invalid-draft.yaml`,
+      content: configText,
+      mimeType: 'text/yaml',
+    });
   }
 
   return (
@@ -150,14 +148,14 @@ export function ExportDialog({
       {blocking && <p className="export-dialog__draft-notice">{t('export.draftNotice')}</p>}
 
       <div className="export-dialog__actions">
-        <button type="button" disabled={blocking} onClick={handleExportYaml}>
+        <button type="button" disabled={blocking} onClick={() => void handleExportYaml()}>
           {t('export.yamlButton')}
         </button>
         <button type="button" disabled={blocking} onClick={() => void handleExportMcsproj()}>
           {t('export.mcsprojButton')}
         </button>
         {blocking && (
-          <button type="button" onClick={handleExportDraft}>
+          <button type="button" onClick={() => void handleExportDraft()}>
             {t('export.draftButton')}
           </button>
         )}

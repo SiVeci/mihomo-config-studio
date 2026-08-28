@@ -1,4 +1,4 @@
-export type { AndroidFileAdapter, StorageAdapter, StorageQuota } from './adapter.js';
+export type { StorageAdapter, StorageQuota } from './adapter.js';
 export { AutoSaver, DEFAULT_AUTOSAVE_INTERVAL_MS } from './autosave.js';
 export type { AutoSaverOptions } from './autosave.js';
 export { IndexedDbStorageAdapter } from './indexeddb.js';

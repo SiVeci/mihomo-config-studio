@@ -64,8 +64,9 @@ describe('v0.3.0 closed loop: apply template -> form edit -> undo -> redo -> mod
       <ProjectPage
         client={client}
         adapter={adapter}
-        downloadFile={(content, filename, mimeType) => {
-          downloads.push({ content, filename, mimeType });
+        saveDocument={async ({ suggestedName, content, mimeType }) => {
+          downloads.push({ content, filename: suggestedName, mimeType });
+          return { kind: 'saved', name: suggestedName };
         }}
       />,
     );

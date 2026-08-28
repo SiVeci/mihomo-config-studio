@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { OpenDocumentOptions, OpenDocumentOutcome } from '../platform/index.js';
 import { t } from '../i18n/index.js';
 import type { PreviewProviderResponse, ValidationIssue } from '../worker/protocol.js';
 import { ImportPanel } from './ImportPanel.js';
@@ -35,38 +36,65 @@ function fakeClient(
   };
 }
 
-describe('ImportPanel / file selection', () => {
-  it('imports the contents of a selected .yaml file and shows a success message', async () => {
-    const onImport = vi.fn();
-    render(<ImportPanel client={fakeClient()} onImport={onImport} />);
-    const file = new File([VALID_YAML], 'config.yaml', { type: 'text/yaml' });
+/** Resolves to `opened` with fixed text/name, ignoring whatever `acceptExtensions` the caller passed — good enough for these UI-wiring tests, which don't assert on that argument. */
+function openDocumentReturning(
+  text: string,
+  name = 'config.yaml',
+): (options: OpenDocumentOptions) => Promise<OpenDocumentOutcome> {
+  return async () => ({ kind: 'opened', text, name });
+}
 
-    fireEvent.change(screen.getByLabelText<HTMLInputElement>(t('import.fileButton')), {
-      target: { files: [file] },
-    });
+const openDocumentCancelled = async (): Promise<OpenDocumentOutcome> => ({ kind: 'cancelled' });
+
+describe('ImportPanel / file selection via the platform port (ADR-026)', () => {
+  it('imports the contents the port resolves with and shows a success message', async () => {
+    const onImport = vi.fn();
+    render(
+      <ImportPanel
+        client={fakeClient()}
+        onImport={onImport}
+        openDocument={openDocumentReturning(VALID_YAML)}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: t('import.fileButton') }));
 
     await waitFor(() => expect(onImport).toHaveBeenCalledWith(VALID_YAML));
     expect(screen.getByText(t('import.successMessage'))).toBeDefined();
   });
 
-  it('resets the file input value after a selection, so picking the same file again still fires change', () => {
-    render(<ImportPanel client={fakeClient()} onImport={vi.fn()} />);
-    const file = new File([VALID_YAML], 'config.yaml', { type: 'text/yaml' });
-    const input = screen.getByLabelText<HTMLInputElement>(t('import.fileButton'));
+  it('does nothing when the port reports cancelled — no import, no error message', async () => {
+    const onImport = vi.fn();
+    render(
+      <ImportPanel
+        client={fakeClient()}
+        onImport={onImport}
+        openDocument={openDocumentCancelled}
+      />,
+    );
 
-    fireEvent.change(input, { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: t('import.fileButton') }));
 
-    expect(input.value).toBe('');
+    // Macrotask flush — guarantees every pending microtask in
+    // handleOpenFileClick's `await openDocument(...)` chain has settled
+    // before asserting, regardless of how many `await` hops it takes.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(onImport).not.toHaveBeenCalled();
+    expect(screen.queryByText(t('import.successMessage'))).toBeNull();
+    expect(screen.queryByText(t('import.errorMessage'))).toBeNull();
   });
 
-  it('does not call onImport and shows an error message when the file has a blocking syntax issue', async () => {
+  it('does not call onImport and shows an error message when the opened file has a blocking syntax issue', async () => {
     const onImport = vi.fn();
-    render(<ImportPanel client={fakeClient([BLOCKING_ISSUE])} onImport={onImport} />);
-    const file = new File(['a: 1\n  b: 2\n'], 'bad.yaml', { type: 'text/yaml' });
+    render(
+      <ImportPanel
+        client={fakeClient([BLOCKING_ISSUE])}
+        onImport={onImport}
+        openDocument={openDocumentReturning('a: 1\n  b: 2\n', 'bad.yaml')}
+      />,
+    );
 
-    fireEvent.change(screen.getByLabelText<HTMLInputElement>(t('import.fileButton')), {
-      target: { files: [file] },
-    });
+    fireEvent.click(screen.getByRole('button', { name: t('import.fileButton') }));
 
     await screen.findByText(t('import.errorMessage'));
     expect(onImport).not.toHaveBeenCalled();
@@ -170,13 +198,6 @@ describe('ImportPanel / ADR-005 (no client-side subscription fetch)', () => {
 });
 
 describe('ImportPanel / local Provider file preview (PRD §8.11, v0.3.0 #17)', () => {
-  function selectProviderFile(text: string, name = 'provider.yaml'): void {
-    const file = new File([text], name, { type: 'text/yaml' });
-    fireEvent.change(screen.getByLabelText<HTMLInputElement>(t('providerPreview.fileButton')), {
-      target: { files: [file] },
-    });
-  }
-
   it('shows the node count and each node’s name/type without touching the open project (never calls onImport)', async () => {
     const onImport = vi.fn();
     const client = fakeClient([], {
@@ -186,9 +207,18 @@ describe('ImportPanel / local Provider file preview (PRD §8.11, v0.3.0 #17)', (
         { name: null, proxyType: null, fieldKeys: ['type'] },
       ],
     });
-    render(<ImportPanel client={client} onImport={onImport} />);
+    render(
+      <ImportPanel
+        client={client}
+        onImport={onImport}
+        openDocument={openDocumentReturning(
+          'proxies:\n  - name: HK-01\n    type: ss\n',
+          'provider.yaml',
+        )}
+      />,
+    );
 
-    selectProviderFile('proxies:\n  - name: HK-01\n    type: ss\n');
+    fireEvent.click(screen.getByRole('button', { name: t('providerPreview.fileButton') }));
 
     await screen.findByText(t('providerPreview.nodeCount', { count: 2 }));
     expect(screen.getByText('HK-01')).toBeDefined();
@@ -200,9 +230,15 @@ describe('ImportPanel / local Provider file preview (PRD §8.11, v0.3.0 #17)', (
   it('shows an error message for a file that is not a valid Provider file, without touching the open project', async () => {
     const onImport = vi.fn();
     const client = fakeClient([], null);
-    render(<ImportPanel client={client} onImport={onImport} />);
+    render(
+      <ImportPanel
+        client={client}
+        onImport={onImport}
+        openDocument={openDocumentReturning('mode: rule\n', 'not-a-provider.yaml')}
+      />,
+    );
 
-    selectProviderFile('mode: rule\n', 'not-a-provider.yaml');
+    fireEvent.click(screen.getByRole('button', { name: t('providerPreview.fileButton') }));
 
     await screen.findByText(t('providerPreview.errorMessage'));
     expect(onImport).not.toHaveBeenCalled();
@@ -213,9 +249,15 @@ describe('ImportPanel / local Provider file preview (PRD §8.11, v0.3.0 #17)', (
       proxyCount: 1,
       nodes: [{ name: 'a', proxyType: 'vmess', fieldKeys: ['name', 'type', 'uuid', 'password'] }],
     });
-    render(<ImportPanel client={client} onImport={vi.fn()} />);
+    render(
+      <ImportPanel
+        client={client}
+        onImport={vi.fn()}
+        openDocument={openDocumentReturning('proxies:\n  - name: a\n    type: vmess\n')}
+      />,
+    );
 
-    selectProviderFile('proxies:\n  - name: a\n    type: vmess\n');
+    fireEvent.click(screen.getByRole('button', { name: t('providerPreview.fileButton') }));
 
     const fieldsRow = await screen.findByText(/uuid, password/);
     expect(fieldsRow.textContent).not.toMatch(/[-]{4,}|@|:\/\//); // no value-shaped text sneaked in

@@ -24,24 +24,3 @@ export interface StorageAdapter {
   list(prefix: string): Promise<readonly string[]>;
   estimateQuota?(): Promise<StorageQuota | null>;
 }
-
-/**
- * Extra surface Android needs, defined now so the base port does not need a
- * breaking change when `apps/android` is packaged in v0.6.0 (out of scope
- * until then — TODO(v0.6.0): implement against a Capacitor plugin, informed
- * by the M0 spike at
- * `apps/android/android/app/src/main/java/studio/mihomoconfig/m0spike/SafFilePlugin.kt`).
- * No `@capacitor/*` import belongs here or ever will in `packages/**`
- * (ESLint enforces this) — only the plain-TS interface shape.
- *
- * Two Android storage locations behave differently from a plain key: a
- * Storage Access Framework (SAF) document is addressed by a `content://` URI
- * the user picked through a system file picker, not an app-chosen key, so a
- * real implementation must persist the key-to-URI mapping itself. The app's
- * private directory (`filesDir`) has no such indirection — `StorageAdapter`'s
- * plain string keys already model it directly.
- */
-export interface AndroidFileAdapter extends StorageAdapter {
-  /** Record that `key` is backed by a user-picked SAF document at `uri`. */
-  bindSafDocument(key: string, uri: string): Promise<void>;
-}

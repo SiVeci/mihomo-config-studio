@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { t } from '../i18n/index.js';
+import type { SaveDocumentOutcome } from '../platform/index.js';
 import type { ProjectRecord } from '../project/model.js';
 import type { ValidationIssue } from '../worker/protocol.js';
 import { ExportDialog } from './ExportDialog.js';
@@ -33,9 +34,24 @@ const BLOCKING_ISSUE: ValidationIssue = {
   blocking: true,
 };
 
+function fakeSaveDocument(): ReturnType<typeof vi.fn> & {
+  (options: {
+    suggestedName: string;
+    content: string | Uint8Array;
+    mimeType: string;
+  }): Promise<SaveDocumentOutcome>;
+} {
+  return vi.fn(
+    async (options: { suggestedName: string; content: string | Uint8Array; mimeType: string }) => ({
+      kind: 'saved' as const,
+      name: options.suggestedName,
+    }),
+  );
+}
+
 describe('ExportDialog / normal export (no blocking issues)', () => {
   it('exports config.yaml verbatim, not through any re-serialisation', () => {
-    const downloadFile = vi.fn();
+    const saveDocument = fakeSaveDocument();
     render(
       <ExportDialog
         project={PROJECT}
@@ -44,21 +60,21 @@ describe('ExportDialog / normal export (no blocking issues)', () => {
         configText={'mode: rule\nport: 7890\n'}
         issues={[]}
         onClose={vi.fn()}
-        downloadFile={downloadFile}
+        saveDocument={saveDocument}
       />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: t('export.yamlButton') }));
 
-    expect(downloadFile).toHaveBeenCalledWith(
-      'mode: rule\nport: 7890\n',
-      'My Project.yaml',
-      'text/yaml',
-    );
+    expect(saveDocument).toHaveBeenCalledWith({
+      suggestedName: 'My Project.yaml',
+      content: 'mode: rule\nport: 7890\n',
+      mimeType: 'text/yaml',
+    });
   });
 
   it('exports a .mcsproj archive that reads back to the same config text and project metadata', async () => {
-    const downloadFile = vi.fn();
+    const saveDocument = fakeSaveDocument();
     render(
       <ExportDialog
         project={PROJECT}
@@ -67,17 +83,19 @@ describe('ExportDialog / normal export (no blocking issues)', () => {
         configText={'mode: rule\n'}
         issues={[]}
         onClose={vi.fn()}
-        downloadFile={downloadFile}
+        saveDocument={saveDocument}
       />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: t('export.mcsprojButton') }));
 
-    await vi.waitFor(() => expect(downloadFile).toHaveBeenCalled());
-    const [bytes, filename, mimeType] = downloadFile.mock.calls[0] as [Uint8Array, string, string];
-    expect(filename).toBe('My Project.mcsproj');
-    expect(mimeType).toBe('application/zip');
-    const read = await readMcsproj(bytes);
+    await vi.waitFor(() => expect(saveDocument).toHaveBeenCalled());
+    const [options] = saveDocument.mock.calls[0] as [
+      { suggestedName: string; content: Uint8Array; mimeType: string },
+    ];
+    expect(options.suggestedName).toBe('My Project.mcsproj');
+    expect(options.mimeType).toBe('application/zip');
+    const read = await readMcsproj(options.content);
     expect(read.configText).toBe('mode: rule\n');
     expect(read.manifest.id).toBe('p1');
     expect(read.manifest.name).toBe('My Project');
@@ -141,7 +159,7 @@ describe('ExportDialog / blocking issues (FR-YAML-07 mutually exclusive exports)
   });
 
   it('exports the raw (invalid) text with a draft-marked filename, distinct from the normal export name', () => {
-    const downloadFile = vi.fn();
+    const saveDocument = fakeSaveDocument();
     render(
       <ExportDialog
         project={PROJECT}
@@ -150,17 +168,17 @@ describe('ExportDialog / blocking issues (FR-YAML-07 mutually exclusive exports)
         configText={'mode: rule\n  bad: indent'}
         issues={[BLOCKING_ISSUE]}
         onClose={vi.fn()}
-        downloadFile={downloadFile}
+        saveDocument={saveDocument}
       />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: t('export.draftButton') }));
 
-    expect(downloadFile).toHaveBeenCalledWith(
-      'mode: rule\n  bad: indent',
-      'My Project.invalid-draft.yaml',
-      'text/yaml',
-    );
+    expect(saveDocument).toHaveBeenCalledWith({
+      suggestedName: 'My Project.invalid-draft.yaml',
+      content: 'mode: rule\n  bad: indent',
+      mimeType: 'text/yaml',
+    });
   });
 });
 

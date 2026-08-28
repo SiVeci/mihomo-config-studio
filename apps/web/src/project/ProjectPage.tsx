@@ -22,7 +22,7 @@ import type { DiffPanelWorkerClient } from '../diff/DiffPanel.js';
 import { YamlEditor } from '../editor/YamlEditor.js';
 import type { YamlEditorHandle, YamlEditorWorkerClient } from '../editor/YamlEditor.js';
 import { ExportDialog } from '../export/ExportDialog.js';
-import type { DownloadFile } from '../export/ExportDialog.js';
+import type { SaveDocument } from '../export/ExportDialog.js';
 import { UpgradeDialog } from '../migration/UpgradeDialog.js';
 import type { UpgradeResult } from '../migration/UpgradeDialog.js';
 import { ReadOnlyGuard } from './ReadOnlyGuard.js';
@@ -163,8 +163,8 @@ export interface ProjectPageProps {
     ModuleFormWorkerClient;
   /** Injectable clock so autosave timing is exactly assertable in tests. */
   readonly now?: () => number;
-  /** Forwarded to `ExportDialog` as-is; injectable because jsdom has no `URL.createObjectURL` (see `ExportDialog`'s own doc comment). */
-  readonly downloadFile?: DownloadFile;
+  /** Forwarded to `ExportDialog` as-is; test-only override for the platform port (ADR-026) — jsdom has no `URL.createObjectURL`/`showSaveFilePicker` (see `ExportDialog`'s own doc comment). */
+  readonly saveDocument?: SaveDocument;
   /** Test-only trust anchor override forwarded to `resolveProjectSchema` (v0.5.0 #11), same escape hatch `BundlePage` exposes; production code leaves this unset. */
   readonly trustedPublicKeys?: readonly Uint8Array[];
 }
@@ -173,7 +173,7 @@ export function ProjectPage({
   adapter,
   client,
   now = Date.now,
-  downloadFile,
+  saveDocument,
   trustedPublicKeys,
 }: ProjectPageProps): ReactNode {
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
@@ -896,7 +896,7 @@ export function ProjectPage({
               schemaLock={schemaLock}
               quarantine={quarantine}
               onClose={() => setShowExportDialog(false)}
-              {...(downloadFile ? { downloadFile } : {})}
+              {...(saveDocument ? { saveDocument } : {})}
             />
           )}
           {showUpgradeDialog && schemaLock && (

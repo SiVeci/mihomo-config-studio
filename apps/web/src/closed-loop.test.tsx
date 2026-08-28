@@ -52,8 +52,9 @@ describe('v0.2.0 closed loop: import -> edit -> diff -> export, no Schema module
       <ProjectPage
         client={client}
         adapter={adapter}
-        downloadFile={(content, filename, mimeType) => {
-          downloads.push({ content, filename, mimeType });
+        saveDocument={async ({ suggestedName, content, mimeType }) => {
+          downloads.push({ content, filename: suggestedName, mimeType });
+          return { kind: 'saved', name: suggestedName };
         }}
       />,
     );
