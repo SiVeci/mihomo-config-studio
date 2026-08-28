@@ -30,6 +30,7 @@
 | [ADR-023](./ADR-023-atomic-batch-edit.md)                   | 批量编辑是一次原子写入，不是合并窗口                | Accepted | v0.4.0 切片 #10 |
 | [ADR-024](./ADR-024-single-maintainer-release-approval.md)  | 单维护者仓库下的发布审批偏离（补充 ADR-010 §2）     | Accepted | v0.5.0 切片 #14 |
 | [ADR-025](./ADR-025-declarative-migration-opcodes.md)       | 声明式迁移操作码的封闭集合                          | Accepted | v0.5.0 切片 #5  |
+| [ADR-027](./ADR-027-minimum-webview-baseline.md)            | 最低 WebView/浏览器基线与启动能力门                 | Accepted | v0.6.0 切片 #1  |
 
 ADR-001 至 ADR-005 直接来自 PRD §17，本仓库补全其背景与工程约束。
 ADR-006 起为实施阶段新增的决策。

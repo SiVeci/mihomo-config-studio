@@ -12,7 +12,8 @@
       "name": "mcs-web-preview",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@mcs/web", "exec", "vite", "preview", "--port", "5401"],
-      "port": 5401
+      "port": 5401,
+      "autoPort": true
     }
   ]
 }
