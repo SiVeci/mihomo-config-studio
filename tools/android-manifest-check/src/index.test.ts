@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { findManifests, run } from './index.js';
+import { findManifests, run, runApkDump } from './index.js';
 
 describe('findManifests / run', () => {
   let dir: string;
@@ -69,5 +69,34 @@ describe('findManifests / run', () => {
     );
 
     expect(run(dir)).toBe(1);
+  });
+});
+
+describe('runApkDump (FR-AND-06, produced-artifact level, v0.6.0 #4)', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'android-manifest-check-apk-test-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('returns 0 for a captured dump with only the allowed permissions', () => {
+    const dumpFile = join(dir, 'permissions.txt');
+    writeFileSync(
+      dumpFile,
+      "package: studio.mihomoconfig.app\nuses-permission: name='android.permission.INTERNET'\n",
+    );
+
+    expect(runApkDump(dumpFile)).toBe(0);
+  });
+
+  it('returns 1 for a captured dump with an unexpected permission', () => {
+    const dumpFile = join(dir, 'permissions.txt');
+    writeFileSync(dumpFile, "uses-permission: name='android.permission.WRITE_EXTERNAL_STORAGE'\n");
+
+    expect(runApkDump(dumpFile)).toBe(1);
   });
 });

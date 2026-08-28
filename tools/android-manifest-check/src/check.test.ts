@@ -63,6 +63,50 @@ describe('checkManifestXml', () => {
     expect(result.ok).toBe(false);
   });
 
+  it('flags READ_EXTERNAL_STORAGE', () => {
+    const xml = withInjected(
+      '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />',
+    );
+    const result = checkManifestXml(xml);
+    expect(result.ok).toBe(false);
+    expect(result.violations).toEqual(
+      expect.arrayContaining([expect.stringContaining('READ_EXTERNAL_STORAGE')]),
+    );
+  });
+
+  it('flags WRITE_EXTERNAL_STORAGE', () => {
+    const xml = withInjected(
+      '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />',
+    );
+    const result = checkManifestXml(xml);
+    expect(result.ok).toBe(false);
+    expect(result.violations).toEqual(
+      expect.arrayContaining([expect.stringContaining('WRITE_EXTERNAL_STORAGE')]),
+    );
+  });
+
+  it('flags MANAGE_EXTERNAL_STORAGE', () => {
+    const xml = withInjected(
+      '<uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />',
+    );
+    const result = checkManifestXml(xml);
+    expect(result.ok).toBe(false);
+    expect(result.violations).toEqual(
+      expect.arrayContaining([expect.stringContaining('MANAGE_EXTERNAL_STORAGE')]),
+    );
+  });
+
+  it('flags ACCESS_BACKGROUND_LOCATION', () => {
+    const xml = withInjected(
+      '<uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />',
+    );
+    const result = checkManifestXml(xml);
+    expect(result.ok).toBe(false);
+    expect(result.violations).toEqual(
+      expect.arrayContaining([expect.stringContaining('ACCESS_BACKGROUND_LOCATION')]),
+    );
+  });
+
   it('reports every violation when a manifest has more than one', () => {
     const xml = withInjected(
       '<uses-permission android:name="android.permission.BIND_VPN_SERVICE" />' +

@@ -16,6 +16,25 @@ const FORBIDDEN_TOKENS: ReadonlyArray<{ readonly pattern: RegExp; readonly reaso
     pattern: /FOREGROUND_SERVICE\w*/,
     reason: 'declares a FOREGROUND_SERVICE* permission',
   },
+  {
+    pattern: /READ_EXTERNAL_STORAGE/,
+    reason:
+      'declares READ_EXTERNAL_STORAGE (broad storage permission; FR-AND-02 requires SAF only)',
+  },
+  {
+    pattern: /WRITE_EXTERNAL_STORAGE/,
+    reason:
+      'declares WRITE_EXTERNAL_STORAGE (broad storage permission; FR-AND-02 requires SAF only)',
+  },
+  {
+    pattern: /MANAGE_EXTERNAL_STORAGE/,
+    reason:
+      'declares MANAGE_EXTERNAL_STORAGE (broad storage permission; FR-AND-02 requires SAF only)',
+  },
+  {
+    pattern: /ACCESS_BACKGROUND_LOCATION/,
+    reason: 'declares ACCESS_BACKGROUND_LOCATION (this app has no location feature at all)',
+  },
 ];
 
 /**

@@ -44,7 +44,7 @@ jobs:
         run: pnpm run test:coverage
 
   android-manifest-check:
-    name: android manifest has no VPN permissions
+    name: android manifest has no VPN/broad-storage permissions
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,11 +61,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       # FR-AND-06 / NG-02 (PRD §13.5 release blocker): source-level scan only —
-      # no Android SDK on this runner, so the aapt2-based artifact check stays local (#13).
+      # no Android SDK on this runner, so the aapt2-based produced-artifact
+      # check (tools/android-manifest-check's --apk-dump mode, v0.6.0 #4)
+      # runs in the release workflow instead, once an APK exists (#12).
       - name: Build checker
         run: pnpm --filter @mcs/android-manifest-check exec tsc -p tsconfig.json
 
-      - name: Assert no VPN permissions or APIs in AndroidManifest.xml
+      - name: Assert no VPN/broad-storage permissions or APIs in AndroidManifest.xml
         run: node tools/android-manifest-check/dist/index.js apps/android/android/app/src
 
   perf-baseline:
