@@ -10,8 +10,12 @@
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none';"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none';"
     />
+    <!-- ADR-029: registered from apps/web/src/pwa/register.ts, skipped on Android (Capacitor loads this same origin natively). -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#cc785c" />
     <title>Mihomo Config Studio</title>
   </head>
   <body>

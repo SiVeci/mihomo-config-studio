@@ -92,7 +92,7 @@ describe('v0.2.0 closed loop: import -> edit -> diff -> export, no Schema module
     // 4. Export: content matches the edited buffer byte for byte, never re-serialised (FR-YAML-07/FR-PROJ-06).
     fireEvent.click(screen.getByRole('button', { name: t('export.triggerButton') }));
     await screen.findByText(t('export.title'));
-    fireEvent.click(screen.getByRole('button', { name: t('export.yamlButton') }));
+    fireEvent.click(screen.getByRole('button', { name: t('export.yamlDownloadButton') }));
 
     expect(downloads).toHaveLength(1);
     expect(downloads[0]?.content).toBe(editedYaml);

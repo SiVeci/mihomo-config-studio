@@ -5,6 +5,7 @@ import { BundlePage } from './bundle/BundlePage.js';
 import { resolveUpdateSources } from './bundle/update-sources.js';
 import { t } from './i18n/index.js';
 import { ProjectPage } from './project/ProjectPage.js';
+import { UpdateBanner } from './pwa/UpdateBanner.js';
 import { HashRouter, Routes, useRoutePath } from './router.js';
 import type { Route } from './router.js';
 import { createConfigWorkerClient } from './worker/client.js';
@@ -52,6 +53,7 @@ export function App(): ReactNode {
   return (
     <HashRouter>
       <Routes routes={ROUTES} notFound={<NotFoundPage />} />
+      <UpdateBanner />
     </HashRouter>
   );
 }

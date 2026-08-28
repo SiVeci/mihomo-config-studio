@@ -60,10 +60,12 @@ export interface ExportDialogProps {
  *
  * All three exports go through `saveDocument` (ADR-026) rather than a
  * direct download — the same UI code this dialog already is works
- * unmodified once Android's SAF implementation lands in #3. This dialog
- * does not yet branch its own copy on `saved`/`downloaded`/`cancelled`
- * (v0.6.0 #7 adds the button-label distinction, PRD §11.4); today it only
- * needs the port to keep working on every platform, silently.
+ * unmodified once Android's SAF implementation lands in #3. Button labels
+ * reflect `capabilities.canSaveViaSystemPicker` (v0.6.0 #7, PRD §11.4): on
+ * a browser without `showSaveFilePicker`, `saveDocument` silently falls
+ * back to a Blob + `<a download>` (`platform/web.ts`) — the label says
+ * "下载" up front rather than the same button silently changing what it
+ * does under an unchanged "导出" label.
  *
  * The "分享" entry (v0.6.0 #5, FR-AND-03) only renders when
  * `capabilities.canShare` is true — Android-only, never on Web — and opens
@@ -147,14 +149,24 @@ export function ExportDialog({
 
       <div className="export-dialog__actions">
         <button type="button" disabled={blocking} onClick={() => void handleExportYaml()}>
-          {t('export.yamlButton')}
+          {t(
+            capabilities.canSaveViaSystemPicker ? 'export.yamlButton' : 'export.yamlDownloadButton',
+          )}
         </button>
         <button type="button" disabled={blocking} onClick={() => void handleExportMcsproj()}>
-          {t('export.mcsprojButton')}
+          {t(
+            capabilities.canSaveViaSystemPicker
+              ? 'export.mcsprojButton'
+              : 'export.mcsprojDownloadButton',
+          )}
         </button>
         {blocking && (
           <button type="button" onClick={() => void handleExportDraft()}>
-            {t('export.draftButton')}
+            {t(
+              capabilities.canSaveViaSystemPicker
+                ? 'export.draftButton'
+                : 'export.draftDownloadButton',
+            )}
           </button>
         )}
         {capabilities.canShare && (

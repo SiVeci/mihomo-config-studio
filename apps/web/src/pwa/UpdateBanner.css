@@ -1,0 +1,14 @@
+.update-banner {
+  position: fixed;
+  z-index: 1000;
+  bottom: var(--mcs-spacing-md);
+  left: 50%;
+  transform: translateX(-50%);
+  border: none;
+  border-radius: 999px;
+  background-color: var(--mcs-color-primary-active);
+  color: var(--mcs-color-on-primary);
+  padding: var(--mcs-spacing-sm) var(--mcs-spacing-lg);
+  font-size: var(--mcs-font-size-body-sm);
+  cursor: pointer;
+}

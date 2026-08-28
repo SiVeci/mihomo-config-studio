@@ -119,7 +119,7 @@ describe('v0.3.0 closed loop: apply template -> form edit -> undo -> redo -> mod
     // 6. Export: content matches the edited buffer byte for byte.
     fireEvent.click(screen.getByRole('button', { name: t('export.triggerButton') }));
     await screen.findByText(t('export.title'));
-    fireEvent.click(screen.getByRole('button', { name: t('export.yamlButton') }));
+    fireEvent.click(screen.getByRole('button', { name: t('export.yamlDownloadButton') }));
 
     expect(downloads).toHaveLength(1);
     expect(downloads[0]?.content).toBe(editedText);

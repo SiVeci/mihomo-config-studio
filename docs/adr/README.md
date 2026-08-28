@@ -32,6 +32,7 @@
 | [ADR-025](./ADR-025-declarative-migration-opcodes.md)       | 声明式迁移操作码的封闭集合                          | Accepted | v0.5.0 切片 #5  |
 | [ADR-026](./ADR-026-platform-capability-port.md)            | 平台能力端口与单一 Web 构建产物                     | Accepted | v0.6.0 切片 #2  |
 | [ADR-027](./ADR-027-minimum-webview-baseline.md)            | 最低 WebView/浏览器基线与启动能力门                 | Accepted | v0.6.0 切片 #1  |
+| [ADR-029](./ADR-029-service-worker-cache-strategy.md)       | 自建 Service Worker 与缓存版本策略                  | Accepted | v0.6.0 切片 #7  |
 
 ADR-001 至 ADR-005 直接来自 PRD §17，本仓库补全其背景与工程约束。
 ADR-006 起为实施阶段新增的决策。

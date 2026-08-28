@@ -61,6 +61,7 @@ describe('ExportDialog / normal export (no blocking issues)', () => {
         issues={[]}
         onClose={vi.fn()}
         saveDocument={saveDocument}
+        capabilities={{ canSaveViaSystemPicker: true, canShare: false }}
       />,
     );
 
@@ -84,6 +85,7 @@ describe('ExportDialog / normal export (no blocking issues)', () => {
         issues={[]}
         onClose={vi.fn()}
         saveDocument={saveDocument}
+        capabilities={{ canSaveViaSystemPicker: true, canShare: false }}
       />,
     );
 
@@ -146,6 +148,7 @@ describe('ExportDialog / blocking issues (FR-YAML-07 mutually exclusive exports)
         configText={'mode: rule\n  bad: indent'}
         issues={[BLOCKING_ISSUE]}
         onClose={vi.fn()}
+        capabilities={{ canSaveViaSystemPicker: true, canShare: false }}
       />,
     );
 
@@ -169,6 +172,7 @@ describe('ExportDialog / blocking issues (FR-YAML-07 mutually exclusive exports)
         issues={[BLOCKING_ISSUE]}
         onClose={vi.fn()}
         saveDocument={saveDocument}
+        capabilities={{ canSaveViaSystemPicker: true, canShare: false }}
       />,
     );
 
@@ -179,6 +183,59 @@ describe('ExportDialog / blocking issues (FR-YAML-07 mutually exclusive exports)
       content: 'mode: rule\n  bad: indent',
       mimeType: 'text/yaml',
     });
+  });
+});
+
+describe('ExportDialog / save vs. download button label (v0.6.0 #7, PRD §11.4)', () => {
+  it('labels the export buttons "导出" when the platform supports the system save picker', () => {
+    render(
+      <ExportDialog
+        project={PROJECT}
+        schemaLock={SCHEMA_LOCK}
+        quarantine={QUARANTINE}
+        configText={'mode: rule\n'}
+        issues={[]}
+        onClose={vi.fn()}
+        capabilities={{ canSaveViaSystemPicker: true, canShare: false }}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: t('export.yamlButton') })).toBeDefined();
+    expect(screen.getByRole('button', { name: t('export.mcsprojButton') })).toBeDefined();
+  });
+
+  it('labels the export buttons "下载" instead — not the same label silently changing behaviour — when the platform falls back to Blob + <a download>', () => {
+    render(
+      <ExportDialog
+        project={PROJECT}
+        schemaLock={SCHEMA_LOCK}
+        quarantine={QUARANTINE}
+        configText={'mode: rule\n'}
+        issues={[]}
+        onClose={vi.fn()}
+        capabilities={{ canSaveViaSystemPicker: false, canShare: false }}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: t('export.yamlDownloadButton') })).toBeDefined();
+    expect(screen.getByRole('button', { name: t('export.mcsprojDownloadButton') })).toBeDefined();
+    expect(screen.queryByRole('button', { name: t('export.yamlButton') })).toBeNull();
+  });
+
+  it('labels the draft-export button "下载无效草稿" the same way when the platform lacks the system save picker', () => {
+    render(
+      <ExportDialog
+        project={PROJECT}
+        schemaLock={SCHEMA_LOCK}
+        quarantine={QUARANTINE}
+        configText={'mode: rule\n  bad: indent'}
+        issues={[BLOCKING_ISSUE]}
+        onClose={vi.fn()}
+        capabilities={{ canSaveViaSystemPicker: false, canShare: false }}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: t('export.draftDownloadButton') })).toBeDefined();
   });
 });
 
