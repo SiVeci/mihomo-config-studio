@@ -6,8 +6,8 @@ import {
   type SchemaModule,
 } from '@mcs/schema-core';
 import { builtinAsStoredBundle, createRegistry } from '@mcs/schema-registry';
-import { AutoSaver, DEFAULT_AUTOSAVE_INTERVAL_MS } from '@mcs/storage';
-import type { StorageAdapter } from '@mcs/storage';
+import { AutoSaver, DEFAULT_AUTOSAVE_INTERVAL_MS, SnapshotManager } from '@mcs/storage';
+import type { SnapshotDegradationSignal, StorageAdapter } from '@mcs/storage';
 import {
   useEffect,
   useMemo,
@@ -26,6 +26,7 @@ import type { SaveDocument } from '../export/ExportDialog.js';
 import { UpgradeDialog } from '../migration/UpgradeDialog.js';
 import type { UpgradeResult } from '../migration/UpgradeDialog.js';
 import { ReadOnlyGuard } from './ReadOnlyGuard.js';
+import { StoragePressureNotice } from './StoragePressureNotice.js';
 import { ModuleFormPage } from '../form/ModuleFormPage.js';
 import type { ModuleFormPageHandle } from '../form/ModuleFormPage.js';
 import { UnknownFieldTree } from '../form/UnknownFieldTree.js';
@@ -264,6 +265,13 @@ export function ProjectPage({
   configTextRef.current = configText;
   const manifestAutoSaverRef = useRef<AutoSaver | null>(null);
   const configAutoSaverRef = useRef<AutoSaver | null>(null);
+  const snapshotManagerRef = useRef<SnapshotManager | null>(null);
+  // NFR-REL-05 (v0.6.0 #9): the three-level degradation `SnapshotManager`
+  // itself already reports (`packages/storage`, fully tested there) — this
+  // is only where the UI first starts listening. `null` until the first
+  // snapshot after a project is selected, same as "no signal yet", not "space
+  // is fine": `StoragePressureNotice` treats both the same (renders nothing).
+  const [snapshotSignal, setSnapshotSignal] = useState<SnapshotDegradationSignal | null>(null);
   const editorRef = useRef<YamlEditorHandle>(null);
   const moduleFormRef = useRef<ModuleFormPageHandle>(null);
   const mainViewTabRefs = useRef<Partial<Record<MainView, HTMLButtonElement | null>>>({});
@@ -410,6 +418,32 @@ export function ProjectPage({
     };
   }, [adapter, selectedId]);
 
+  // NFR-REL-05 (v0.6.0 #9): one manager per selected project, same lifetime
+  // as the two AutoSavers above — a distinct key prefix (`snapshots/`, no
+  // trailing filename) so pruning inside it can never collide with
+  // `manifest.json`/`config.yaml`, both single keys the two AutoSavers own.
+  useEffect(() => {
+    if (!selectedId) {
+      snapshotManagerRef.current = null;
+      setSnapshotSignal(null);
+      return;
+    }
+    snapshotManagerRef.current = new SnapshotManager({
+      adapter,
+      prefix: `project/${selectedId}/snapshots/`,
+    });
+    setSnapshotSignal(null);
+    return () => {
+      snapshotManagerRef.current = null;
+    };
+  }, [adapter, selectedId]);
+
+  function recordSnapshot(): void {
+    const manager = snapshotManagerRef.current;
+    if (!manager) return;
+    void manager.record(new TextEncoder().encode(configTextRef.current)).then(setSnapshotSignal);
+  }
+
   useEffect(() => {
     return registerBackgroundFlush(() => {
       void manifestAutoSaverRef.current?.flush();
@@ -516,6 +550,7 @@ export function ProjectPage({
     setConfigText(response.text);
     configAutoSaverRef.current?.touch(now());
     markSavePending();
+    recordSnapshot();
   }
 
   async function handleCreate(): Promise<void> {
@@ -606,6 +641,7 @@ export function ProjectPage({
     setConfigText(text);
     configAutoSaverRef.current?.touch(now());
     markSavePending();
+    recordSnapshot();
   }
 
   function handleJumpToIssue(range: TextRange): void {
@@ -674,6 +710,7 @@ export function ProjectPage({
     setConfigText(serializeResponse.text);
     configAutoSaverRef.current?.touch(now());
     markSavePending();
+    recordSnapshot();
   }
 
   async function applyFixAndRefresh(patch: IssueFix): Promise<void> {
@@ -819,6 +856,10 @@ export function ProjectPage({
             compatibilityProfile={selected.targetProfile}
             saveStatus={saveStatus}
             onBack={() => setSelectedId(null)}
+          />
+          <StoragePressureNotice
+            signal={snapshotSignal}
+            onExportClick={() => setShowExportDialog(true)}
           />
           {readOnly ? (
             <ReadOnlyGuard

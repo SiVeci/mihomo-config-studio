@@ -2,6 +2,7 @@
 import { GENERAL_MODULE } from '@mcs/schema-builtin';
 import { BUILTIN_BUNDLE, bundleStoreFrom, installBundle } from '@mcs/schema-registry';
 import { MemoryStorageAdapter } from '@mcs/storage';
+import type { StorageAdapter, StorageQuota } from '@mcs/storage';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -1974,5 +1975,88 @@ describe('ProjectPage / read-only protection (ADR-004 point 6, PRD §9.5 point 3
     await waitFor(() => expect(screen.queryByText(t('readonly.upgradeButton'))).toBeNull());
     // Back to the normal, writable editing surface.
     await screen.findByRole('tablist');
+  });
+});
+
+describe('ProjectPage / storage pressure notice (NFR-REL-05, v0.6.0 #9)', () => {
+  /**
+   * Wraps a real `MemoryStorageAdapter` but reports quota as tight — that
+   * adapter's own `estimateQuota()` always returns `quotaBytes: null`
+   * (nothing to be tight relative to), which is why `SnapshotManager` never
+   * naturally degrades against it. `failWrites` additionally makes `put`
+   * throw `QuotaExceededError`, needed to reach the `stopped` level (`reduced`
+   * only needs quota reported tight; `stopped` needs the write to actually
+   * fail even after pruning).
+   */
+  class QuotaPressureAdapter implements StorageAdapter {
+    readonly #inner = new MemoryStorageAdapter();
+    readonly #failWrites: boolean;
+    constructor(failWrites: boolean) {
+      this.#failWrites = failWrites;
+    }
+    async get(key: string): ReturnType<StorageAdapter['get']> {
+      return this.#inner.get(key);
+    }
+    async put(key: string, value: Uint8Array): ReturnType<StorageAdapter['put']> {
+      if (this.#failWrites && key.includes('/snapshots/')) {
+        throw Object.assign(new Error('quota exceeded'), { name: 'QuotaExceededError' });
+      }
+      return this.#inner.put(key, value);
+    }
+    async delete(key: string): ReturnType<StorageAdapter['delete']> {
+      return this.#inner.delete(key);
+    }
+    async list(prefix: string): ReturnType<StorageAdapter['list']> {
+      return this.#inner.list(prefix);
+    }
+    async estimateQuota(): Promise<StorageQuota | null> {
+      return { usageBytes: 95, quotaBytes: 100 };
+    }
+  }
+
+  async function setUpSelectedProject(adapter: StorageAdapter) {
+    const client = new WorkerClient(new RealWorker());
+    render(<ProjectPage client={client} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+    const editorTextarea = screen.getByLabelText<HTMLTextAreaElement>(t('editor.title'));
+    await waitFor(() => expect(editorTextarea.value).toBe(DEFAULT_PROJECT_CONFIG_TEXT));
+    await waitFor(() => {
+      expect(document.querySelector('[data-module-section="general"]')).not.toBeNull();
+    });
+    return editorTextarea;
+  }
+
+  it('shows no notice while storage has plenty of room (the real MemoryStorageAdapter default)', async () => {
+    const editorTextarea = await setUpSelectedProject(new MemoryStorageAdapter());
+
+    fireEvent.change(editorTextarea, { target: { value: 'mode: rule\nport: 7891\n' } });
+
+    await waitFor(() => expect(editorTextarea.value).toBe('mode: rule\nport: 7891\n'));
+    expect(screen.queryByText(t('storage.snapshot.reduced'))).toBeNull();
+    expect(screen.queryByText(t('storage.snapshot.stopped'))).toBeNull();
+  });
+
+  it('shows the low-key reduced notice once an edit records a snapshot under tight-but-writable quota', async () => {
+    const editorTextarea = await setUpSelectedProject(new QuotaPressureAdapter(false));
+
+    fireEvent.change(editorTextarea, { target: { value: 'mode: rule\nport: 7891\n' } });
+
+    await waitFor(() => expect(screen.getByText(t('storage.snapshot.reduced'))).toBeDefined());
+    expect(
+      screen.queryByRole('button', { name: t('storage.snapshot.exportNowButton') }),
+    ).toBeNull();
+  });
+
+  it('shows the prominent stopped notice with a direct export entry once snapshotting genuinely cannot write', async () => {
+    const editorTextarea = await setUpSelectedProject(new QuotaPressureAdapter(true));
+
+    fireEvent.change(editorTextarea, { target: { value: 'mode: rule\nport: 7891\n' } });
+
+    await waitFor(() => expect(screen.getByText(t('storage.snapshot.stopped'))).toBeDefined());
+    fireEvent.click(screen.getByRole('button', { name: t('storage.snapshot.exportNowButton') }));
+    expect(await screen.findByRole('dialog', { name: t('export.title') })).toBeDefined();
   });
 });

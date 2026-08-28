@@ -253,5 +253,8 @@
   "migration.error.unknown": "An unknown error occurred — nothing was changed",
   "readonly.banner": "This project is locked to Bundle version {version}, which is not available locally. It is open read-only so nothing is changed against the wrong Schema.",
   "readonly.goToBundlePage": "Go to Bundle management (try restoring that version)",
-  "readonly.upgradeButton": "Upgrade to the current version instead"
+  "readonly.upgradeButton": "Upgrade to the current version instead",
+  "storage.snapshot.reduced": "Storage space is tight — snapshot history has been reduced",
+  "storage.snapshot.stopped": "Storage space is low — snapshot history has stopped. Export now is recommended",
+  "storage.snapshot.exportNowButton": "Export now"
 }

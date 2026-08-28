@@ -1,0 +1,26 @@
+.storage-pressure-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--mcs-spacing-sm);
+  font-size: var(--mcs-font-size-body-sm);
+  padding: var(--mcs-spacing-xs) var(--mcs-spacing-sm);
+}
+
+/* Low-key on purpose (NFR-REL-05, v0.6.0 #9): space is tight but nothing
+   the user is doing is actually at risk yet — no border, no background. */
+.storage-pressure-notice--reduced {
+  color: var(--mcs-color-text-muted);
+}
+
+/* The level that actually needs the user to act. */
+.storage-pressure-notice--stopped {
+  border: 1px solid var(--mcs-color-text-warning);
+  background-color: var(--mcs-color-warning-tint);
+  border-radius: var(--mcs-rounded-sm);
+  color: var(--mcs-color-text-warning);
+}
+
+.storage-pressure-notice--stopped button {
+  margin-left: auto;
+  flex-shrink: 0;
+}
