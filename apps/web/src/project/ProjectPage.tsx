@@ -6,7 +6,7 @@ import {
   type SchemaModule,
 } from '@mcs/schema-core';
 import { builtinAsStoredBundle, createRegistry } from '@mcs/schema-registry';
-import { AutoSaver } from '@mcs/storage';
+import { AutoSaver, DEFAULT_AUTOSAVE_INTERVAL_MS } from '@mcs/storage';
 import type { StorageAdapter } from '@mcs/storage';
 import {
   useEffect,
@@ -38,6 +38,10 @@ import { DeleteImpactDialog } from '../graph/DeleteImpactDialog.js';
 import { GraphView } from '../graph/GraphView.js';
 import { buildCascadeDeletePatches, buildReplacePatches } from '../graph/impact-patches.js';
 import { AppShell } from '../layout/AppShell.js';
+import { BottomNav } from '../layout/BottomNav.js';
+import type { BottomNavPage } from '../layout/BottomNav.js';
+import { StatusBar } from '../layout/StatusBar.js';
+import { useNarrowViewport } from '../layout/useNarrowViewport.js';
 import { collectRuleEntityNames } from '../rules/entity-names.js';
 import { RuleListPage } from '../rules/RuleListPage.js';
 import type {
@@ -262,6 +266,24 @@ export function ProjectPage({
   const editorRef = useRef<YamlEditorHandle>(null);
   const moduleFormRef = useRef<ModuleFormPageHandle>(null);
   const mainViewTabRefs = useRef<Partial<Record<MainView, HTMLButtonElement | null>>>({});
+  // StatusBar's save-status display (PRD §7.3, v0.6.0 #6) — a cosmetic
+  // mirror of AutoSaver's own flush timing, not a second source of truth
+  // for it: `AutoSaver` never calls back on flush, so this just assumes a
+  // flush has happened `DEFAULT_AUTOSAVE_INTERVAL_MS` after the most recent
+  // edit, the same window AutoSaver itself uses (imported, not
+  // re-guessed). Real persistence correctness still rests entirely on the
+  // existing AutoSaver wiring above.
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'pending'>('saved');
+  const savedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [activeMobilePage, setActiveMobilePage] = useState<'main' | 'yaml' | 'issues'>('main');
+  const isNarrowViewport = useNarrowViewport();
+
+  useEffect(() => {
+    return () => {
+      if (savedTimeoutRef.current !== null) clearTimeout(savedTimeoutRef.current);
+    };
+  }, []);
+
   // Set only when `handleJumpToField` had to switch `mainView` itself (v0.4.0
   // #13) — see the effect below for why a same-render ref call cannot do this.
   const pendingJumpPathRef = useRef<ConfigPath | null>(null);
@@ -457,6 +479,36 @@ export function ProjectPage({
     applyHistoryResponse(response);
   }
 
+  /** See `saveStatus`'s own declaration comment: a display-only mirror of AutoSaver's flush window, not a second persistence timer. */
+  function markSavePending(): void {
+    setSaveStatus('pending');
+    if (savedTimeoutRef.current !== null) clearTimeout(savedTimeoutRef.current);
+    savedTimeoutRef.current = setTimeout(
+      () => setSaveStatus('saved'),
+      DEFAULT_AUTOSAVE_INTERVAL_MS,
+    );
+  }
+
+  /**
+   * PRD §7.3's four bottom-nav destinations map onto three content areas
+   * (`activeMobilePage`) because 配置/关系 share one — the existing `mainView`
+   * tablist (v0.4.0 #7) already switches between them, so 关系 just also
+   * points `mainView` at `'graph'` rather than getting a fourth,
+   * duplicate content area.
+   */
+  function handleBottomNavigate(page: BottomNavPage): void {
+    if (page === 'graph') {
+      setActiveMobilePage('main');
+      setMainView('graph');
+      return;
+    }
+    if (page === 'config') {
+      setActiveMobilePage('main');
+      return;
+    }
+    setActiveMobilePage(page);
+  }
+
   /** Shared by `handleUndo`/`handleRedo`: both responses have the identical shape (v0.3.0 #15). */
   function applyHistoryResponse(response: UndoResponse | RedoResponse): void {
     setCanUndo(response.canUndo);
@@ -465,6 +517,7 @@ export function ProjectPage({
     configTextRef.current = response.text;
     setConfigText(response.text);
     configAutoSaverRef.current?.touch(now());
+    markSavePending();
   }
 
   async function handleCreate(): Promise<void> {
@@ -501,6 +554,7 @@ export function ProjectPage({
     projectsRef.current = updated;
     setProjects(updated);
     manifestAutoSaverRef.current?.touch(now());
+    markSavePending();
   }
 
   async function handleImport(id: string, text: string): Promise<void> {
@@ -553,6 +607,7 @@ export function ProjectPage({
     configTextRef.current = text;
     setConfigText(text);
     configAutoSaverRef.current?.touch(now());
+    markSavePending();
   }
 
   function handleJumpToIssue(range: TextRange): void {
@@ -620,6 +675,7 @@ export function ProjectPage({
     configTextRef.current = serializeResponse.text;
     setConfigText(serializeResponse.text);
     configAutoSaverRef.current?.touch(now());
+    markSavePending();
   }
 
   async function applyFixAndRefresh(patch: IssueFix): Promise<void> {
@@ -713,6 +769,7 @@ export function ProjectPage({
 
   return (
     <AppShell
+      narrowFocus={selected ? 'main' : 'sidebar'}
       sidebar={
         <div className="project-sidebar">
           <h1 className="project-sidebar__title">{t('app.title')}</h1>
@@ -759,6 +816,12 @@ export function ProjectPage({
     >
       {selected ? (
         <>
+          <StatusBar
+            projectName={selected.name}
+            compatibilityProfile={selected.targetProfile}
+            saveStatus={saveStatus}
+            onBack={() => setSelectedId(null)}
+          />
           {readOnly ? (
             <ReadOnlyGuard
               lockedVersion={schemaLock?.bundleVersion ?? ''}
@@ -783,108 +846,167 @@ export function ProjectPage({
             </ReadOnlyGuard>
           ) : (
             <>
-              <ImportPanel
-                client={client}
-                onImport={(text) => void handleImport(selected.id, text)}
-              />
-              <YamlEditor
-                ref={editorRef}
-                text={configText}
-                onChange={handleConfigChange}
-                client={client}
-                onIssuesChange={setIssues}
-                onValueChange={setDocumentValue}
-              />
-              <div className="project-main-view">
-                <div
-                  className="project-main-view__tablist"
-                  role="tablist"
-                  aria-label={t('project.mainViewTabListLabel')}
-                >
-                  {MAIN_VIEWS.map((view) => (
-                    <button
-                      key={view}
-                      ref={(element) => {
-                        mainViewTabRefs.current[view] = element;
-                      }}
-                      type="button"
-                      role="tab"
-                      id={`main-view-tab-${view}`}
-                      aria-selected={mainView === view}
-                      aria-controls={`main-view-panel-${view}`}
-                      tabIndex={mainView === view ? 0 : -1}
-                      className="project-main-view__tab"
-                      onClick={() => setMainView(view)}
-                      onKeyDown={(event) => handleMainViewTabKeyDown(event, view)}
-                    >
-                      {t(MAIN_VIEW_TAB_LABEL_KEYS[view])}
-                    </button>
-                  ))}
-                </div>
-                <div
-                  className="project-main-view__panel"
-                  role="tabpanel"
-                  id={`main-view-panel-${mainView}`}
-                  aria-labelledby={`main-view-tab-${mainView}`}
-                >
-                  {/* Lazy-mounted (E3): only the selected view's component ever
-                  renders — a 10,000-row rule list or a large relationship
-                  graph costs nothing while the user is looking at the other
-                  one. */}
-                  {mainView === 'form' && (
-                    <ModuleFormPage
-                      ref={moduleFormRef}
-                      modules={modules}
-                      value={documentValue}
-                      mode={formMode}
-                      onModeChange={setFormMode}
-                      onFieldChange={(path, value) => void handleDocumentFieldChange(path, value)}
-                      onDeleteEntity={(path) => void handleDeleteEntityRequest(path)}
-                    />
-                  )}
-                  {mainView === 'rules' && (
-                    <RuleListPage
-                      rules={rules}
-                      catalog={ruleCatalog}
-                      proxyTargetNames={ruleEntityNames.proxyTargetNames}
-                      ruleProviderNames={ruleEntityNames.ruleProviderNames}
-                      subRuleGroupNames={ruleEntityNames.subRuleGroupNames}
-                      onApplyFix={applyFixAndRefresh}
-                      onApplyBatch={applyBatchAndRefresh}
-                    />
-                  )}
-                  {mainView === 'graph' &&
-                    (graphData ? (
-                      <GraphView
-                        layout={graphData.layout}
-                        entities={graphData.entities}
-                        cycles={graphData.cycles}
-                        onJumpToField={handleJumpToField}
-                      />
-                    ) : (
-                      <p className="project-detail__empty">{t('graph.emptyState')}</p>
+              {/* PRD §7.3 / v0.6.0 #6: on a narrow screen, only the page
+              matching `activeMobilePage` is visible (`AppShell.tsx`'s
+              media-query-gated `.project-mobile-page`/`--active` classes);
+              on a wide screen those classes have no effect and every page
+              renders in normal document flow, unchanged from before this
+              slice. 配置/关系 (v0.4.0 #7's `mainView` tablist) share this
+              first page — see `handleBottomNavigate`. */}
+              <div
+                className={`project-mobile-page${activeMobilePage === 'main' ? ' project-mobile-page--active' : ''}`}
+              >
+                <ImportPanel
+                  client={client}
+                  onImport={(text) => void handleImport(selected.id, text)}
+                />
+                <div className="project-main-view">
+                  <div
+                    className="project-main-view__tablist"
+                    role="tablist"
+                    aria-label={t('project.mainViewTabListLabel')}
+                  >
+                    {MAIN_VIEWS.map((view) => (
+                      <button
+                        key={view}
+                        ref={(element) => {
+                          mainViewTabRefs.current[view] = element;
+                        }}
+                        type="button"
+                        role="tab"
+                        id={`main-view-tab-${view}`}
+                        aria-selected={mainView === view}
+                        aria-controls={`main-view-panel-${view}`}
+                        tabIndex={mainView === view ? 0 : -1}
+                        className="project-main-view__tab"
+                        onClick={() => setMainView(view)}
+                        onKeyDown={(event) => handleMainViewTabKeyDown(event, view)}
+                      >
+                        {t(MAIN_VIEW_TAB_LABEL_KEYS[view])}
+                      </button>
                     ))}
+                  </div>
+                  <div
+                    className="project-main-view__panel"
+                    role="tabpanel"
+                    id={`main-view-panel-${mainView}`}
+                    aria-labelledby={`main-view-tab-${mainView}`}
+                  >
+                    {/* Lazy-mounted (E3): only the selected view's component ever
+                    renders — a 10,000-row rule list or a large relationship
+                    graph costs nothing while the user is looking at the other
+                    one. */}
+                    {mainView === 'form' && (
+                      <ModuleFormPage
+                        ref={moduleFormRef}
+                        modules={modules}
+                        value={documentValue}
+                        mode={formMode}
+                        onModeChange={setFormMode}
+                        onFieldChange={(path, value) => void handleDocumentFieldChange(path, value)}
+                        onDeleteEntity={(path) => void handleDeleteEntityRequest(path)}
+                      />
+                    )}
+                    {mainView === 'rules' && (
+                      <RuleListPage
+                        rules={rules}
+                        catalog={ruleCatalog}
+                        proxyTargetNames={ruleEntityNames.proxyTargetNames}
+                        ruleProviderNames={ruleEntityNames.ruleProviderNames}
+                        subRuleGroupNames={ruleEntityNames.subRuleGroupNames}
+                        onApplyFix={applyFixAndRefresh}
+                        onApplyBatch={applyBatchAndRefresh}
+                      />
+                    )}
+                    {mainView === 'graph' &&
+                      (graphData ? (
+                        <GraphView
+                          layout={graphData.layout}
+                          entities={graphData.entities}
+                          cycles={graphData.cycles}
+                          onJumpToField={handleJumpToField}
+                        />
+                      ) : (
+                        <p className="project-detail__empty">{t('graph.emptyState')}</p>
+                      ))}
+                  </div>
                 </div>
+                <DiffPanel
+                  importBaseline={importBaseline}
+                  savedBaseline={savedBaseline}
+                  client={client}
+                  issues={issues}
+                />
+                <ProjectDetail
+                  project={selected}
+                  canUndo={canUndo}
+                  canRedo={canRedo}
+                  onUndo={() => void handleUndo()}
+                  onRedo={() => void handleRedo()}
+                  onFieldChange={handleFieldChange}
+                  onExportClick={() => setShowExportDialog(true)}
+                  onUpgradeClick={() => setShowUpgradeDialog(true)}
+                  confirmingDelete={confirmingDeleteId === selected.id}
+                  onDeleteClick={() => setConfirmingDeleteId(selected.id)}
+                  onCancelDelete={() => setConfirmingDeleteId(null)}
+                  onConfirmDelete={() => void handleConfirmDelete(selected.id)}
+                />
               </div>
-              <DiffPanel
-                importBaseline={importBaseline}
-                savedBaseline={savedBaseline}
-                client={client}
-                issues={issues}
-              />
-              <ProjectDetail
-                project={selected}
-                canUndo={canUndo}
-                canRedo={canRedo}
-                onUndo={() => void handleUndo()}
-                onRedo={() => void handleRedo()}
-                onFieldChange={handleFieldChange}
-                onExportClick={() => setShowExportDialog(true)}
-                onUpgradeClick={() => setShowUpgradeDialog(true)}
-                confirmingDelete={confirmingDeleteId === selected.id}
-                onDeleteClick={() => setConfirmingDeleteId(selected.id)}
-                onCancelDelete={() => setConfirmingDeleteId(null)}
-                onConfirmDelete={() => void handleConfirmDelete(selected.id)}
+              <div
+                className={`project-mobile-page${activeMobilePage === 'yaml' ? ' project-mobile-page--active' : ''}`}
+              >
+                <YamlEditor
+                  ref={editorRef}
+                  text={configText}
+                  onChange={handleConfigChange}
+                  client={client}
+                  onIssuesChange={setIssues}
+                  onValueChange={setDocumentValue}
+                />
+              </div>
+              {/* Duplicates the `aside` prop's IssuePanel/UnknownFieldTree
+              below (desktop-only, hidden by `AppShell.css` on a narrow
+              screen) rather than relocating them — both are pure,
+              props-driven components with no side effects of their own, so
+              a second instance is cheap. Its *content* only actually mounts
+              when `useNarrowViewport()` agrees a phone-width screen is what
+              hid the desktop copy in the first place, AND this is the
+              active mobile page: `display: none` alone would still leave
+              two mounted instances in the tree, which both breaks
+              `getByRole`/`getByText` queries (jsdom does not evaluate
+              `@media` conditions) and would confuse real assistive tech
+              that does not honor CSS visibility either. Requiring the
+              active-page check too avoids mounting this duplicate the
+              moment the viewport is narrow, before the user has even
+              navigated to the 问题 tab. */}
+              <div
+                className={`project-mobile-page${activeMobilePage === 'issues' ? ' project-mobile-page--active' : ''}`}
+              >
+                {isNarrowViewport && activeMobilePage === 'issues' && (
+                  <>
+                    <IssuePanel
+                      issues={issues}
+                      client={client}
+                      onJump={handleJumpToIssue}
+                      onJumpToField={handleJumpToField}
+                    />
+                    <UnknownFieldTree
+                      fields={unknownFields}
+                      client={client}
+                      onJump={handleJumpToIssue}
+                    />
+                  </>
+                )}
+              </div>
+              <BottomNav
+                active={
+                  activeMobilePage === 'main'
+                    ? mainView === 'graph'
+                      ? 'graph'
+                      : 'config'
+                    : activeMobilePage
+                }
+                onNavigate={handleBottomNavigate}
               />
             </>
           )}

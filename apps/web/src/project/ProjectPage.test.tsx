@@ -1183,6 +1183,111 @@ describe('ProjectPage / main view switching (E3, v0.4.0 #7)', () => {
   });
 });
 
+describe('ProjectPage / narrow-screen layout (PRD §7.3, v0.6.0 #6)', () => {
+  async function setUpSelectedProject() {
+    const adapter = new MemoryStorageAdapter();
+    const client = new WorkerClient(new RealWorker());
+    render(<ProjectPage client={client} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+    const editorTextarea = screen.getByLabelText<HTMLTextAreaElement>(t('editor.title'));
+    await waitFor(() => expect(editorTextarea.value).toBe(DEFAULT_PROJECT_CONFIG_TEXT));
+    // Same wait `setUpWithRealDocument` (main-view-switching suite) uses:
+    // the real Worker's parse is async, and interacting before it settles
+    // (e.g. a bottom-nav click that reads `documentValue`) can race a
+    // `NO_DOCUMENT` rejection out of the Worker.
+    await waitFor(() => {
+      expect(document.querySelector('[data-module-section="general"]')).not.toBeNull();
+    });
+    return { adapter, editorTextarea };
+  }
+
+  it('StatusBar shows the selected project’s name and target profile', async () => {
+    await setUpSelectedProject();
+
+    // Scoped to `.status-bar`: the sidebar's own project-list item (always
+    // mounted, `ProjectPage.tsx`'s `project-sidebar__item` button) renders
+    // the same project name text, so an unscoped `getByText` is ambiguous.
+    const statusBar = within(document.querySelector('.status-bar') as HTMLElement);
+    expect(statusBar.getByText(t('project.untitledName'))).toBeDefined();
+    expect(statusBar.getByText(DEFAULT_TARGET_PROFILE)).toBeDefined();
+  });
+
+  it('StatusBar shows pending right after an edit — a display-only mirror of the AutoSaver window, not a new persistence timer', async () => {
+    await setUpSelectedProject();
+    expect(screen.getByText(t('statusBar.saved'))).toBeDefined();
+
+    const editorTextarea = screen.getByLabelText<HTMLTextAreaElement>(t('editor.title'));
+    fireEvent.change(editorTextarea, { target: { value: 'mode: rule\nport: 7891\n' } });
+
+    await waitFor(() => expect(screen.getByText(t('statusBar.pending'))).toBeDefined());
+  });
+
+  it('clicking StatusBar’s back button deselects the project — the only way back to the project list once AppShell hides the sidebar narrow (v0.6.0 #6 usability fix, PRD §7.3)', async () => {
+    await setUpSelectedProject();
+
+    fireEvent.click(screen.getByRole('button', { name: t('statusBar.backButton') }));
+
+    expect(await screen.findByText(t('project.noSelection'))).toBeDefined();
+    expect(screen.queryByRole('group', { name: t('statusBar.label') })).toBeNull();
+  });
+
+  it('BottomNav defaults to 配置 active, matching the tablist’s own default (form view)', async () => {
+    await setUpSelectedProject();
+
+    expect(
+      screen.getByRole('button', { name: t('bottomNav.configTab') }).getAttribute('aria-current'),
+    ).toBe('page');
+    expect(
+      screen.getByRole('button', { name: t('bottomNav.graphTab') }).getAttribute('aria-current'),
+    ).toBeNull();
+  });
+
+  it('clicking 关系 in BottomNav switches the existing tablist to the graph view', async () => {
+    await setUpSelectedProject();
+
+    fireEvent.click(screen.getByRole('button', { name: t('bottomNav.graphTab') }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('tab', { name: t('project.graphViewTab') }).getAttribute('aria-selected'),
+      ).toBe('true'),
+    );
+    expect(
+      screen.getByRole('button', { name: t('bottomNav.graphTab') }).getAttribute('aria-current'),
+    ).toBe('page');
+  });
+
+  it('clicking 问题 in BottomNav mounts the issue panel only on a narrow viewport (jsdom has no matchMedia by default, so this needs it mocked)', async () => {
+    (window as unknown as { matchMedia: (query: string) => object }).matchMedia = (
+      query: string,
+    ) => ({
+      matches: true,
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    });
+    try {
+      await setUpSelectedProject();
+      // One match already exists — the desktop `aside` copy, always
+      // rendered (CSS decides whether it is *shown*, not whether it
+      // mounts). The mobile "问题" page only mounts its own duplicate once
+      // navigated to (see `useNarrowViewport` gating it in `ProjectPage`).
+      expect(screen.getAllByRole('region', { name: t('issues.title') })).toHaveLength(1);
+
+      fireEvent.click(screen.getByRole('button', { name: t('bottomNav.issuesTab') }));
+
+      await waitFor(() =>
+        expect(screen.getAllByRole('region', { name: t('issues.title') })).toHaveLength(2),
+      );
+    } finally {
+      Reflect.deleteProperty(window, 'matchMedia');
+    }
+  });
+});
+
 describe('ProjectPage / rule editor wiring (v0.4.0 #8, FR-RULE-01/05)', () => {
   async function setUpWithRealDocument(yaml: string) {
     const adapter = new MemoryStorageAdapter();

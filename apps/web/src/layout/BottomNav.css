@@ -1,0 +1,27 @@
+.bottom-nav {
+  /* Shown only under AppShell.tsx's narrow-screen media query. */
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--mcs-color-hairline);
+  background-color: var(--mcs-color-surface-card);
+  z-index: 1;
+}
+
+.bottom-nav__item {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: var(--mcs-spacing-xs) var(--mcs-spacing-xxs);
+  height: 56px;
+  cursor: pointer;
+  color: var(--mcs-color-text-muted);
+  font-size: var(--mcs-font-size-caption);
+}
+
+.bottom-nav__item[aria-current='page'] {
+  color: var(--mcs-color-text-primary);
+  font-weight: 500;
+}

@@ -65,6 +65,26 @@ describe('RuleListPage (ADR-022, sequence numbers always visible)', () => {
     expect(rows[1]?.textContent).toContain('MATCH,PROXY');
   });
 
+  it('puts the 1-based sequence number in each row’s accessible name, not just its visible text (PRD §7.3, v0.6.0 #6) — touch drag has no keyboard-style landing-point feedback, so the number must reach assistive tech through the name too', () => {
+    render(
+      <RuleListPage
+        {...baseProps({
+          rules: ['DOMAIN-SUFFIX,a.com,DIRECT', 'MATCH,PROXY'],
+          rowHeight: ROW_HEIGHT,
+          containerHeight: CONTAINER_HEIGHT,
+        })}
+      />,
+    );
+    expect(
+      screen.getByRole('row', {
+        name: t('ruleList.rowLabel', { index: 1, text: 'DOMAIN-SUFFIX,a.com,DIRECT' }),
+      }),
+    ).not.toBeNull();
+    expect(
+      screen.getByRole('row', { name: t('ruleList.rowLabel', { index: 2, text: 'MATCH,PROXY' }) }),
+    ).not.toBeNull();
+  });
+
   it('declares the true total row count via aria-rowcount, not the number of DOM rows', () => {
     render(
       <RuleListPage

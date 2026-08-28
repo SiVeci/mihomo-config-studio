@@ -48,4 +48,30 @@ describe('AppShell', () => {
     const style = container.querySelector('style');
     expect(style?.textContent).toContain(BREAKPOINTS.tablet.value);
   });
+
+  it('injects the narrow-screen rules for StatusBar/BottomNav/mobile paging (PRD §7.3, v0.6.0 #6) — same centralized <style> tag, since @media conditions cannot read custom properties', () => {
+    const { container } = render(<AppShell sidebar={<p>sidebar</p>}>main</AppShell>);
+
+    const style = container.querySelector('style');
+    expect(style?.textContent).toContain('.status-bar');
+    expect(style?.textContent).toContain('.bottom-nav');
+    expect(style?.textContent).toContain('.project-mobile-page--active');
+  });
+
+  it('defaults to the main column on a narrow screen, not a squeezed sidebar+main split — caught by loading a real build at a 375px viewport, since jsdom never applies @media at all', () => {
+    const { container } = render(<AppShell sidebar={<p>sidebar</p>}>main</AppShell>);
+
+    expect(container.querySelector('.app-shell')?.className).toBe('app-shell');
+    expect(container.querySelector('.app-shell--narrow-sidebar')).toBeNull();
+  });
+
+  it('narrowFocus="sidebar" adds the modifier class that swaps the narrow screen over to the project list (used while nothing is selected yet)', () => {
+    const { container } = render(
+      <AppShell sidebar={<p>sidebar</p>} narrowFocus="sidebar">
+        main
+      </AppShell>,
+    );
+
+    expect(container.querySelector('.app-shell--narrow-sidebar')).not.toBeNull();
+  });
 });

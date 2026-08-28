@@ -356,6 +356,7 @@ export function RuleListPage({
                 role="row"
                 aria-rowindex={index + 1}
                 aria-selected={index === selectedIndex}
+                aria-label={t('ruleList.rowLabel', { index: index + 1, text: rule })}
                 tabIndex={0}
                 draggable
                 className={rowClassName}
