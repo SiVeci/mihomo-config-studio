@@ -2,7 +2,9 @@
 
 ## 环境
 
-- Node.js ≥ 20.11
+- Node.js ≥ 22.18（[ADR-030](docs/adr/ADR-030-minimum-node-baseline.md)：22.18 起
+  默认开启类型剥离，`tools/*` 的编译产物才能加载 ADR-007 的源码导出；且 Node 20 上
+  jsdom 装不起来，DOM 测试会静默不执行）
 - pnpm 10（`corepack enable pnpm` 或 `npm i -g pnpm@10`）
 
 ```bash

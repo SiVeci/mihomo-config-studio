@@ -86,7 +86,8 @@ tools/
 
 ## 本地开发
 
-需要 Node.js ≥ 20.11 和 pnpm 10。
+需要 Node.js ≥ 22.18 和 pnpm 10（版本下限的来由见
+[ADR-030](docs/adr/ADR-030-minimum-node-baseline.md)）。
 
 ```bash
 pnpm install

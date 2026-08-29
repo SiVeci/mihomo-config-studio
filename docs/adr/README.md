@@ -34,6 +34,7 @@
 | [ADR-027](./ADR-027-minimum-webview-baseline.md)            | 最低 WebView/浏览器基线与启动能力门                 | Accepted | v0.6.0 切片 #1  |
 | [ADR-028](./ADR-028-pure-js-ed25519-backend.md)             | 纯 JS Ed25519 验签后端（`@noble/ed25519`）          | Accepted | v0.6.0 切片 #10 |
 | [ADR-029](./ADR-029-service-worker-cache-strategy.md)       | 自建 Service Worker 与缓存版本策略                  | Accepted | v0.6.0 切片 #7  |
+| [ADR-030](./ADR-030-minimum-node-baseline.md)               | 开发与 CI 的最低 Node 版本抬到 22.18                | Accepted | v0.9.0 切片 #1  |
 
 ADR-001 至 ADR-005 直接来自 PRD §17，本仓库补全其背景与工程约束。
 ADR-006 起为实施阶段新增的决策。

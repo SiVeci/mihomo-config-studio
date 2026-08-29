@@ -7,7 +7,7 @@
   "type": "module",
   "packageManager": "pnpm@10.34.5",
   "engines": {
-    "node": ">=20.11.0"
+    "node": ">=22.18.0"
   },
   "scripts": {
     "typecheck": "tsc -b tsconfig.build.json",
