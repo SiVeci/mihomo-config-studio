@@ -710,6 +710,51 @@ describe('handleWorkerRequest / undo, redo (FR-PROJ-04, v0.3.0 #15)', () => {
     expect(response).toMatchObject({ canUndo: false, canRedo: false, text: SAMPLE });
   });
 
+  // v0.9.0 #1, found by this repo's first-ever real CI run. `YamlEditor`'s
+  // debounced effect re-parses `text` ~300ms after it changes, and
+  // `ProjectPage` feeds every undo/redo response's text straight back into
+  // that prop — so a `parse` carrying the *pre-undo* text can still be
+  // in flight when the undo lands, if React has not yet committed the new
+  // prop (and therefore not yet run the effect cleanup that would have
+  // cancelled the timer). `handleParse`'s echo check compares the request
+  // text against the document it currently holds, so that late arrival looks
+  // like "a genuinely new document" and wipes the undo history — the exact
+  // failure mode its own comment warns about, just reached from the other
+  // direction.
+  //
+  // Symptom on CI (deterministic there, never locally):
+  // ProjectPage.test.tsx's "Redo restores the edited text byte-exact after an
+  // undo" failed with `expected true to be false` — redo returned the right
+  // text (the re-parsed document happens to hold it) but `canUndo: false`,
+  // because there was no history left to be at the top of.
+  it('a stale debounced re-parse arriving after an undo does not wipe the undo history', () => {
+    const state = parsed();
+    const patch: IssueFix = { kind: 'set-scalar', path: ['port'], value: 7891 };
+    handleWorkerRequest(state, { type: 'applyPatch', requestId: 'r1', patch });
+    // The same round trip `ProjectPage.refreshAfterWrite` makes to fill
+    // `configText` — i.e. exactly the text `YamlEditor` gets as its prop and
+    // then schedules a re-parse of.
+    const serialized = handleWorkerRequest(state, { type: 'serialize', requestId: 'r1b' });
+    if (serialized.type !== 'serialize') throw new Error('unreachable');
+    const afterEdit = serialized.text;
+
+    const undone = handleWorkerRequest(state, { type: 'undo', requestId: 'r2' });
+    if (undone.type !== 'undo') throw new Error('unreachable');
+    expect(undone.text).toBe(SAMPLE);
+
+    // The late timer fires here, still carrying the pre-undo text.
+    handleWorkerRequest(state, { type: 'parse', requestId: 'r3', text: afterEdit });
+
+    const redone = handleWorkerRequest(state, { type: 'redo', requestId: 'r4' });
+    if (redone.type !== 'redo') throw new Error('unreachable');
+    expect(redone.text).toBe(afterEdit);
+    // The real assertion: the redo actually replayed a history entry, rather
+    // than the history having been silently reset and `redo` merely echoing
+    // whatever document the stale parse happened to install.
+    expect(redone.canUndo).toBe(true);
+    expect(redone.canRedo).toBe(false);
+  });
+
   it('undo after a real applyPatch restores the export text byte-exact and flips canUndo/canRedo', () => {
     const state = parsed();
     const patch: IssueFix = { kind: 'set-scalar', path: ['port'], value: 7891 };

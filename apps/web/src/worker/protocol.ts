@@ -396,7 +396,22 @@ function handleParse(state: WorkerState, request: ParseRequest): ParseResponse {
   // silently wipes undo history a fraction of a second after every single
   // edit, which is invisible to a fast synchronous test but real for an
   // actual user (caught manually in a real browser, v0.3.0 #15).
-  const isEchoOfCurrentDocument = state.parseResult?.document?.toText() === request.text;
+  //
+  // v0.9.0 #1: comparing against the current text *alone* was not enough, and
+  // the repo's first real CI run proved it. That debounced re-parse is
+  // scheduled from a React effect keyed on the text prop; an undo/redo can
+  // land in the gap between the timer firing and React committing the new
+  // prop (so the effect cleanup has not cancelled the timer yet). The parse
+  // then arrives carrying the *pre-undo* text, which no longer matches the
+  // document — and the history got wiped, which is precisely the disaster the
+  // paragraph above is about, just reached from the other direction. Asking
+  // the history stack whether it knows the text closes that gap: any state
+  // reachable by undo/redo is by definition still "this document".
+  // Regression: protocol.test.ts "a stale debounced re-parse arriving after
+  // an undo does not wipe the undo history".
+  const isEchoOfCurrentDocument =
+    state.parseResult?.document?.toText() === request.text ||
+    state.historyStack.knowsText(request.text);
   const parseResult = MihomoYamlDocument.parse(request.text);
   state.parseResult = parseResult;
   if (!isEchoOfCurrentDocument) state.historyStack = new HistoryStack();

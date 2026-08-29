@@ -228,4 +228,49 @@ describe('HistoryStack (FR-PROJ-04)', () => {
     // stack past maxEntries, so the original text is no longer recoverable.
     expect(stack.undo()).toBeNull();
   });
+
+  // v0.9.0 #1: the Worker's `parse` handler asks this to tell "the editor
+  // echoing a state of the document I am already editing" apart from "a
+  // genuinely new document" — see `knowsText`'s own doc comment and
+  // `apps/web/src/worker/protocol.ts`'s `handleParse`.
+  describe('knowsText', () => {
+    it('knows both the before and the after text of every recorded entry', () => {
+      const stack = new HistoryStack();
+      const document = doc('a: 1\n');
+
+      stack.record(document, 'set a', () => document.setScalarIn(['a'], 2));
+      stack.record(document, 'set a again', () => document.setScalarIn(['a'], 3));
+
+      expect(stack.knowsText('a: 1\n')).toBe(true);
+      expect(stack.knowsText('a: 2\n')).toBe(true);
+      expect(stack.knowsText('a: 3\n')).toBe(true);
+    });
+
+    it('does not know a text this stack never recorded', () => {
+      const stack = new HistoryStack();
+      const document = doc('a: 1\n');
+      stack.record(document, 'set a', () => document.setScalarIn(['a'], 2));
+
+      expect(stack.knowsText('b: 9\n')).toBe(false);
+      // Byte-exact, not fuzzy: a whitespace difference is a different document.
+      expect(stack.knowsText('a: 2')).toBe(false);
+    });
+
+    it('knows nothing on an empty stack, so the first parse always starts a fresh scope', () => {
+      expect(new HistoryStack().knowsText('a: 1\n')).toBe(false);
+    });
+
+    it('forgets an evicted entry, staying consistent with what undo can reach', () => {
+      const stack = new HistoryStack({ maxEntries: 1 });
+      const document = doc('a: 1\nb: 1\n');
+      stack.record(document, 'set a', () => document.setScalarIn(['a'], 2), 'field:a');
+      stack.record(document, 'set b', () => document.setScalarIn(['b'], 2), 'field:b');
+
+      // "set a" was evicted, so its `before` is no longer a state this stack
+      // can return to — knowsText must agree with undo() rather than claim a
+      // reachability that no longer exists.
+      expect(stack.knowsText('a: 1\nb: 1\n')).toBe(false);
+      expect(stack.knowsText('a: 2\nb: 1\n')).toBe(true);
+    });
+  });
 });

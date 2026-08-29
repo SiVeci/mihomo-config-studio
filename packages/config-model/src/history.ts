@@ -123,4 +123,25 @@ export class HistoryStack {
     this.#lastMergeKey = null;
     return entry.after;
   }
+
+  /**
+   * Is `text` one of the document states this stack can reach — i.e. any
+   * entry's `before` or `after`, reachable by some sequence of undo/redo?
+   *
+   * The one caller is the Worker's `parse` handler (v0.9.0 #1), deciding
+   * whether an incoming text is "still the document I am editing" or "a
+   * genuinely new document, so start a fresh undo scope". Comparing against
+   * only the *current* text is not enough: the editor re-parses on a debounce,
+   * so a parse carrying a slightly stale — but perfectly familiar — state can
+   * land after an undo/redo already moved the document elsewhere, and
+   * resetting the stack there silently destroys the user's undo history.
+   *
+   * Deliberately errs toward "known": a raw-text edit that happens to
+   * reproduce an earlier state keeps the history rather than clearing it,
+   * which is the safe direction — the worst case is one extra undo step
+   * available, versus losing every step.
+   */
+  knowsText(text: string): boolean {
+    return this.#entries.some((entry) => entry.before === text || entry.after === text);
+  }
 }
