@@ -307,6 +307,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/yaml-engine
 
+  tools/csp-check: {}
+
   tools/egress-check: {}
 
   tools/schema-cli:

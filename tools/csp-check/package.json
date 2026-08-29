@@ -1,0 +1,10 @@
+{
+  "name": "@mcs/csp-check",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Asserts apps/web's built index.html and public/_headers carry the exact strict CSP ADR-032 defines, with no unsafe-eval/unsafe-inline drift and no non-essential third-party script/link (NFR-SEC-07).",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

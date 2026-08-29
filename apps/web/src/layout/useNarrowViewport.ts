@@ -9,8 +9,8 @@ function matchesNarrow(): boolean {
 }
 
 /**
- * Same breakpoint `AppShell.tsx`'s `RESPONSIVE_STYLE` uses for the
- * CSS-only narrow-screen layout — this hook exists for the one place CSS
+ * Same breakpoint `AppShell.responsive.css` uses for the CSS-only
+ * narrow-screen layout (ADR-032) — this hook exists for the one place CSS
  * visibility is not enough: `ProjectPage`'s "问题" mobile page duplicates
  * the desktop aside's `IssuePanel`/`UnknownFieldTree` (both cheap,
  * props-only components, see that duplication's own comment) rather than

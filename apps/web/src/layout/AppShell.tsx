@@ -1,63 +1,8 @@
-import { BREAKPOINTS } from '@mcs/ui';
 import type { ReactNode } from 'react';
 
 import { t } from '../i18n/index.js';
 import './AppShell.css';
-
-/**
- * The `@media` breakpoint below is generated from `@mcs/ui`'s token value
- * rather than a hand-copied number, so it cannot drift from the source of
- * truth `packages/ui` owns — CSS custom properties cannot be read inside a
- * media-query condition, so a plain `.css` file has no way to reference the
- * token directly; interpolating it into a `<style>` tag is the workaround.
- *
- * The same breakpoint also drives PRD §7.3's narrow-screen layout
- * (`StatusBar`/`BottomNav`/the `.project-mobile-page` content paging,
- * `ProjectPage.tsx`, v0.6.0 #6): those components render unconditionally in
- * the DOM and stay `display: none` by default (their own `.css` files) —
- * this is the one place, alongside the aside/sidebar rules it already owned,
- * that turns them on. Keeping every breakpoint-gated rule in this single
- * interpolated block means there is exactly one number to keep in sync with
- * the token, regardless of which component's class it styles.
- */
-const RESPONSIVE_STYLE = `
-@media (max-width: ${BREAKPOINTS.tablet.value}) {
-  .app-shell {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "main";
-  }
-  .app-shell__sidebar {
-    display: none;
-  }
-  .app-shell__aside {
-    display: none;
-  }
-  .app-shell--narrow-sidebar {
-    grid-template-areas: "sidebar";
-  }
-  .app-shell--narrow-sidebar .app-shell__sidebar {
-    display: block;
-  }
-  .app-shell--narrow-sidebar .app-shell__main {
-    display: none;
-  }
-  .status-bar {
-    display: flex;
-  }
-  .bottom-nav {
-    display: flex;
-  }
-  .app-shell__main {
-    padding-bottom: calc(var(--mcs-spacing-lg) + 56px);
-  }
-  .project-mobile-page {
-    display: none;
-  }
-  .project-mobile-page--active {
-    display: block;
-  }
-}
-`;
+import './AppShell.responsive.css';
 
 export interface AppShellProps {
   readonly sidebar: ReactNode;
@@ -93,7 +38,6 @@ export function AppShell({
   const className = narrowFocus === 'sidebar' ? 'app-shell app-shell--narrow-sidebar' : 'app-shell';
   return (
     <div className={className}>
-      <style>{RESPONSIVE_STYLE}</style>
       <nav className="app-shell__sidebar" aria-label={t('appShell.sidebarLabel')}>
         {sidebar}
       </nav>

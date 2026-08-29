@@ -82,6 +82,7 @@ tools/
   upstream-watch/      上游文档 / 示例变更监控                 🚧 规划中，未建
   core-test-runner/    Mihomo 配置测试矩阵                     ✅ v1.19.29 下载+校验+内核测试 + CI job（v0.3.0 #21）
   egress-check/        packages/** 出网白名单守卫（CI 强制）   ✅ 路径级+形态级双层校验，四条原否定用例保留（v0.5.0 #3）
+  csp-check/           apps/web 构建产物严格 CSP 守卫（CI 强制） ✅ 策略/unsafe-eval/unsafe-inline/外部脚本四层核对，_headers 与 index.html 一致性（v0.9.0 #4，ADR-032）
 ```
 
 ## 本地开发
@@ -128,6 +129,7 @@ pnpm run build
 - [版本执行计划](docs/releases/README.md)
 - [需求追踪表](docs/requirements-traceability.md)
 - [PRD 与上游行为差异记录](docs/upstream-divergences.md)
+- [自托管部署头（CSP 等）](docs/self-hosting-headers.md)
 - [贡献指南](CONTRIBUTING.md)
 - [安全策略](SECURITY.md)
 

@@ -182,3 +182,33 @@ jobs:
       # `mihomo -t -f`; any case not behaving as declared fails the job.
       - name: Run the kernel test matrix against the real Mihomo kernel
         run: node tools/core-test-runner/dist/index.js ${{ matrix.track == 'beta' && '--beta' || '' }}
+
+  csp-check:
+    name: strict CSP on the real build output
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Version comes from package.json's `packageManager` — see the note on
+      # the first pnpm/action-setup step in .github/workflows/ci.yml.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build apps/web (this job checks the real bundle, never the source apps/web/index.html directly — ADR-032)
+        run: pnpm run build
+
+      - name: Build csp-check
+        run: pnpm --filter @mcs/csp-check exec tsc -p tsconfig.json
+
+      # NFR-SEC-07 / release blocker: strict CSP, no unsafe-eval, no
+      # non-essential third-party script. tools/csp-check has its own unit
+      # tests (tools/csp-check/src/check.test.ts); this step runs it against
+      # the real build output.
+      - name: Assert apps/web/dist carries the exact strict CSP (ADR-032)
+        run: node tools/csp-check/dist/index.js apps/web/dist

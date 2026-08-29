@@ -1,9 +1,20 @@
 // @vitest-environment jsdom
 import { BREAKPOINTS } from '@mcs/ui';
 import { cleanup, render, screen } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { AppShell } from './AppShell.js';
+
+const RESPONSIVE_CSS_PATH = join(
+  dirname(fileURLToPath(import.meta.url)),
+  'AppShell.responsive.css',
+);
+function readResponsiveCss(): string {
+  return readFileSync(RESPONSIVE_CSS_PATH, 'utf8');
+}
 
 afterEach(() => {
   cleanup();
@@ -42,20 +53,21 @@ describe('AppShell', () => {
     expect(aside.textContent).toContain('custom aside');
   });
 
-  it('derives the responsive breakpoint from @mcs/ui rather than a hand-copied number', () => {
+  it('ADR-032: no longer renders an inline <style> element (style-src-elem drops unsafe-inline) — the responsive rules moved to a real, imported .css file', () => {
     const { container } = render(<AppShell sidebar={<p>sidebar</p>}>main</AppShell>);
 
-    const style = container.querySelector('style');
-    expect(style?.textContent).toContain(BREAKPOINTS.tablet.value);
+    expect(container.querySelector('style')).toBeNull();
   });
 
-  it('injects the narrow-screen rules for StatusBar/BottomNav/mobile paging (PRD §7.3, v0.6.0 #6) — same centralized <style> tag, since @media conditions cannot read custom properties', () => {
-    const { container } = render(<AppShell sidebar={<p>sidebar</p>}>main</AppShell>);
+  it("AppShell.responsive.css's literal breakpoint stays equal to @mcs/ui's token — a real .css file cannot read a CSS custom property inside an @media condition, so this literal is checked directly rather than derived at run time", () => {
+    expect(readResponsiveCss()).toContain(`max-width: ${BREAKPOINTS.tablet.value}`);
+  });
 
-    const style = container.querySelector('style');
-    expect(style?.textContent).toContain('.status-bar');
-    expect(style?.textContent).toContain('.bottom-nav');
-    expect(style?.textContent).toContain('.project-mobile-page--active');
+  it('AppShell.responsive.css still carries the narrow-screen rules for StatusBar/BottomNav/mobile paging (PRD §7.3, v0.6.0 #6) — unchanged content, only moved out of the interpolated <style> tag', () => {
+    const css = readResponsiveCss();
+    expect(css).toContain('.status-bar');
+    expect(css).toContain('.bottom-nav');
+    expect(css).toContain('.project-mobile-page--active');
   });
 
   it('defaults to the main column on a narrow screen, not a squeezed sidebar+main split — caught by loading a real build at a 375px viewport, since jsdom never applies @media at all', () => {

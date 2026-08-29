@@ -3,6 +3,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { App } from './App.js';
+import { applyCssVariables } from './theme/apply-css-variables.js';
 
 /**
  * The real app: React, `@mcs/ui`, and everything `App.tsx` pulls in. Built
@@ -20,10 +21,11 @@ import { App } from './App.js';
 export function mount(rootElement: HTMLElement): void {
   // Single source of truth (packages/ui#7): the CSS custom properties
   // consumed by index.css are generated from the same token data @mcs/ui
-  // exports as TS, never hand-duplicated.
-  const tokenStyle = document.createElement('style');
-  tokenStyle.textContent = cssVariables();
-  document.head.prepend(tokenStyle);
+  // exports as TS, never hand-duplicated. Applied via the `style` attribute
+  // (ADR-032), not an injected `<style>` element — see
+  // apply-css-variables.ts's own doc comment for why that distinction
+  // matters under a strict CSP.
+  applyCssVariables(document.documentElement, cssVariables());
 
   createRoot(rootElement).render(
     <StrictMode>

@@ -1,0 +1,52 @@
+/**
+ * ADR-032: moved out of an interpolated <style> element (AppShell.tsx) so
+ * `style-src-elem` can drop 'unsafe-inline'. The breakpoint below is a
+ * literal copy of @mcs/ui's BREAKPOINTS.tablet.value ("1024px") — a real
+ * .css file cannot read a CSS custom property inside an @media condition,
+ * so there is no way to reference the token directly here. AppShell.test.ts
+ * asserts this literal stays equal to the token: if the token changes and
+ * this file does not, that test goes red immediately.
+ *
+ * Everything below is unchanged behaviour, only moved: the same rules also
+ * drive PRD §7.3's narrow-screen layout (StatusBar/BottomNav/the
+ * .project-mobile-page content paging, ProjectPage.tsx, v0.6.0 #6) — those
+ * components render unconditionally in the DOM and stay `display: none` by
+ * default (their own .css files); this is the one place, alongside the
+ * aside/sidebar rules it already owned, that turns them on.
+ */
+@media (max-width: 1024px) {
+  .app-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'main';
+  }
+  .app-shell__sidebar {
+    display: none;
+  }
+  .app-shell__aside {
+    display: none;
+  }
+  .app-shell--narrow-sidebar {
+    grid-template-areas: 'sidebar';
+  }
+  .app-shell--narrow-sidebar .app-shell__sidebar {
+    display: block;
+  }
+  .app-shell--narrow-sidebar .app-shell__main {
+    display: none;
+  }
+  .status-bar {
+    display: flex;
+  }
+  .bottom-nav {
+    display: flex;
+  }
+  .app-shell__main {
+    padding-bottom: calc(var(--mcs-spacing-lg) + 56px);
+  }
+  .project-mobile-page {
+    display: none;
+  }
+  .project-mobile-page--active {
+    display: block;
+  }
+}
