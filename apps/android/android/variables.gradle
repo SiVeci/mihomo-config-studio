@@ -12,6 +12,8 @@ ext {
     junitVersion = '4.13.2'
     androidxJunitVersion = '1.2.1'
     androidxEspressoCoreVersion = '3.6.1'
+    androidxUiautomatorVersion = '2.3.0'
+    androidxOrchestratorVersion = '1.5.1'
     cordovaAndroidVersion = '10.1.1'
     kotlin_version = '1.9.25'
 }

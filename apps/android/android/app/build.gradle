@@ -20,6 +20,19 @@ android {
         versionCode releaseVersionCode
         versionName releaseVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // v0.9.0 #9: `pm clear`/`am kill` targeting this app from *inside*
+        // one of its own instrumented tests kills the instrumentation
+        // process too — Android hosts test code in-process with the app
+        // under test, always. `clearPackageData` lets the Orchestrator (a
+        // separate process) do the clearing *between* tests instead, so no
+        // test method ever has to call it on itself. Discovered the hard
+        // way: `SafRoundTripTest`'s first `@Before`-issued `pm clear` call
+        // reliably reported "Instrumentation run failed due to Process
+        // crashed" on whichever test JUnit happened to run first, confirmed
+        // via `adb logcat` showing `PACKAGE_DATA_CLEARED` and
+        // `AndroidRuntime: VM exiting` for this exact package a few dozen
+        // milliseconds after that test method started.
+        testInstrumentationRunnerArguments clearPackageData: 'true'
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -45,6 +58,11 @@ android {
             }
         }
     }
+    testOptions {
+        // Pairs with `clearPackageData` above — the Orchestrator process
+        // (not this app's own instrumentation) does the clearing.
+        execution 'ANDROIDX_TEST_ORCHESTRATOR'
+    }
 }
 
 repositories {
@@ -63,6 +81,16 @@ dependencies {
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    // v0.9.0 #9: the SAF picker (com.google.android.documentsui) is a
+    // separate process this app's own window hierarchy can't reach —
+    // Espresso only drives the process under test. UIAutomator operates on
+    // the whole device's accessibility tree instead.
+    androidTestImplementation "androidx.test.uiautomator:uiautomator:$androidxUiautomatorVersion"
+    // `androidTestUtil`, not `androidTestImplementation`: the Orchestrator
+    // installs and runs as its own separate APK/process, never linked into
+    // the test APK — that separateness is the entire point (see the
+    // `clearPackageData` comment on `testInstrumentationRunnerArguments`).
+    androidTestUtil "androidx.test:orchestrator:$androidxOrchestratorVersion"
     implementation project(':capacitor-cordova-android-plugins')
 }
 
