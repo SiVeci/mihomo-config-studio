@@ -1,0 +1,10 @@
+{
+  "name": "@mcs/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Playwright end-to-end specs (ADR-033) — driven by the root pnpm run e2e script, never imported by another workspace package.",
+  "dependencies": {
+    "@mcs/schema-registry": "workspace:*"
+  }
+}

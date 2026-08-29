@@ -14,6 +14,11 @@ playwright-report/
 blob-report/
 .playwright/
 
+# e2e/update.spec.ts's signed test-bundle fixtures: generated fresh (or
+# reused across local runs — see loadOrGenerateBundleFixtureSet's own doc
+# comment) by playwright.config.ts's top-level await, never handwritten.
+e2e/.generated/
+
 # android build artifacts
 apps/android/android/app/build/
 apps/android/android/build/

@@ -146,6 +146,12 @@ importers:
         specifier: ^6.0.7
         version: 6.4.3(@types/node@22.20.1)(yaml@2.9.0)
 
+  e2e:
+    dependencies:
+      '@mcs/schema-registry':
+        specifier: workspace:*
+        version: link:../packages/schema-registry
+
   packages/config-model:
     dependencies:
       '@mcs/yaml-engine':

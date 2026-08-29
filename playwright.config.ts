@@ -1,6 +1,26 @@
 import { defineConfig, devices } from '@playwright/test';
 
+import { BUNDLE_SOURCE_BASE_PATH, loadOrGenerateBundleFixtureSet } from './e2e/bundle-fixtures.js';
+
 const PORT = 4173;
+
+/**
+ * v0.9.0 #8: `e2e/update.spec.ts` needs a Bundle candidate real
+ * `verifyBundle` will actually accept, which means the app's build has to
+ * trust whatever key signed it — `MCS_TRUST_ANCHOR_OVERRIDES_JSON` is a
+ * Vite `define` resolved at `vite build` time (`apps/web/vite.config.ts`),
+ * so this has to run before `webServer.command` below, not inside a test.
+ */
+const bundleFixtures = await loadOrGenerateBundleFixtureSet();
+
+/** `NodeJS.ProcessEnv`'s index signature is `string | undefined`; `webServer.env` wants plain `string` — this repo's `exactOptionalPropertyTypes` needs the explicit filter, not just a spread. */
+function definedEnvEntries(): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined) result[key] = value;
+  }
+  return result;
+}
 
 /**
  * ADR-033: the tested target is the real, built production bundle, never
@@ -41,5 +61,15 @@ export default defineConfig({
     url: `http://localhost:${String(PORT)}`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    env: {
+      ...definedEnvEntries(),
+      MCS_TRUST_ANCHOR_OVERRIDES_JSON: JSON.stringify([bundleFixtures.trustedPublicKeyHex]),
+      MCS_BUNDLE_UPDATE_SOURCES_JSON: JSON.stringify({
+        stable: {
+          manifestUrl: `${BUNDLE_SOURCE_BASE_PATH}/manifest.json`,
+          fileBaseUrl: BUNDLE_SOURCE_BASE_PATH,
+        },
+      }),
+    },
   },
 });
