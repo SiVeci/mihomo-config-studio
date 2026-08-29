@@ -38,6 +38,7 @@
 | [ADR-031](./ADR-031-kernel-matrix-dual-track.md)                    | 内核测试矩阵的双轨口径与 Beta 轨 digest 信任降级                | Accepted | v0.9.0 切片 #3  |
 | [ADR-032](./ADR-032-strict-csp-layering.md)                         | 严格 CSP 的分层口径与部署头交付形态                             | Accepted | v0.9.0 切片 #4  |
 | [ADR-033](./ADR-033-e2e-layering.md)                                | Playwright 端到端测试的分层与被测对象                           | Accepted | v0.9.0 切片 #7  |
+| [ADR-034](./ADR-034-perf-ci-gating.md)                              | 性能基准的 CI 阻断阈值，与"阈值对着什么硬件说"                  | Accepted | v0.9.0 切片 #10 |
 | [ADR-035](./ADR-035-relative-import-extensions-for-node-runtime.md) | 内部相对导入改用字面 `.ts` 扩展名，修复裸 Node 对多文件包的解析 | Accepted | v0.9.0 切片 #2  |
 
 ADR-001 至 ADR-005 直接来自 PRD §17，本仓库补全其背景与工程约束。

@@ -1,0 +1,10 @@
+{
+  "name": "@mcs/perf-gate",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Compares vitest bench --outputJson results against docs/adr/ADR-034's checked-in thresholds.json and fails the build on a real regression (NFR-PERF-02/03/04, v0.9.0 #10).",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

@@ -22,6 +22,7 @@
     { "path": "./tools/csp-check" },
     { "path": "./tools/egress-check" },
     { "path": "./tools/log-redaction-check" },
+    { "path": "./tools/perf-gate" },
     { "path": "./apps/android" },
     { "path": "./apps/web" },
     { "path": "./e2e" }

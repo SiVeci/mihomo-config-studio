@@ -75,15 +75,8 @@ jobs:
         run: node tools/android-manifest-check/dist/index.js apps/android/android/app/src
 
   perf-baseline:
-    name: import + scale benchmarks (record only, non-blocking)
+    name: import + scale benchmarks (NFR-PERF-02/03/04 gate, ADR-034)
     runs-on: ubuntu-latest
-    # NFR-PERF-02/04: exit conditions are "< 2s" and the version document's
-    # three perf numbers, verified per-slice in
-    # docs/releases/plans/v0.2.0-perf-baseline.md /
-    # docs/releases/plans/v0.4.0-perf-baseline.md — this job only keeps the
-    # numbers visible on every push. A hard threshold job is v0.9.0 scope
-    # (shared runners are too noisy to gate on before then).
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -98,11 +91,23 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Build perf-gate
+        run: pnpm --filter @mcs/perf-gate exec tsc -p tsconfig.json
+
       - name: Run the 1 MB corpus import benchmark
-        run: pnpm vitest bench --run packages/validator/src/bench/import.bench.ts
+        run: pnpm vitest bench --run packages/validator/src/bench/import.bench.ts --outputJson=import-bench.json
 
       - name: Run the 1,000-entity / 10,000-rule scale benchmark
-        run: pnpm vitest bench --run packages/validator/src/bench/scale.bench.ts
+        run: pnpm vitest bench --run packages/validator/src/bench/scale.bench.ts --outputJson=scale-bench.json
+
+      # ADR-034: PRD §11.1 gives NFR-PERF-02/03/04 no target hardware, and the
+      # first real CI run (v0.9.0 #1) showed this runner is ~7x slower than a
+      # normal dev machine for the 1 MB import benchmark specifically — two of
+      # the four gated numbers below are CI-calibrated thresholds, not the
+      # PRD's literal figures (tools/perf-gate/thresholds.json documents each
+      # one's reasoning inline).
+      - name: Enforce NFR-PERF-02/03/04 thresholds
+        run: node tools/perf-gate/dist/index.js tools/perf-gate/thresholds.json import-bench.json scale-bench.json
 
   no-network-egress:
     name: no configuration upload path

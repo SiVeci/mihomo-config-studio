@@ -1,0 +1,30 @@
+[
+  {
+    "requirement": "NFR-PERF-02",
+    "file": "packages/validator/src/bench/import.bench.ts",
+    "name": "parse + first validation pass (total)",
+    "thresholdMs": 7000,
+    "note": "CI-calibrated, not the PRD's literal 2000ms (ADR-034): the first real CI run (v0.9.0 #1) measured mean 4086.22ms / max 4605.19ms on GitHub's shared ubuntu-latest runner, about 7x slower than the same benchmark on a normal dev machine (580.57ms). The PRD's 2-second target describes real end-user hardware, which this CI job cannot represent for this specific CPU-bound workload — 7000ms (~1.5x the observed CI max) catches real regressions without false-failing on ordinary CI noise."
+  },
+  {
+    "requirement": "NFR-PERF-03",
+    "file": "packages/validator/src/bench/scale.bench.ts",
+    "name": "single moveSeqItem",
+    "thresholdMs": 100,
+    "note": "PRD's literal figure, unadjusted: CI measured ~0.01ms, about four orders of magnitude of margin, so CI/real-hardware differences cannot plausibly close this gap."
+  },
+  {
+    "requirement": "NFR-PERF-03/04",
+    "file": "packages/validator/src/bench/scale.bench.ts",
+    "name": "100 consecutive moves",
+    "thresholdMs": 100,
+    "note": "PRD's literal figure, unadjusted: CI measured ~1.95ms, about 50x margin."
+  },
+  {
+    "requirement": "NFR-PERF-03 (batch-edit family)",
+    "file": "packages/validator/src/bench/scale.bench.ts",
+    "name": "applyBatch-equivalent replacing 1000 rule targets",
+    "thresholdMs": 150,
+    "note": "CI-calibrated, not the PRD's literal 100ms (ADR-034): CI measured ~78.25ms, only ~1.28x margin — too tight for a brand-new gate on a noisy shared runner. 150ms keeps a real 2x+ slowdown catchable while giving headroom against normal CI jitter; tighten once more real CI runs are on record."
+  }
+]
