@@ -20,9 +20,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # No `version:` input on purpose: pnpm/action-setup@v4 errors out
+      # ("Multiple versions of pnpm specified") when the action input and
+      # package.json's `packageManager` field both name a version. Verified
+      # on this repo's first-ever real CI run (v0.9.0 #1) — all five jobs
+      # failed here in 13s. `packageManager: pnpm@10.34.5` is the single
+      # source of truth, and it pins an exact version rather than a range.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - uses: actions/setup-node@v4
         with:
@@ -49,9 +53,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Version comes from package.json's `packageManager` — see the note on
+      # the first pnpm/action-setup step in .github/workflows/ci.yml.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - uses: actions/setup-node@v4
         with:
@@ -83,9 +87,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Version comes from package.json's `packageManager` — see the note on
+      # the first pnpm/action-setup step in .github/workflows/ci.yml.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - uses: actions/setup-node@v4
         with:
@@ -106,9 +110,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Version comes from package.json's `packageManager` — see the note on
+      # the first pnpm/action-setup step in .github/workflows/ci.yml.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - uses: actions/setup-node@v4
         with:
@@ -141,9 +145,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Version comes from package.json's `packageManager` — see the note on
+      # the first pnpm/action-setup step in .github/workflows/ci.yml.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - uses: actions/setup-node@v4
         with:

@@ -33,9 +33,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Version comes from package.json's `packageManager` — see the note on
+      # the first pnpm/action-setup step in .github/workflows/ci.yml.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - uses: actions/setup-node@v4
         with:
@@ -65,9 +65,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Version comes from package.json's `packageManager` — see the note on
+      # the first pnpm/action-setup step in .github/workflows/ci.yml.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - uses: actions/setup-node@v4
         with:
@@ -135,9 +135,9 @@ jobs:
         with:
           name: unsigned-bundle
 
+      # Version comes from package.json's `packageManager` — see the note on
+      # the first pnpm/action-setup step in .github/workflows/ci.yml.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - uses: actions/setup-node@v4
         with:
