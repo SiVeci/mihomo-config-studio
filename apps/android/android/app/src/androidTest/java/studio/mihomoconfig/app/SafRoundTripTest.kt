@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.UiObjectNotFoundException
 import androidx.test.uiautomator.UiScrollable
 import androidx.test.uiautomator.UiSelector
@@ -141,50 +142,77 @@ class SafRoundTripTest {
      * backs it up rather than assuming the first node `UiScrollable` finds
      * is the outer page. Screens with no scrollable container at all (the
      * project list) just skip both and go straight to the direct find.
+     *
+     * `isLaidOut` exists because `findObject` alone matches the instant a
+     * selector's text/resource-id exists anywhere in the accessibility
+     * tree — including this app's own self-built list virtualization's
+     * not-yet-laid-out sections, confirmed live (`uiautomator dump` right
+     * after pasting+importing) to report a real but degenerate bounds rect
+     * (collapsed to the origin, or clipped to zero height at the viewport's
+     * bottom edge) while genuinely off-screen. Without this check,
+     * `tapText`/`tapResourceId` stopped swiping the moment `findObject`
+     * returned non-null, before the page had scrolled at all. This check
+     * is confirmed necessary but **not sufficient**: `docs/releases/plans/
+     * v0.9.0-android-e2e-evidence.md` records a further, still-unresolved
+     * finding from the same investigation — once this in-process
+     * `device.swipe()` runs even once, `findObject` stops finding "导出"
+     * at all (not just with bad bounds), unlike the same gesture issued
+     * externally via `adb shell input swipe`, which reliably scrolls it
+     * into view within a few tries. Root cause not yet confirmed.
      */
+    private fun UiObject2.isLaidOut(): Boolean = visibleBounds.let { it.width() > 0 && it.height() > 0 }
+
     private fun tapText(text: String) {
         try {
             UiScrollable(UiSelector().scrollable(true)).scrollIntoView(UiSelector().text(text))
         } catch (_: UiObjectNotFoundException) {
             // No scrollable container on this screen.
         }
-        var target = device.findObject(By.text(text))
+        var target = device.findObject(By.text(text))?.takeIf { it.isLaidOut() }
         var remainingSwipes = 12
         while (target == null && remainingSwipes > 0) {
             device.swipe(540, 1600, 540, 400, 20)
-            target = device.findObject(By.text(text))
+            target = device.findObject(By.text(text))?.takeIf { it.isLaidOut() }
             remainingSwipes--
         }
         if (target == null) {
-            target = device.wait(Until.findObject(By.text(text)), WAIT_MS)
+            val deadline = System.currentTimeMillis() + WAIT_MS
+            while (target == null && System.currentTimeMillis() < deadline) {
+                Thread.sleep(200)
+                target = device.findObject(By.text(text))?.takeIf { it.isLaidOut() }
+            }
         }
         assertNotNull("'$text' never appeared", target)
-        target.click()
+        target!!.click()
     }
 
     private fun waitForText(text: String) {
         assertTrue("'$text' never appeared", device.wait(Until.hasObject(By.text(text)), WAIT_MS))
     }
 
-    /** For form controls specifically — see the class doc comment on why these need `resource-id`, not text, as the selector. Same manual-swipe backup as `tapText`, for the same reason. */
+    /** For form controls specifically — see the class doc comment on why these need `resource-id`, not text, as the selector, and `tapText`'s doc comment on why the swipe loop checks real bounds rather than mere existence. */
     private fun tapResourceId(id: String) {
         try {
             UiScrollable(UiSelector().scrollable(true)).scrollIntoView(UiSelector().resourceId(id))
         } catch (_: UiObjectNotFoundException) {
             // No scrollable container on this screen.
         }
-        var target = device.findObject(By.res(id))
+        var target = device.findObject(By.res(id))?.takeIf { it.isLaidOut() }
         var remainingSwipes = 12
         while (target == null && remainingSwipes > 0) {
             device.swipe(540, 1600, 540, 400, 20)
-            target = device.findObject(By.res(id))
+            target = device.findObject(By.res(id))?.takeIf { it.isLaidOut() }
             remainingSwipes--
         }
         if (target == null) {
-            target = device.wait(Until.findObject(By.res(id)), WAIT_MS)
+            val deadline = System.currentTimeMillis() + WAIT_MS
+            while (target == null && System.currentTimeMillis() < deadline) {
+                Thread.sleep(200)
+                target = device.findObject(By.res(id))?.takeIf { it.isLaidOut() }
+            }
         }
         assertNotNull("resource-id '$id' never appeared", target)
-        target.click()
+        target!!.click()
     }
 
     /** Input side of every scenario below — see the class doc comment for why this replaces opening a pre-staged on-device file. `ImportPanel.tsx`'s textarea (`id="import-paste"`) has the same label-not-surfaced shape `tapResourceId` already works around. */
