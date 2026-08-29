@@ -1,8 +1,9 @@
-import { useState, type DragEvent, type ReactNode } from 'react';
+import { useEffect, useState, type DragEvent, type ReactNode } from 'react';
 
 import { t } from '../i18n/index.js';
 import { resolvePlatformFileService } from '../platform/index.js';
 import type { OpenDocumentOptions, OpenDocumentOutcome } from '../platform/index.js';
+import type { IncomingDocument } from '../platform/incoming-document.js';
 import { hasBlockingIssues } from '../worker/protocol.js';
 import type { ParseResponse, PreviewProviderResponse } from '../worker/protocol.js';
 import './ImportPanel.css';
@@ -31,6 +32,10 @@ export interface ImportPanelProps {
   readonly onImport: (text: string) => void;
   /** Test-only override; production code leaves this unset so both file buttons resolve through the real platform port (`resolvePlatformFileService`, ADR-026). */
   readonly openDocument?: OpenDocument;
+  /** FR-AND-07 (v0.6.0 #13): a document received via Android's share sheet while this panel was not mounted (or already consumed) — `undefined`/`null` when there is none pending. Owned by `ProjectPage`, not this component, because a share can arrive before any project is open. */
+  readonly pendingIncomingDocument?: IncomingDocument | null;
+  /** Called once a pending incoming document has been handed to `attemptImport`, so `ProjectPage` clears it and the same share does not replay on the next render. */
+  readonly onIncomingDocumentConsumed?: () => void;
 }
 
 type Status = 'idle' | 'success' | 'error';
@@ -58,11 +63,19 @@ type ProviderPreviewStatus = 'idle' | 'success' | 'error';
  * can never end up merged into the open project by accident. ADR-005 also
  * means this file must never gain a network request of its own for either
  * feature; `ImportPanel.test.tsx` has a matching structural scan for that.
+ *
+ * `pendingIncomingDocument` (FR-AND-07, v0.6.0 #13) is a fifth way text
+ * reaches `attemptImport`, not a fifth independent path: Android's share
+ * sheet is a *trigger*, not a new source, so it is fed through the exact
+ * same function the paste box uses rather than duplicating the validate-
+ * then-`onImport` logic a second time.
  */
 export function ImportPanel({
   client,
   onImport,
   openDocument = defaultOpenDocument,
+  pendingIncomingDocument,
+  onIncomingDocumentConsumed,
 }: ImportPanelProps): ReactNode {
   const [pasteText, setPasteText] = useState('');
   const [status, setStatus] = useState<Status>('idle');
@@ -79,6 +92,17 @@ export function ImportPanel({
     setPasteText('');
     onImport(text);
   }
+
+  // FR-AND-07 (v0.6.0 #13): a share intent reuses this exact same
+  // attemptImport() — the same validation gate the file-open and
+  // drag-and-drop entries already go through, not a parallel bypass.
+  useEffect(() => {
+    if (!pendingIncomingDocument) return;
+    void attemptImport(pendingIncomingDocument.text).then(() => onIncomingDocumentConsumed?.());
+    // Depends only on the document itself: ProjectPage hands this a fresh
+    // object per real share, so this fires exactly once per share, not on
+    // every unrelated re-render.
+  }, [pendingIncomingDocument]);
 
   async function handleFile(file: File): Promise<void> {
     const text = await file.text();

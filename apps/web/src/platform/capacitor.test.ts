@@ -5,25 +5,37 @@ import {
   createCapacitorPlatformFileService,
   isNativePlatform,
   onAppStateChange,
+  onIncomingDocument,
 } from './capacitor.js';
 
 // `vi.mock`'s factory is hoisted above ordinary `const` declarations, so the
 // mock fns it closes over must be created through `vi.hoisted` too — a plain
 // `const openDocument = vi.fn()` above `vi.mock` would still throw a
 // temporal-dead-zone ReferenceError at import time.
-const { openDocument, createDocument, shareText, isNativePlatformMock, addListener } = vi.hoisted(
-  () => ({
-    openDocument: vi.fn(),
-    createDocument: vi.fn(),
-    shareText: vi.fn(),
-    isNativePlatformMock: vi.fn(() => false),
-    addListener: vi.fn(),
-  }),
-);
+const {
+  openDocument,
+  createDocument,
+  shareText,
+  safFileAddListener,
+  isNativePlatformMock,
+  addListener,
+} = vi.hoisted(() => ({
+  openDocument: vi.fn(),
+  createDocument: vi.fn(),
+  shareText: vi.fn(),
+  safFileAddListener: vi.fn(),
+  isNativePlatformMock: vi.fn(() => false),
+  addListener: vi.fn(),
+}));
 
 vi.mock('@capacitor/core', () => ({
   Capacitor: { isNativePlatform: () => isNativePlatformMock() },
-  registerPlugin: () => ({ openDocument, createDocument, shareText }),
+  registerPlugin: () => ({
+    openDocument,
+    createDocument,
+    shareText,
+    addListener: safFileAddListener,
+  }),
 }));
 
 vi.mock('@capacitor/app', () => ({
@@ -177,6 +189,42 @@ describe('onAppStateChange (v0.6.0 #8, NFR-REL-02) — the second flush signal l
     addListener.mockReturnValue(Promise.resolve({ remove }));
 
     const unsubscribe = onAppStateChange(vi.fn());
+    unsubscribe();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(remove).toHaveBeenCalledOnce();
+  });
+});
+
+describe('onIncomingDocument (FR-AND-07, v0.6.0 #13) — decodes the base64 payload SafFilePlugin.kt sends', () => {
+  it('registers for the incomingDocument event specifically', () => {
+    safFileAddListener.mockReturnValue(Promise.resolve({ remove: vi.fn() }));
+
+    onIncomingDocument(vi.fn());
+
+    expect(safFileAddListener).toHaveBeenCalledWith('incomingDocument', expect.any(Function));
+  });
+
+  it('forwards the name and decodes contentBase64 back to UTF-8 text', () => {
+    let nativeCallback: ((result: { name: string; contentBase64: string }) => void) | undefined;
+    safFileAddListener.mockImplementation((_eventName: string, callback: typeof nativeCallback) => {
+      nativeCallback = callback;
+      return Promise.resolve({ remove: vi.fn() });
+    });
+    const callback = vi.fn();
+
+    onIncomingDocument(callback);
+    nativeCallback?.({ name: 'shared.yaml', contentBase64: btoa('mode: rule\n') });
+
+    expect(callback).toHaveBeenCalledWith({ name: 'shared.yaml', text: 'mode: rule\n' });
+  });
+
+  it('returns a synchronous unsubscribe function that removes the listener once the async registration resolves', async () => {
+    const remove = vi.fn().mockResolvedValue(undefined);
+    safFileAddListener.mockReturnValue(Promise.resolve({ remove }));
+
+    const unsubscribe = onIncomingDocument(vi.fn());
     unsubscribe();
     await Promise.resolve();
     await Promise.resolve();

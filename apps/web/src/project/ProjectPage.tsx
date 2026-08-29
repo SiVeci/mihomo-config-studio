@@ -43,6 +43,8 @@ import { BottomNav } from '../layout/BottomNav.js';
 import type { BottomNavPage } from '../layout/BottomNav.js';
 import { StatusBar } from '../layout/StatusBar.js';
 import { useNarrowViewport } from '../layout/useNarrowViewport.js';
+import { registerIncomingDocumentHandler } from '../platform/incoming-document.js';
+import type { IncomingDocument } from '../platform/incoming-document.js';
 import { registerBackgroundFlush } from '../platform/lifecycle.js';
 import { collectRuleEntityNames } from '../rules/entity-names.js';
 import { RuleListPage } from '../rules/RuleListPage.js';
@@ -186,6 +188,10 @@ export function ProjectPage({
   const [loaded, setLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  // FR-AND-07 (v0.6.0 #13): a share can arrive before any project is open
+  // (or before ImportPanel is mounted at all), so this is owned here, not
+  // inside ImportPanel — it just stays pending until a project opens.
+  const [incomingDocument, setIncomingDocument] = useState<IncomingDocument | null>(null);
   const [configText, setConfigText] = useState('');
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [importBaseline, setImportBaseline] = useState('');
@@ -449,6 +455,10 @@ export function ProjectPage({
       void manifestAutoSaverRef.current?.flush();
       void configAutoSaverRef.current?.flush();
     });
+  }, []);
+
+  useEffect(() => {
+    return registerIncomingDocumentHandler(setIncomingDocument);
   }, []);
 
   useEffect(() => {
@@ -898,6 +908,8 @@ export function ProjectPage({
                 <ImportPanel
                   client={client}
                   onImport={(text) => void handleImport(selected.id, text)}
+                  pendingIncomingDocument={incomingDocument}
+                  onIncomingDocumentConsumed={() => setIncomingDocument(null)}
                 />
                 <div className="project-main-view">
                   <div

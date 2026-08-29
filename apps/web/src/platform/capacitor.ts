@@ -48,6 +48,10 @@ interface SafFileSaveResult {
   readonly cancelled: boolean;
   readonly name?: string;
 }
+interface IncomingDocumentResult {
+  readonly name: string;
+  readonly contentBase64: string;
+}
 interface SafFilePlugin {
   openDocument(): Promise<SafFileOpenResult>;
   createDocument(options: {
@@ -55,6 +59,10 @@ interface SafFilePlugin {
     contentBase64: string;
   }): Promise<SafFileSaveResult>;
   shareText(options: { contentBase64: string; filename: string }): Promise<void>;
+  addListener(
+    eventName: 'incomingDocument',
+    listenerFunc: (result: IncomingDocumentResult) => void,
+  ): Promise<{ remove: () => Promise<void> }>;
 }
 
 const SafFile = registerPlugin<SafFilePlugin>('SafFile');
@@ -78,6 +86,26 @@ function base64ToText(base64: string): string {
   const binary = atob(base64);
   const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
   return new TextDecoder().decode(bytes);
+}
+
+/**
+ * FR-AND-07 (v0.6.0 #13): mirrors `onAppStateChange`'s async-handle
+ * unsubscribe shape exactly — `addListener` is itself a bridge round-trip
+ * (`Promise<{ remove }>`), but a `useEffect` cleanup needs a synchronous
+ * function back, so the removal is chained onto rather than awaited here.
+ * `SafFilePlugin.handleOnNewIntent` sends this with `retainUntilConsumed`,
+ * so a share received before this listener attaches (always true on a cold
+ * start) still arrives once it does.
+ */
+export function onIncomingDocument(
+  callback: (doc: { name: string; text: string }) => void,
+): () => void {
+  const handle = SafFile.addListener('incomingDocument', (result) => {
+    callback({ name: result.name, text: base64ToText(result.contentBase64) });
+  });
+  return () => {
+    void handle.then((listener) => listener.remove());
+  };
 }
 
 async function openDocumentCapacitor(_options: OpenDocumentOptions): Promise<OpenDocumentOutcome> {

@@ -22,6 +22,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- FR-AND-07 (v0.6.0 #13, P1 optional): receive a shared YAML
+                 config from another app. SafFilePlugin.handleOnNewIntent
+                 reads EXTRA_STREAM/EXTRA_TEXT; singleTask above means a warm
+                 app redelivers here via onNewIntent instead of spawning a
+                 second instance. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="application/x-yaml" />
+                <data android:mimeType="text/yaml" />
+            </intent-filter>
+
         </activity>
 
         <provider

@@ -58,6 +58,49 @@ class SafFilePlugin : Plugin() {
 
     private var pendingSaveContentBase64: String = ""
 
+    /**
+     * FR-AND-07 (v0.6.0 #13): Capacitor's `Bridge` calls this for every
+     * plugin on both cold start (`BridgeActivity.onCreate` → `load()` →
+     * `onNewIntent(getIntent())`, the launch intent routed through this same
+     * method) and warm start (`MainActivity`'s `singleTask` launch mode
+     * means a second share redelivers via `Activity.onNewIntent`, which
+     * `BridgeActivity` forwards here too) — no `MainActivity` override
+     * needed for either path. `retainUntilConsumed = true` on
+     * `notifyListeners` queues the event if the JS side has not called
+     * `addListener('incomingDocument', …)` yet (always true on a cold
+     * start, since the WebView has not finished booting React at this
+     * point) and replays it the moment the first listener attaches.
+     */
+    override fun handleOnNewIntent(intent: Intent) {
+        super.handleOnNewIntent(intent)
+        if (intent.action != Intent.ACTION_SEND) return
+        try {
+            val streamUri = getStreamExtra(intent)
+            val name: String
+            val bytes: ByteArray
+            if (streamUri != null) {
+                bytes = context.contentResolver.openInputStream(streamUri)?.use { readAllBytes(it) } ?: return
+                name = queryDisplayName(streamUri) ?: "shared.yaml"
+            } else {
+                val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
+                bytes = text.toByteArray(Charsets.UTF_8)
+                name = "shared.yaml"
+            }
+            val data = JSObject()
+            data.put("name", name)
+            data.put("contentBase64", Base64.encodeToString(bytes, Base64.NO_WRAP))
+            notifyListeners("incomingDocument", data, true)
+        } catch (e: Exception) {
+            // No PluginCall to reject here (this is an unsolicited native
+            // event, not a JS-initiated call) — a malformed share just
+            // means no incomingDocument event fires, same as no share at
+            // all, not a crash.
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun getStreamExtra(intent: Intent): Uri? = intent.getParcelableExtra(Intent.EXTRA_STREAM)
+
     @PluginMethod
     fun openDocument(call: PluginCall) {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {

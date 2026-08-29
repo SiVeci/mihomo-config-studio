@@ -42,8 +42,45 @@ import type { ModuleFormWorkerClient } from './ProjectPage.js';
 // the real ProjectPage (v0.4.0 #13).
 Element.prototype.scrollIntoView = vi.fn();
 
+// FR-AND-07 (v0.6.0 #13): mocked at the `@capacitor/*` package boundary,
+// not `../platform/capacitor.js`, so `capacitor.ts`'s real bridging logic
+// (base64 decode, retainUntilConsumed-shaped event forwarding) still runs —
+// this proves the real chain (native event -> capacitor.ts ->
+// incoming-document.ts -> ProjectPage -> ImportPanel) works, not just that
+// two mocks were wired to each other. `isNativePlatformMock` defaults to
+// `false`, matching the real `Capacitor.isNativePlatform()` result in
+// jsdom, so every other test in this file is unaffected unless it opts in.
+const { isNativePlatformMock, safFileAddListener } = vi.hoisted(() => ({
+  isNativePlatformMock: vi.fn(() => false),
+  safFileAddListener: vi.fn(),
+}));
+vi.mock('@capacitor/core', () => ({
+  Capacitor: { isNativePlatform: () => isNativePlatformMock() },
+  registerPlugin: () => ({
+    openDocument: vi.fn(),
+    createDocument: vi.fn(),
+    shareText: vi.fn(),
+    addListener: safFileAddListener,
+  }),
+}));
+// `addListener` must resolve to a real handle, not the bare `vi.fn()`
+// default of `undefined` — `registerBackgroundFlush` (already wired into
+// every ProjectPage render since v0.6.0 #8) unconditionally calls
+// `onAppStateChange` whenever `isNativePlatform()` is true, and its cleanup
+// does `handle.then(...)`; an unresolved `undefined` there throws on
+// unmount, which then aborts this file's own `afterEach` mid-body and
+// leaks `isNativePlatformMock`'s value into later, unrelated tests.
+vi.mock('@capacitor/app', () => ({
+  App: { addListener: vi.fn(() => Promise.resolve({ remove: vi.fn() })) },
+}));
+
 afterEach(() => {
-  cleanup();
+  try {
+    cleanup();
+  } finally {
+    isNativePlatformMock.mockReturnValue(false);
+    safFileAddListener.mockReset();
+  }
 });
 
 type FakeClient = ImportWorkerClient &
@@ -318,6 +355,40 @@ describe('ProjectPage / import (FR-YAML-01 wiring)', () => {
     await screen.findByText(t('import.errorMessage'));
     const configBytes = await adapter.get(`project/${id}/config.yaml`);
     expect(configBytes ? decoder.decode(configBytes) : null).toBe(DEFAULT_PROJECT_CONFIG_TEXT);
+  });
+});
+
+describe('ProjectPage / incoming share intent (FR-AND-07, v0.6.0 #13)', () => {
+  it('a document received via the native share sheet imports into the selected project, through the real capacitor.ts -> incoming-document.ts -> ImportPanel chain', async () => {
+    isNativePlatformMock.mockReturnValue(true);
+    let nativeCallback: ((result: { name: string; contentBase64: string }) => void) | undefined;
+    safFileAddListener.mockImplementation((_eventName: string, callback: typeof nativeCallback) => {
+      nativeCallback = callback;
+      return Promise.resolve({ remove: vi.fn() });
+    });
+    const adapter = new MemoryStorageAdapter();
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+    const id = (await adapter.list('project/'))
+      .find((key) => key.endsWith('/manifest.json'))!
+      .split('/')[1]!;
+
+    expect(nativeCallback).toBeDefined();
+    nativeCallback?.({ name: 'shared.yaml', contentBase64: btoa('mode: direct\n') });
+
+    await screen.findByText(t('import.successMessage'));
+    const configBytes = await adapter.get(`project/${id}/config.yaml`);
+    expect(configBytes ? decoder.decode(configBytes) : null).toBe('mode: direct\n');
+  });
+
+  it('does not subscribe to the native event at all on a non-native platform (the jsdom/desktop default)', async () => {
+    const adapter = new MemoryStorageAdapter();
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+
+    expect(safFileAddListener).not.toHaveBeenCalled();
   });
 });
 

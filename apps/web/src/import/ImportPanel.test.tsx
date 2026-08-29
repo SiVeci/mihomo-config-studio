@@ -263,3 +263,69 @@ describe('ImportPanel / local Provider file preview (PRD §8.11, v0.3.0 #17)', (
     expect(fieldsRow.textContent).not.toMatch(/[-]{4,}|@|:\/\//); // no value-shaped text sneaked in
   });
 });
+
+describe('ImportPanel / incoming share intent (FR-AND-07, v0.6.0 #13)', () => {
+  it('imports a pending incoming document through the same attemptImport path as the other entries', async () => {
+    const onImport = vi.fn();
+    const onIncomingDocumentConsumed = vi.fn();
+    const { rerender } = render(
+      <ImportPanel client={fakeClient()} onImport={onImport} pendingIncomingDocument={null} />,
+    );
+
+    rerender(
+      <ImportPanel
+        client={fakeClient()}
+        onImport={onImport}
+        pendingIncomingDocument={{ name: 'shared.yaml', text: VALID_YAML }}
+        onIncomingDocumentConsumed={onIncomingDocumentConsumed}
+      />,
+    );
+
+    await waitFor(() => expect(onImport).toHaveBeenCalledWith(VALID_YAML));
+    expect(screen.getByText(t('import.successMessage'))).toBeDefined();
+    await waitFor(() => expect(onIncomingDocumentConsumed).toHaveBeenCalledOnce());
+  });
+
+  it('reports an error and does not call onImport for an incoming document with a blocking issue', async () => {
+    const onImport = vi.fn();
+    const client = fakeClient([BLOCKING_ISSUE]);
+    const { rerender } = render(
+      <ImportPanel client={client} onImport={onImport} pendingIncomingDocument={null} />,
+    );
+
+    rerender(
+      <ImportPanel
+        client={client}
+        onImport={onImport}
+        pendingIncomingDocument={{ name: 'shared.yaml', text: 'not: [valid' }}
+      />,
+    );
+
+    await screen.findByText(t('import.errorMessage'));
+    expect(onImport).not.toHaveBeenCalled();
+  });
+
+  it('does nothing on mount when there is no pending incoming document', () => {
+    const onImport = vi.fn();
+    render(
+      <ImportPanel client={fakeClient()} onImport={onImport} pendingIncomingDocument={null} />,
+    );
+
+    expect(onImport).not.toHaveBeenCalled();
+  });
+
+  it('does not re-import on an unrelated re-render once the same document has already been consumed', async () => {
+    const onImport = vi.fn();
+    const doc = { name: 'shared.yaml', text: VALID_YAML };
+    const { rerender } = render(
+      <ImportPanel client={fakeClient()} onImport={onImport} pendingIncomingDocument={doc} />,
+    );
+    await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1));
+
+    rerender(
+      <ImportPanel client={fakeClient()} onImport={onImport} pendingIncomingDocument={doc} />,
+    );
+
+    expect(onImport).toHaveBeenCalledTimes(1);
+  });
+});
