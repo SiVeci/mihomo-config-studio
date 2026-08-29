@@ -74,6 +74,7 @@ packages/
   storage/             Web/Android 存储抽象                  ✅ 端口 + 内存/IndexedDB + 自动保存/快照裁剪（v0.2.0 #4-5）
   project-format/      .mcsproj 导入导出                     ✅ ZIP 往返 + 导出接线（v0.2.0 #6、#15）
   ui/                  通用 UI、主题与无障碍组件               ✅ 设计令牌 + 文字色层 + 对比度断言（v0.2.0 #7-8）
+  logging/             日志/崩溃文本脱敏核心                  ✅ 零依赖纯函数 redact() + createLogger()（v0.9.0 #5，NFR-SEC-03，尚未接线）
   test-fixtures/       官方样例、边界样例和 Golden Files      ✅ 含确定性大语料生成器（v0.2.0 #16）
 tools/
   schema-cli/          Bundle 校验、签名、差异和发布           ✅ `pack`/`check`/`diff`/`sign` 子命令，迁移操作码封闭集合检查（v0.5.0 #13，ADR-025）

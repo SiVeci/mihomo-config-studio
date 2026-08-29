@@ -1,0 +1,13 @@
+{
+  "name": "@mcs/logging",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Log/crash-text redaction core (NFR-SEC-03) — pure functions, zero dependencies, zero IO.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "devDependencies": {
+    "@mcs/test-fixtures": "workspace:*"
+  }
+}

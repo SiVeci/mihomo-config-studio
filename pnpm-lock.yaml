@@ -175,6 +175,12 @@ importers:
         specifier: workspace:*
         version: link:../test-fixtures
 
+  packages/logging:
+    devDependencies:
+      '@mcs/test-fixtures':
+        specifier: workspace:*
+        version: link:../test-fixtures
+
   packages/migration:
     dependencies:
       '@mcs/schema-core':

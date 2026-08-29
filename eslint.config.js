@@ -61,6 +61,17 @@ export default tseslint.config(
     },
   },
   {
+    // The one sanctioned low-level `console` wrapper (NFR-SEC-03, v0.9.0
+    // #5): every debug/info/warn/error call elsewhere in this repo is meant
+    // to route through `createLogger()`'s redaction, not call `console.*`
+    // directly, so this file alone needs all four methods rather than just
+    // the repo-wide `warn`/`error` allowance.
+    files: ['packages/logging/src/logger.ts'],
+    rules: {
+      'no-console': 'off',
+    },
+  },
+  {
     // Plain Node CLI scripts run only by schema-release.yml (v0.5.0 #14) —
     // not TypeScript, so tseslint's own `no-undef` override never applies;
     // `no-undef` otherwise flags every reference to a Node global.
