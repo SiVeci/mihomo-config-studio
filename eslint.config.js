@@ -28,7 +28,12 @@ export default tseslint.config(
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
       eqeqeq: ['error', 'always', { null: 'ignore' }],
-      'no-console': ['error', { allow: ['warn', 'error'] }],
+      // NFR-SEC-03 / v0.9.0 #6: no bare console.* anywhere in product code
+      // (apps/web/**, packages/**) — every log line goes through
+      // @mcs/logging's createLogger() instead, so it can never skip
+      // redaction. `tools/**`/test files keep their own override below: a
+      // CLI's stdout is its product output, not a log.
+      'no-console': 'error',
     },
   },
   {
@@ -54,7 +59,12 @@ export default tseslint.config(
     },
   },
   {
-    files: ['**/*.test.ts', 'packages/test-fixtures/**/*.ts', 'tools/**/*.ts'],
+    // `**/*.test.tsx` added alongside the pre-existing `**/*.test.ts` here
+    // (v0.9.0 #6, tightening `no-console` below exposed that the original
+    // glob never covered `.tsx` test files — two `.perf.test.tsx` files
+    // already used `console.warn` for their own benchmark output, which the
+    // old, more permissive rule happened to allow anyway).
+    files: ['**/*.test.ts', '**/*.test.tsx', 'packages/test-fixtures/**/*.ts', 'tools/**/*.ts'],
     rules: {
       'no-restricted-imports': 'off',
       'no-console': 'off',

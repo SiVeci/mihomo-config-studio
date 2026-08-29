@@ -132,6 +132,37 @@ jobs:
       - name: Reject network calls in packages/** outside the egress allowlist
         run: node tools/egress-check/dist/index.js packages
 
+  log-redaction:
+    name: no direct console.* call outside @mcs/logging
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Version comes from package.json's `packageManager` — see the note on
+      # the first pnpm/action-setup step in .github/workflows/ci.yml.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # NFR-SEC-03 / release blocker: every log line must route through
+      # @mcs/logging's createLogger() so redact() can never be skipped.
+      # tools/log-redaction-check has its own unit tests
+      # (tools/log-redaction-check/src/check.test.ts); these two steps run it
+      # against the real trees, same structure as no-network-egress above.
+      - name: Build log-redaction checker
+        run: pnpm --filter @mcs/log-redaction-check exec tsc -p tsconfig.json
+
+      - name: Reject console.* calls in apps/web/src outside the allowlist
+        run: node tools/log-redaction-check/dist/index.js apps/web/src
+
+      - name: Reject console.* calls in packages/** outside the allowlist
+        run: node tools/log-redaction-check/dist/index.js packages
+
   core-config-test:
     name: core-config-test (${{ matrix.track }})
     runs-on: ubuntu-latest

@@ -84,6 +84,7 @@ tools/
   core-test-runner/    Mihomo 配置测试矩阵                     ✅ v1.19.29 下载+校验+内核测试 + CI job（v0.3.0 #21）
   egress-check/        packages/** 出网白名单守卫（CI 强制）   ✅ 路径级+形态级双层校验，四条原否定用例保留（v0.5.0 #3）
   csp-check/           apps/web 构建产物严格 CSP 守卫（CI 强制） ✅ 策略/unsafe-eval/unsafe-inline/外部脚本四层核对，_headers 与 index.html 一致性（v0.9.0 #4，ADR-032）
+  log-redaction-check/ 日志脱敏静态守卫（CI 强制）             ✅ 路径级白名单，拒绝 apps/web/src、packages/** 里未经 @mcs/logging 的直接 console.* 调用（v0.9.0 #6，NFR-SEC-03）
 ```
 
 ## 本地开发

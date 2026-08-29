@@ -94,4 +94,8 @@ describe('redact — does not over-redact: diagnostic value survives', () => {
   it('an empty string round-trips as an empty string, not a redaction marker', () => {
     expect(redact('')).toBe('');
   });
+
+  it('leaves App.tsx\'s NFR-PERF-01 perf marker byte-for-byte unchanged (v0.9.0 #6) — no ":" separator, no URL/UUID/long-token shape', () => {
+    expect(redact('MCS_FIRST_INTERACTIVE_MS=149')).toBe('MCS_FIRST_INTERACTIVE_MS=149');
+  });
 });

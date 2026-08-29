@@ -90,6 +90,9 @@ importers:
       '@mcs/graph':
         specifier: workspace:*
         version: link:../../packages/graph
+      '@mcs/logging':
+        specifier: workspace:*
+        version: link:../../packages/logging
       '@mcs/migration':
         specifier: workspace:*
         version: link:../../packages/migration
@@ -316,6 +319,8 @@ importers:
   tools/csp-check: {}
 
   tools/egress-check: {}
+
+  tools/log-redaction-check: {}
 
   tools/schema-cli:
     dependencies:

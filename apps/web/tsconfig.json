@@ -12,6 +12,7 @@
     { "path": "../../packages/config-model" },
     { "path": "../../packages/form-renderer" },
     { "path": "../../packages/graph" },
+    { "path": "../../packages/logging" },
     { "path": "../../packages/migration" },
     { "path": "../../packages/project-format" },
     { "path": "../../packages/schema-builtin" },

@@ -21,6 +21,7 @@
     { "path": "./tools/core-test-runner" },
     { "path": "./tools/csp-check" },
     { "path": "./tools/egress-check" },
+    { "path": "./tools/log-redaction-check" },
     { "path": "./apps/android" },
     { "path": "./apps/web" }
   ]

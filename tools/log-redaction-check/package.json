@@ -1,0 +1,10 @@
+{
+  "name": "@mcs/log-redaction-check",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Asserts apps/web/src and packages/** contain no direct console.* call outside the one sanctioned @mcs/logging wrapper (NFR-SEC-03).",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

@@ -1,3 +1,4 @@
+import { createLogger } from '@mcs/logging';
 import { IndexedDbStorageAdapter } from '@mcs/storage';
 import { useEffect, useMemo, type ReactNode } from 'react';
 
@@ -49,6 +50,8 @@ const ROUTES: readonly Route[] = [
   { path: '/bundle', element: <BundlePageRoute /> },
 ];
 
+const logger = createLogger();
+
 /**
  * NFR-PERF-01 (v0.6.0 #11): `adb shell am start -W`'s `TotalTime` only
  * covers the Activity becoming visible — the WebView's own React tree
@@ -57,14 +60,17 @@ const ROUTES: readonly Route[] = [
  * the browser has committed and painted this first render, the earliest
  * point anything on screen is real and clickable — as close to "time to
  * interactive" as a single client-rendered mark can get without
- * instrumenting every async data load on the page. `console.warn` (not
- * `.log`) because `no-console` allows only `warn`/`error`; read back via
- * `adb logcat`, not surfaced to the user.
+ * instrumenting every async data load on the page. Routed through the
+ * shared `@mcs/logging` logger rather than a direct `console.warn` call
+ * (NFR-SEC-03, v0.9.0 #6) — `redact()` never touches this exact string
+ * (`redact.test.ts` pins it: no `:` separator, no URL/UUID/long-token
+ * shape), so `MCS_FIRST_INTERACTIVE_MS=<ms>` reaches `adb logcat`
+ * byte-for-byte, unchanged from before this line went through the logger.
  */
 function useReportFirstInteractive(): void {
   useEffect(() => {
     performance.mark('mcs-first-interactive');
-    console.warn(`MCS_FIRST_INTERACTIVE_MS=${Math.round(performance.now())}`);
+    logger.warn(`MCS_FIRST_INTERACTIVE_MS=${Math.round(performance.now())}`);
   }, []);
 }
 

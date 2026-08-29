@@ -15,6 +15,7 @@
     "@mcs/config-model": "workspace:*",
     "@mcs/form-renderer": "workspace:*",
     "@mcs/graph": "workspace:*",
+    "@mcs/logging": "workspace:*",
     "@mcs/migration": "workspace:*",
     "@mcs/project-format": "workspace:*",
     "@mcs/schema-builtin": "workspace:*",
