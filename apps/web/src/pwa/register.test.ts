@@ -233,14 +233,38 @@ describe('registerServiceWorker (PRD §11.4, ADR-029, v0.6.0 #7)', () => {
     expect(waiting.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' });
   });
 
-  it('reloads the page once when the controller changes', async () => {
+  it('does not reload on a first-ever install claiming an uncontrolled page (ADR-029: no session was running yet, but none should be swapped mid-load either)', async () => {
     const container = installFakeServiceWorkerContainer();
+    container.controller = null;
     container.register.mockResolvedValue(fakeRegistration());
     const { registerServiceWorker } = await import('./register.js');
 
     registerServiceWorker(() => undefined);
     window.dispatchEvent(new Event('load'));
 
+    container.fire('controllerchange');
+
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('reloads the page once after applyUpdate() is called and the controller changes', async () => {
+    const container = installFakeServiceWorkerContainer();
+    container.controller = {};
+    const registration = fakeRegistration();
+    const waiting = fakeServiceWorker();
+    registration.waiting = waiting;
+    container.register.mockResolvedValue(registration);
+    let handle: { applyUpdate: () => void } | undefined;
+    const { registerServiceWorker } = await import('./register.js');
+
+    registerServiceWorker((h) => {
+      handle = h;
+    });
+    window.dispatchEvent(new Event('load'));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    handle?.applyUpdate();
     container.fire('controllerchange');
     container.fire('controllerchange');
 

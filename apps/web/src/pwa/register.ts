@@ -63,10 +63,28 @@ export function registerServiceWorker(
     return;
   }
 
+  // `clients.claim()` (`sw.ts`, ADR-029) makes an uncontrolled page's very
+  // first-ever worker install fire `controllerchange` too, not just a
+  // genuine `applyUpdate()` handoff. Reloading on that first claim races
+  // whatever the user is already doing on the page they just opened —
+  // exactly the "swapped out mid-session" outcome ADR-029 says a running
+  // session must never see. Only a controller change this page itself
+  // asked for (via `applyUpdate()`) should reload it.
+  let updateRequested = false;
+
   function register(): void {
     navigator.serviceWorker
       .register('/sw.js')
-      .then((registration) => watchForUpdates(registration, onUpdateAvailable))
+      .then((registration) =>
+        watchForUpdates(registration, (handle) => {
+          onUpdateAvailable({
+            applyUpdate: () => {
+              updateRequested = true;
+              handle.applyUpdate();
+            },
+          });
+        }),
+      )
       .catch(() => {
         // Registration can fail (e.g. `sw.js` 404s on a dev server that
         // never built it) — offline support is progressive, so the app
@@ -89,7 +107,7 @@ export function registerServiceWorker(
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     // Fires once per `applyUpdate()`, but guard anyway: a second, unrelated
     // controller change mid-reload must not queue a second reload.
-    if (reloadedForUpdate) {
+    if (!updateRequested || reloadedForUpdate) {
       return;
     }
     reloadedForUpdate = true;

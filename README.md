@@ -85,6 +85,7 @@ tools/
   egress-check/        packages/** 出网白名单守卫（CI 强制）   ✅ 路径级+形态级双层校验，四条原否定用例保留（v0.5.0 #3）
   csp-check/           apps/web 构建产物严格 CSP 守卫（CI 强制） ✅ 策略/unsafe-eval/unsafe-inline/外部脚本四层核对，_headers 与 index.html 一致性（v0.9.0 #4，ADR-032）
   log-redaction-check/ 日志脱敏静态守卫（CI 强制）             ✅ 路径级白名单，拒绝 apps/web/src、packages/** 里未经 @mcs/logging 的直接 console.* 调用（v0.9.0 #6，NFR-SEC-03）
+e2e/                   Playwright 端到端测试（独立于 vitest）  ✅ Web 线七场景：创建/导入/修改引用/规则排序/差异/导出/离线恢复（v0.9.0 #7，ADR-033）
 ```
 
 ## 本地开发
@@ -122,6 +123,13 @@ pnpm run dev
 
 ```bash
 pnpm run build
+```
+
+真实浏览器（Chromium）跑 Web 端到端测试——独立于 `check`，见
+[ADR-033](docs/adr/ADR-033-e2e-layering.md)：
+
+```bash
+pnpm run e2e
 ```
 
 ## 文档

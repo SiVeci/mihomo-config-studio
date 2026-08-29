@@ -243,3 +243,35 @@ jobs:
       # the real build output.
       - name: Assert apps/web/dist carries the exact strict CSP (ADR-032)
         run: node tools/csp-check/dist/index.js apps/web/dist
+
+  e2e-web:
+    name: Web E2E (Playwright, real Chromium)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Version comes from package.json's `packageManager` — see the note on
+      # the first pnpm/action-setup step in .github/workflows/ci.yml.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Chromium only (ADR-027's baseline is Chromium 107+ WebViews plus
+      # desktop Chrome) — same reasoning `playwright.config.ts`'s `projects`
+      # array already documents.
+      - name: Install Playwright's Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      # PRD §13.4 Web line, ADR-033: builds the real production bundle
+      # (playwright.config.ts's own `webServer`) and drives it with a real
+      # browser — jsdom cannot exercise the download/offline/Service-Worker
+      # paths these scenarios need. Independent of the `check` job above by
+      # design (ADR-033: a per-slice gate has to stay fast, or people start
+      # skipping it).
+      - name: Run Web E2E suite
+        run: pnpm run e2e

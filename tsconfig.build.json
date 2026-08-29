@@ -23,6 +23,7 @@
     { "path": "./tools/egress-check" },
     { "path": "./tools/log-redaction-check" },
     { "path": "./apps/android" },
-    { "path": "./apps/web" }
+    { "path": "./apps/web" },
+    { "path": "./e2e" }
   ]
 }

@@ -1,14 +1,34 @@
+import { matchesGlob } from 'node:path';
+
 import { defineConfig } from 'vitest/config';
+
+const include = [
+  'packages/*/src/**/*.test.ts',
+  'packages/*/src/**/*.test.tsx',
+  'tools/*/src/**/*.test.ts',
+  'apps/web/src/**/*.test.ts',
+  'apps/web/src/**/*.test.tsx',
+];
+
+// ADR-033 (v0.9.0 #7): `e2e/**` is Playwright's own suite, run only via
+// `pnpm run e2e`, never through vitest — none of the patterns above can
+// reach it today (all five are scoped under `packages|tools|apps/web`'s own
+// `src/`), but that's only true as long as nobody loosens one into
+// something repo-root-reaching. This runs on every vitest invocation
+// (`pnpm run test`/`check`/`test:coverage` all load this file), so a future
+// overly-broad pattern fails loudly here instead of quietly running
+// browser-driven specs through the wrong runner.
+for (const e2ePath of ['e2e/web.spec.ts', 'e2e/fixtures.ts']) {
+  if (include.some((pattern) => matchesGlob(e2ePath, pattern))) {
+    throw new Error(
+      `vitest.config.ts's include patterns must never match e2e/** (matched ${e2ePath}) — Playwright's suite is a separate runner (ADR-033).`,
+    );
+  }
+}
 
 export default defineConfig({
   test: {
-    include: [
-      'packages/*/src/**/*.test.ts',
-      'packages/*/src/**/*.test.tsx',
-      'tools/*/src/**/*.test.ts',
-      'apps/web/src/**/*.test.ts',
-      'apps/web/src/**/*.test.tsx',
-    ],
+    include,
     environment: 'node',
     coverage: {
       provider: 'v8',

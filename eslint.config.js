@@ -82,6 +82,24 @@ export default tseslint.config(
     },
   },
   {
+    // ADR-033: E2E specs report progress/debug info via console like any
+    // other CLI-run test suite (`tools/**`'s own posture), and `.only` is
+    // banned outright — a forgotten `test.only` in a PR would silently stop
+    // this suite from covering six of its seven scenarios in CI.
+    files: ['e2e/**/*.ts'],
+    rules: {
+      'no-console': 'off',
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "CallExpression[callee.type='MemberExpression'][callee.property.name='only']",
+          message:
+            '.only is not allowed in e2e/** — it would silently skip every other scenario in CI.',
+        },
+      ],
+    },
+  },
+  {
     // Plain Node CLI scripts run only by schema-release.yml (v0.5.0 #14) —
     // not TypeScript, so tseslint's own `no-undef` override never applies;
     // `no-undef` otherwise flags every reference to a Node global.
