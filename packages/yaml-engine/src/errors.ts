@@ -1,4 +1,4 @@
-import { formatPath, type ConfigPath } from './path.js';
+import { formatPath, type ConfigPath } from './path.ts';
 
 export type YamlEngineErrorCode =
   | 'YAML_LIMIT_EXCEEDED'

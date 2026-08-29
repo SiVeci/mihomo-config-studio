@@ -1,8 +1,8 @@
 import type { ConfigPath, MihomoYamlDocument } from '@mcs/yaml-engine';
 
-import { resolveMigrationPath, type QuarantinedField } from './apply.js';
+import { resolveMigrationPath, type QuarantinedField } from './apply.ts';
 
-export type { QuarantinedField, QuarantineSink } from './apply.js';
+export type { QuarantinedField, QuarantineSink } from './apply.ts';
 
 /**
  * Puts a previously-quarantined field's value back into a document, at the

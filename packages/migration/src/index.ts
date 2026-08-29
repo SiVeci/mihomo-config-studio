@@ -1,4 +1,4 @@
-export { applyMigration, resolveMigrationPath } from './apply.js';
+export { applyMigration, resolveMigrationPath } from './apply.ts';
 export type {
   ApplyMigrationErrorCode,
   ApplyMigrationFailure,
@@ -8,13 +8,13 @@ export type {
   QuarantinedField,
   QuarantineSink,
   SnapshotRecorder,
-} from './apply.js';
-export { loadMigrations } from './load.js';
-export type { LoadMigrationsResult } from './load.js';
-export { buildMigrationPlan, isLossyOperation, MIGRATION_OPERATION_KINDS } from './plan.js';
-export { restoreQuarantinedField } from './quarantine.js';
-export { diffSchemas, SchemaDiffError } from './schema-diff.js';
-export type { DefaultChangedEntry, SchemaDiff, SchemaDiffEntry } from './schema-diff.js';
+} from './apply.ts';
+export { loadMigrations } from './load.ts';
+export type { LoadMigrationsResult } from './load.ts';
+export { buildMigrationPlan, isLossyOperation, MIGRATION_OPERATION_KINDS } from './plan.ts';
+export { restoreQuarantinedField } from './quarantine.ts';
+export { diffSchemas, SchemaDiffError } from './schema-diff.ts';
+export type { DefaultChangedEntry, SchemaDiff, SchemaDiffEntry } from './schema-diff.ts';
 export type {
   DeprecateFieldOperation,
   MigrationOperation,
@@ -29,4 +29,4 @@ export type {
   RemoveFieldOperation,
   RenameFieldOperation,
   SetDefaultOperation,
-} from './plan.js';
+} from './plan.ts';

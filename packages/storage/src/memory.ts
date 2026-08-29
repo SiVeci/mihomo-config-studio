@@ -1,4 +1,4 @@
-import type { StorageAdapter, StorageQuota } from './adapter.js';
+import type { StorageAdapter, StorageQuota } from './adapter.ts';
 
 /**
  * In-memory `StorageAdapter`: for tests, and as the fallback when no durable

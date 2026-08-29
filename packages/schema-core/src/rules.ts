@@ -1,7 +1,7 @@
 import type { ConfigPath, IssueSeverity, MessageParams } from '@mcs/yaml-engine';
 
-import { ConditionError, evaluateCondition, type ConditionContext } from './condition.js';
-import type { RuleFix, ValidationRule } from './types.js';
+import { ConditionError, evaluateCondition, type ConditionContext } from './condition.ts';
+import type { RuleFix, ValidationRule } from './types.ts';
 
 /**
  * A problem produced by evaluating `ValidationRule[]` against a module's own

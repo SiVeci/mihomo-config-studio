@@ -1,4 +1,4 @@
-import type { StorageAdapter } from './adapter.js';
+import type { StorageAdapter } from './adapter.ts';
 
 /** FR-PROJ-02 / NFR-REL-02: an unflushed edit must reach durable storage within this window. */
 export const DEFAULT_AUTOSAVE_INTERVAL_MS = 5000;

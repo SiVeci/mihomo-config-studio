@@ -1,4 +1,4 @@
-import type { Condition, JsonPrimitive } from './types.js';
+import type { Condition, JsonPrimitive } from './types.ts';
 
 export interface ConditionContext {
   /** The object that owns the field being evaluated; `"type"` resolves here. */

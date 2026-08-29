@@ -1,4 +1,4 @@
-import type { StorageAdapter, StorageQuota } from './adapter.js';
+import type { StorageAdapter, StorageQuota } from './adapter.ts';
 
 const DEFAULT_DATABASE_NAME = 'mcs-storage';
 const STORE_NAME = 'entries';

@@ -1,4 +1,4 @@
-import type { StorageAdapter } from './adapter.js';
+import type { StorageAdapter } from './adapter.ts';
 
 /** FR-PROJ-05: at least this many snapshots are retained under normal conditions. */
 export const DEFAULT_MAX_SNAPSHOTS = 50;

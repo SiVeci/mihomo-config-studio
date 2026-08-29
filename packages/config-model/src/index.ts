@@ -1,6 +1,6 @@
-export { EntityRegistry } from './entity.js';
-export type { Entity, EntityKind } from './entity.js';
-export { HistoryStack } from './history.js';
-export type { HistoryEntry, HistoryStackOptions } from './history.js';
-export { parseRuleLine } from './rule-line.js';
-export type { ParsedRuleLine, RuleFragment } from './rule-line.js';
+export { EntityRegistry } from './entity.ts';
+export type { Entity, EntityKind } from './entity.ts';
+export { HistoryStack } from './history.ts';
+export type { HistoryEntry, HistoryStackOptions } from './history.ts';
+export { parseRuleLine } from './rule-line.ts';
+export type { ParsedRuleLine, RuleFragment } from './rule-line.ts';

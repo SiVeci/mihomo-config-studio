@@ -6,5 +6,11 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts"],
-  "references": [{ "path": "../../packages/templates" }]
+  "references": [
+    { "path": "../../packages/migration" },
+    { "path": "../../packages/schema-builtin" },
+    { "path": "../../packages/schema-core" },
+    { "path": "../../packages/templates" },
+    { "path": "../../packages/yaml-engine" }
+  ]
 }

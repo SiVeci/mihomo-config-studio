@@ -1,4 +1,4 @@
-import type { JsonSchema } from './types.js';
+import type { JsonSchema } from './types.ts';
 
 export class SchemaRefError extends Error {
   constructor(message: string) {

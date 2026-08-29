@@ -16,10 +16,10 @@ import {
   type ParsedNode,
 } from 'yaml';
 
-import { YamlEngineError, pathNotFound, pathNotScalar } from './errors.js';
-import type { TextRange, YamlIssue } from './issues.js';
-import { resolveLimits, utf8ByteLength, type YamlLimits } from './limits.js';
-import { formatPath, type ConfigPath, type PathSegment } from './path.js';
+import { YamlEngineError, pathNotFound, pathNotScalar } from './errors.ts';
+import type { TextRange, YamlIssue } from './issues.ts';
+import { resolveLimits, utf8ByteLength, type YamlLimits } from './limits.ts';
+import { formatPath, type ConfigPath, type PathSegment } from './path.ts';
 
 /**
  * Writeback strategy currently in force.

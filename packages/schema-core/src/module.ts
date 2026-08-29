@@ -7,7 +7,7 @@ import type {
   RuleTypeSpec,
   SchemaModule,
   ValidationRule,
-} from './types.js';
+} from './types.ts';
 
 /**
  * A problem found in a `SchemaModule`'s own structure — not in a Mihomo

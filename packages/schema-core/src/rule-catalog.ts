@@ -1,6 +1,6 @@
 import { parseRuleLine, type ParsedRuleLine, type RuleFragment } from '@mcs/config-model';
 
-import type { RuleTypeSpec } from './types.js';
+import type { RuleTypeSpec } from './types.ts';
 
 /**
  * A rule line's type is recognised by the catalog: `parseRuleLine`'s

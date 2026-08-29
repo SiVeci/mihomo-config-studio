@@ -1,4 +1,4 @@
-import type { ConfigPath } from './path.js';
+import type { ConfigPath } from './path.ts';
 
 export type IssueSeverity = 'error' | 'warning' | 'info';
 

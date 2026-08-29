@@ -291,9 +291,21 @@ importers:
 
   tools/core-test-runner:
     dependencies:
+      '@mcs/migration':
+        specifier: workspace:*
+        version: link:../../packages/migration
+      '@mcs/schema-builtin':
+        specifier: workspace:*
+        version: link:../../packages/schema-builtin
+      '@mcs/schema-core':
+        specifier: workspace:*
+        version: link:../../packages/schema-core
       '@mcs/templates':
         specifier: workspace:*
         version: link:../../packages/templates
+      '@mcs/yaml-engine':
+        specifier: workspace:*
+        version: link:../../packages/yaml-engine
 
   tools/egress-check: {}
 

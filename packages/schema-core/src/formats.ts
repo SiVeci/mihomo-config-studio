@@ -1,4 +1,4 @@
-import type { KnownFormat } from './types.js';
+import type { KnownFormat } from './types.ts';
 
 /**
  * Format checkers are hand-written and linear. Each pattern below is anchored

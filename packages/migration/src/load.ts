@@ -11,7 +11,7 @@ import {
   type MigrationOperation,
   type MigrationOperationKind,
   type MigrationPlan,
-} from './plan.js';
+} from './plan.ts';
 
 export type LoadMigrationsResult =
   | { readonly ok: true; readonly plans: readonly MigrationPlan[] }

@@ -1,6 +1,6 @@
-export { ConditionError, evaluateCondition, resolve } from './condition.js';
-export type { ConditionContext } from './condition.js';
-export { checkFormat, isRiskyPattern } from './formats.js';
+export { ConditionError, evaluateCondition, resolve } from './condition.ts';
+export type { ConditionContext } from './condition.ts';
+export { checkFormat, isRiskyPattern } from './formats.ts';
 export {
   buildArrayFormPlan,
   buildFormPlan,
@@ -9,11 +9,11 @@ export {
   flattenFields,
   inferControl,
   isArrayEntryModule,
-} from './form-plan.js';
-export { validateModuleShape } from './module.js';
-export type { ModuleShapeIssue } from './module.js';
-export { evaluateRules } from './rules.js';
-export type { RuleEvaluationOptions, RuleIssue } from './rules.js';
+} from './form-plan.ts';
+export { validateModuleShape } from './module.ts';
+export type { ModuleShapeIssue } from './module.ts';
+export { evaluateRules } from './rules.ts';
+export type { RuleEvaluationOptions, RuleIssue } from './rules.ts';
 export type {
   FormMode,
   FormPlan,
@@ -22,11 +22,11 @@ export type {
   PlannedGroup,
   VariantInfo,
   VariantOption,
-} from './form-plan.js';
-export { SchemaRefError, resolveRef } from './ref.js';
-export { buildRulePlan } from './rule-catalog.js';
-export type { RawRulePlan, RulePlan, StructuredRulePlan } from './rule-catalog.js';
-export { KNOWN_FORMATS } from './types.js';
+} from './form-plan.ts';
+export { SchemaRefError, resolveRef } from './ref.ts';
+export { buildRulePlan } from './rule-catalog.ts';
+export type { RawRulePlan, RulePlan, StructuredRulePlan } from './rule-catalog.ts';
+export { KNOWN_FORMATS } from './types.ts';
 export type {
   Condition,
   ControlType,
@@ -50,6 +50,6 @@ export type {
   UiGroup,
   UiSchema,
   ValidationRule,
-} from './types.js';
-export { validateValue } from './validate.js';
-export type { SchemaIssue, ValidateOptions } from './validate.js';
+} from './types.ts';
+export { validateValue } from './validate.ts';
+export type { SchemaIssue, ValidateOptions } from './validate.ts';

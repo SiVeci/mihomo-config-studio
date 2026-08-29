@@ -1,7 +1,7 @@
 import type { SnapshotDegradationSignal } from '@mcs/storage';
 import { MihomoYamlDocument, type ConfigPath, type PathSegment } from '@mcs/yaml-engine';
 
-import type { MigrationOperation, MigrationPlan, MigrationWarning } from './plan.js';
+import type { MigrationOperation, MigrationPlan, MigrationWarning } from './plan.ts';
 
 /** Records a pre-migration snapshot. The concrete adapter/quota policy is `@mcs/storage`'s `SnapshotManager` concern, not this package's. */
 export interface SnapshotRecorder {

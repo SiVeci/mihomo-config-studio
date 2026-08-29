@@ -1,8 +1,8 @@
 import type { ConfigPath, MessageParams } from '@mcs/yaml-engine';
 
-import { checkFormat } from './formats.js';
-import { resolveRef } from './ref.js';
-import type { JsonSchema, JsonSchemaType } from './types.js';
+import { checkFormat } from './formats.ts';
+import { resolveRef } from './ref.ts';
+import type { JsonSchema, JsonSchemaType } from './types.ts';
 
 export interface SchemaIssue {
   severity: 'error';

@@ -1,7 +1,7 @@
 import type { ConfigPath, PathSegment } from '@mcs/yaml-engine';
 
-import { evaluateCondition, type ConditionContext } from './condition.js';
-import { resolveRef } from './ref.js';
+import { evaluateCondition, type ConditionContext } from './condition.ts';
+import { resolveRef } from './ref.ts';
 import type {
   ControlType,
   JsonPrimitive,
@@ -10,7 +10,7 @@ import type {
   SchemaModule,
   UiFieldSpec,
   UiGroup,
-} from './types.js';
+} from './types.ts';
 
 export type FormMode = 'basic' | 'advanced';
 
