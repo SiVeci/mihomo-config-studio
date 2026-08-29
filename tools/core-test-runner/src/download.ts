@@ -107,3 +107,126 @@ export async function downloadAndVerifyKernel(
   verifyKernelBytes(bytes, asset);
   return bytes;
 }
+
+// ---------------------------------------------------------------------------
+// Beta track (ADR-031): follows GitHub's own `latest` release rather than a
+// pinned tag, so — unlike the Stable table above — there is no constant to
+// compare against. The digest used for verification is resolved at run time
+// from GitHub's own API response for that specific asset, not a value a
+// human has reviewed in advance. This is a real, deliberate trust downgrade
+// from the Stable track (recorded in ADR-031, not hidden): it still catches
+// transit corruption, but not a compromised release published upstream.
+// This is a network call from `tools/**`, not `packages/**` — `no-network-egress`
+// only scans `packages/**` and is unaffected; keep it that way; never move
+// this logic into a `packages/**` import graph.
+// ---------------------------------------------------------------------------
+
+export class BetaAssetResolutionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'BetaAssetResolutionError';
+  }
+}
+
+/** Injectable JSON-fetch port, parallel to `FetchBytes` — kept separate because it returns parsed JSON, not raw bytes. */
+export type FetchJson = (url: string) => Promise<unknown>;
+
+export const MIHOMO_LATEST_RELEASE_API_URL =
+  'https://api.github.com/repos/MetaCubeX/mihomo/releases/latest';
+
+/**
+ * A real GitHub release, upstream's own `latest` — resolved once per run,
+ * never cached across runs. `tag`/`digest` are logged by the caller
+ * (ADR-031 point (a)) so a CI reader can always see exactly which upstream
+ * build a Beta run actually exercised.
+ */
+export interface LatestKernelAsset {
+  readonly tag: string;
+  readonly asset: string;
+  readonly sha256: string;
+  readonly bytes: number;
+  readonly downloadUrl: string;
+}
+
+interface GitHubReleaseAsset {
+  readonly name: string;
+  readonly size: number;
+  /** `"sha256:<hex>"`, when GitHub reports one for this asset — not guaranteed for every asset on every release. */
+  readonly digest?: string;
+  readonly browser_download_url: string;
+}
+
+interface GitHubRelease {
+  readonly tag_name: string;
+  readonly assets: readonly GitHubReleaseAsset[];
+}
+
+/**
+ * Matches only the plain per-platform build (e.g. `mihomo-linux-amd64-v1.19.30.gz`)
+ * — the same asset flavour the Stable table pins. Verified against a real
+ * `releases/latest` response (2026-08-29): a single release ships dozens of
+ * `linux-amd64`-containing assets (`-compatible`, `-v1-`/`-v2-`/`-v3-`
+ * GOAMD64 variants, several pinned Go toolchain builds, `.deb`/`.rpm`/
+ * `.pkg.tar.zst` packages) — an unanchored substring match on `linux-amd64`
+ * would non-deterministically pick whichever of those sorts first in the API
+ * response, not the intended plain build. Anchored front and back so only
+ * the exact `mihomo-<os>-<arch>-<version>.gz` shape matches.
+ */
+function latestAssetPattern(platformKey: KernelPlatformKey): RegExp {
+  const [os, arch] = platformKey.split('-');
+  return new RegExp(`^mihomo-${os}-${arch}-v\\d+\\.\\d+\\.\\d+\\.gz$`);
+}
+
+/**
+ * Resolves the Beta track's asset for the current platform from GitHub's
+ * `releases/latest` (never a cached/pinned value — that is the whole point
+ * of "Beta"). Throws rather than falling back to any other asset when the
+ * expected plain build or its digest is missing, matching the Stable path's
+ * own "never guess" posture.
+ */
+export async function resolveLatestAsset(
+  fetchJson: FetchJson,
+  platformKey: KernelPlatformKey | null,
+): Promise<LatestKernelAsset> {
+  if (platformKey !== 'linux-amd64') {
+    throw new BetaAssetResolutionError(
+      `Beta track only resolves "linux-amd64" today; got ${platformKey === null ? 'an unrecognised platform' : `"${platformKey}"`}.`,
+    );
+  }
+  const release = (await fetchJson(MIHOMO_LATEST_RELEASE_API_URL)) as GitHubRelease;
+  const pattern = latestAssetPattern(platformKey);
+  const asset = release.assets.find((candidate) => pattern.test(candidate.name));
+  if (!asset) {
+    throw new BetaAssetResolutionError(
+      `No asset matching "${pattern.source}" found in upstream release "${release.tag_name}".`,
+    );
+  }
+  if (!asset.digest?.startsWith('sha256:')) {
+    throw new BetaAssetResolutionError(
+      `Upstream release "${release.tag_name}" asset "${asset.name}" has no GitHub-reported sha256 digest to verify against.`,
+    );
+  }
+  return {
+    tag: release.tag_name,
+    asset: asset.name,
+    sha256: asset.digest.slice('sha256:'.length),
+    bytes: asset.size,
+    downloadUrl: asset.browser_download_url,
+  };
+}
+
+/** Resolves the Beta track's latest asset, fetches it through the injected port, and verifies the bytes against GitHub's own reported digest for that specific asset (see the trust-model note above `BetaAssetResolutionError`). */
+export async function downloadAndVerifyLatestKernel(
+  fetchJson: FetchJson,
+  fetchBytes: FetchBytes,
+  platformKey: KernelPlatformKey | null,
+): Promise<{ bytes: Uint8Array; resolved: LatestKernelAsset }> {
+  const resolved = await resolveLatestAsset(fetchJson, platformKey);
+  const bytes = await fetchBytes(resolved.downloadUrl);
+  verifyKernelBytes(bytes, {
+    asset: resolved.asset,
+    sha256: resolved.sha256,
+    bytes: resolved.bytes,
+  });
+  return { bytes, resolved };
+}

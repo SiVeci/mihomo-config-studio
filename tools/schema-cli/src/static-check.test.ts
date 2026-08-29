@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { checkExtension, checkFile, checkFiles, checkJsonContent } from './static-check.js';
+import {
+  checkExtension,
+  checkFile,
+  checkFiles,
+  checkJsonContent,
+  checkNoUnstableFieldsForChannel,
+} from './static-check.js';
 
 describe('checkExtension (FR-UPD-07)', () => {
   it('allows .json, .yaml and .md', () => {
@@ -236,5 +242,80 @@ describe('checkFiles', () => {
     ]);
 
     expect(checkFiles(files)).toEqual([]);
+  });
+});
+
+describe('checkNoUnstableFieldsForChannel (ADR-031)', () => {
+  it('flags a field marked x-unstable anywhere in a Stable-channel file', () => {
+    const files = new Map([
+      [
+        'config.schema.json',
+        JSON.stringify({ properties: { newField: { type: 'string', 'x-unstable': true } } }),
+      ],
+    ]);
+
+    expect(checkNoUnstableFieldsForChannel(files, 'stable')).toEqual([
+      {
+        code: 'SCHEMA_CLI_UNSTABLE_FIELD_IN_STABLE_CHANNEL',
+        path: 'config.schema.json.properties.newField',
+      },
+    ]);
+  });
+
+  it('allows the exact same content when the channel is beta', () => {
+    const files = new Map([
+      [
+        'config.schema.json',
+        JSON.stringify({ properties: { newField: { type: 'string', 'x-unstable': true } } }),
+      ],
+    ]);
+
+    expect(checkNoUnstableFieldsForChannel(files, 'beta')).toEqual([]);
+  });
+
+  it('finds the marker inside an array (e.g. an "anyOf" branch)', () => {
+    const files = new Map([
+      [
+        'config.schema.json',
+        JSON.stringify({ anyOf: [{ type: 'string' }, { 'x-unstable': true }] }),
+      ],
+    ]);
+
+    expect(checkNoUnstableFieldsForChannel(files, 'stable')).toEqual([
+      { code: 'SCHEMA_CLI_UNSTABLE_FIELD_IN_STABLE_CHANNEL', path: 'config.schema.json.anyOf[1]' },
+    ]);
+  });
+
+  it('does not flag a field where "x-unstable" is merely a string, not the literal boolean true', () => {
+    const files = new Map([
+      ['config.schema.json', JSON.stringify({ properties: { f: { 'x-unstable': 'draft' } } })],
+    ]);
+
+    expect(checkNoUnstableFieldsForChannel(files, 'stable')).toEqual([]);
+  });
+
+  it('ignores non-.json files entirely, even ones containing the literal marker text', () => {
+    const files = new Map([['notes.md', '"x-unstable": true']]);
+
+    expect(checkNoUnstableFieldsForChannel(files, 'stable')).toEqual([]);
+  });
+
+  it('skips a file with invalid JSON rather than throwing — checkJsonContent already owns reporting that', () => {
+    const files = new Map([['config.schema.json', '{not valid']]);
+
+    expect(checkNoUnstableFieldsForChannel(files, 'stable')).toEqual([]);
+  });
+
+  it('collects one issue per offending file, not just the first', () => {
+    const files = new Map([
+      ['a.json', JSON.stringify({ 'x-unstable': true })],
+      ['b.json', JSON.stringify({ 'x-unstable': true })],
+      ['c.json', JSON.stringify({ ok: true })],
+    ]);
+
+    expect(checkNoUnstableFieldsForChannel(files, 'stable')).toEqual([
+      { code: 'SCHEMA_CLI_UNSTABLE_FIELD_IN_STABLE_CHANNEL', path: 'a.json' },
+      { code: 'SCHEMA_CLI_UNSTABLE_FIELD_IN_STABLE_CHANNEL', path: 'b.json' },
+    ]);
   });
 });

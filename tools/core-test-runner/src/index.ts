@@ -11,20 +11,33 @@ import { buildCorpus, type KernelTestCase, type ReadTextFile } from './corpus.js
 import {
   currentPlatformKey,
   downloadAndVerifyKernel,
+  downloadAndVerifyLatestKernel,
   KERNEL_DIGESTS,
   type FetchBytes,
+  type FetchJson,
 } from './download.js';
 import { allPassed, formatDryRunPreview, formatReport } from './report.js';
 import type { CaseResult } from './report.js';
 
 const execFileAsync = promisify(execFile);
 
+/** GitHub's REST API rejects an unauthenticated request with no `User-Agent` header. */
+const GITHUB_FETCH_HEADERS = { 'User-Agent': 'mihomo-config-studio-core-test-runner' };
+
 const fetchBytes: FetchBytes = async (url) => {
-  const response = await fetch(url);
+  const response = await fetch(url, { headers: GITHUB_FETCH_HEADERS });
   if (!response.ok) {
     throw new Error(`download failed: HTTP ${String(response.status)} for ${url}`);
   }
   return new Uint8Array(await response.arrayBuffer());
+};
+
+const fetchJson: FetchJson = async (url) => {
+  const response = await fetch(url, { headers: GITHUB_FETCH_HEADERS });
+  if (!response.ok) {
+    throw new Error(`GitHub API request failed: HTTP ${String(response.status)} for ${url}`);
+  }
+  return response.json();
 };
 
 const readTextFile: ReadTextFile = (path) => readFileSync(path, 'utf8');
@@ -32,6 +45,28 @@ const readTextFile: ReadTextFile = (path) => readFileSync(path, 'utf8');
 /** A `KernelTestCase.id` (e.g. `module-example:proxy-groups:invalid`) turned into a safe cross-platform file name for the temp config file this case is tested through. */
 function caseFileName(caseId: string): string {
   return `${caseId.replace(/[^a-zA-Z0-9._-]/g, '-')}.yaml`;
+}
+
+/**
+ * Stable pins a known-good digest in advance; Beta (ADR-031) follows
+ * upstream's own `latest` release and only learns the digest to verify
+ * against at run time. The resolved tag and digest are always logged
+ * (ADR-031 point (a)) — for Beta this is the only record of exactly which
+ * upstream build a given run exercised.
+ */
+async function acquireKernel(beta: boolean, platformKey: ReturnType<typeof currentPlatformKey>) {
+  if (!beta) {
+    return downloadAndVerifyKernel(fetchBytes, platformKey);
+  }
+  const { bytes, resolved } = await downloadAndVerifyLatestKernel(
+    fetchJson,
+    fetchBytes,
+    platformKey,
+  );
+  console.log(
+    `[beta] resolved upstream release ${resolved.tag}: ${resolved.asset} (sha256:${resolved.sha256})`,
+  );
+  return bytes;
 }
 
 async function runConfigTest(
@@ -70,7 +105,11 @@ async function main(): Promise<void> {
   }
 
   const platformKey = currentPlatformKey(process.platform, process.arch);
-  const gzipped = await downloadAndVerifyKernel(fetchBytes, platformKey);
+  const beta = process.argv.includes('--beta');
+  console.log(
+    `[track: ${beta ? 'beta' : 'stable'}] running ${String(corpus.length)} kernel test case(s)`,
+  );
+  const gzipped = await acquireKernel(beta, platformKey);
   const binary = gunzipSync(gzipped);
 
   const workDir = mkdtempSync(join(tmpdir(), 'mihomo-core-test-'));

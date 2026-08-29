@@ -206,6 +206,25 @@ describe('parseCheckArgs', () => {
   it('throws when --source is missing', () => {
     expect(() => parseCheckArgs([])).toThrow(/--source/);
   });
+
+  it('--channel is optional, omitted entirely (not undefined) when absent', () => {
+    const args = parseCheckArgs(['--source', './modules']);
+    expect(args).toEqual({ sourceDir: './modules' });
+    expect('channel' in args).toBe(false);
+  });
+
+  it('parses --channel when given (ADR-031)', () => {
+    expect(parseCheckArgs(['--source', './modules', '--channel', 'stable'])).toEqual({
+      sourceDir: './modules',
+      channel: 'stable',
+    });
+  });
+
+  it('rejects a --channel value other than stable/beta', () => {
+    expect(() => parseCheckArgs(['--source', './modules', '--channel', 'nightly'])).toThrow(
+      /--channel must be/,
+    );
+  });
 });
 
 describe('runCheck (v0.5.0 #13, FR-UPD-07)', () => {
@@ -244,6 +263,20 @@ describe('runCheck (v0.5.0 #13, FR-UPD-07)', () => {
     );
 
     expect(() => runCheck(['--source', sourceDir])).toThrow(/Static check rejected/);
+  });
+
+  it('with --channel stable, also rejects an x-unstable field (ADR-031)', () => {
+    const sourceDir = makeSourceDir();
+    writeFileSync(
+      join(sourceDir, 'dns.json'),
+      JSON.stringify({ properties: { f: { 'x-unstable': true } } }),
+    );
+
+    expect(() => runCheck(['--source', sourceDir])).not.toThrow();
+    expect(() => runCheck(['--source', sourceDir, '--channel', 'stable'])).toThrow(
+      /Static check rejected/,
+    );
+    expect(() => runCheck(['--source', sourceDir, '--channel', 'beta'])).not.toThrow();
   });
 
   it("accepts the real, shipping built-in modules directory (exit condition 7 acceptance, plan's own manual command) — plain `node dist/index.js` cannot run this repo's multi-file source-only `packages/**` exports (ADR-007) without a TS-aware loader, so this exercises the identical `checkDirectoryFiles` code path through vitest instead, against the real directory rather than a synthetic one", () => {

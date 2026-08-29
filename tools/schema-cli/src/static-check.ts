@@ -1,6 +1,7 @@
 import { extname } from 'node:path';
 
 import { MIGRATION_OPERATION_KINDS } from '@mcs/migration';
+import type { BundleChannel } from '@mcs/schema-registry';
 
 /**
  * Pure content checks — no filesystem access here (`pack.ts` owns reading
@@ -15,7 +16,8 @@ export type StaticCheckIssueCode =
   | 'SCHEMA_CLI_DISALLOWED_EXTENSION'
   | 'SCHEMA_CLI_INVALID_JSON'
   | 'SCHEMA_CLI_EXECUTABLE_CONTENT'
-  | 'SCHEMA_CLI_UNKNOWN_MIGRATION_OPCODE';
+  | 'SCHEMA_CLI_UNKNOWN_MIGRATION_OPCODE'
+  | 'SCHEMA_CLI_UNSTABLE_FIELD_IN_STABLE_CHANNEL';
 
 export interface StaticCheckIssue {
   readonly code: StaticCheckIssueCode;
@@ -173,4 +175,59 @@ export function checkFiles(files: ReadonlyMap<string, string>): StaticCheckIssue
     if (issue) issues.push(issue);
   }
   return issues;
+}
+
+/**
+ * ADR-031 / v0.9.0 §6: an Alpha/still-in-development field is marked with a
+ * `"x-unstable": true` sibling key wherever it is declared in a module's own
+ * JSON files (typically `config.schema.json`, but checked everywhere — a
+ * Bundle author could mark it in `ui.schema.json` instead). A Bundle destined
+ * for the Stable channel may not carry any such marker at all: Stable is the
+ * one channel PRD §13.5's release blockers hold to the full kernel test
+ * matrix, so shipping a field nobody has verified there defeats the point of
+ * the channel split. `x-unstable` is a plain JSON Schema vendor-extension
+ * keyword (the `x-` prefix is exactly what JSON Schema reserves for this) —
+ * unknown to every validator in this codebase, so it is otherwise inert; this
+ * is the one place that gives it meaning.
+ */
+export function checkNoUnstableFieldsForChannel(
+  files: ReadonlyMap<string, string>,
+  channel: BundleChannel,
+): StaticCheckIssue[] {
+  if (channel !== 'stable') return [];
+
+  const issues: StaticCheckIssue[] = [];
+  for (const [path, content] of files) {
+    if (extname(path).toLowerCase() !== '.json') continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      continue; // Already reported by checkJsonContent — not this function's concern.
+    }
+    const issue = findUnstableMarker(parsed, path);
+    if (issue) issues.push(issue);
+  }
+  return issues;
+}
+
+function findUnstableMarker(value: unknown, path: string): StaticCheckIssue | null {
+  if (Array.isArray(value)) {
+    for (const [index, item] of value.entries()) {
+      const issue = findUnstableMarker(item, `${path}[${index}]`);
+      if (issue) return issue;
+    }
+    return null;
+  }
+  if (value !== null && typeof value === 'object') {
+    if ((value as Record<string, unknown>)['x-unstable'] === true) {
+      return { code: 'SCHEMA_CLI_UNSTABLE_FIELD_IN_STABLE_CHANNEL', path };
+    }
+    for (const [key, child] of Object.entries(value)) {
+      const issue = findUnstableMarker(child, `${path}.${key}`);
+      if (issue) return issue;
+    }
+    return null;
+  }
+  return null;
 }

@@ -13,6 +13,21 @@ ADR-030 记录了"编译后的 `tools/*` CLI 在 Node 20 上无法启动"，把�
 情况：`@mcs/templates`——一个**单文件**包（`src/index.ts` 只有 JSON 导入和一条
 跨包 type-only 导入，包内部没有任何相对导入）。
 
+**更正（v0.9.0 #3 复核时发现）**：上一段"这个结论只验证过一种情况"的说法过头了。
+`tools/schema-cli/src/index.test.ts`（v0.5.0 #13）里已经有一条测试明确写着：
+"plain `node dist/index.js` cannot run this repo's multi-file source-only
+`packages/**` exports (ADR-007) without a TS-aware loader, so this exercises
+the identical `checkDirectoryFiles` code path through vitest instead"——也就是
+说，这个缺口早在 v0.5.0 就被发现过一次，只是当时选择绕过（测试逻辑改走 Vitest，
+不再声称验证"裸 Node 执行编译产物"这条路径），没有升级成 ADR 或修掉。v0.9.0 #2
+是第一次有人**必须**让裸 Node 真正跑通这条路径（`tools/core-test-runner` 的
+`--dry-run`/真实执行都要用），逃不掉才修——不是第一次撞见问题，是第一次问题
+挡住了路必须解决。`tools/schema-cli` 本身至今仍未被任何 CI job 用裸 Node 执行
+（只有 `android-manifest-check`/`egress-check`/`core-test-runner` 三个工具会），
+所以它依赖的 `@mcs/schema-registry` 目前**不在**下面的修复范围内——那条已知限制
+继续存在，且继续被同一条 v0.5.0 #13 测试如实记录着，直到某天真有 `tools/*` CLI
+在运行时需要它。
+
 v0.9.0 #2 让 `tools/core-test-runner` 第一次在运行时（而不只是 typecheck/Vitest）
 import 一个**多文件**包（`@mcs/yaml-engine`，随后发现整条链：`@mcs/schema-core`、
 `@mcs/config-model`、`@mcs/migration`、`@mcs/storage`）。裸 `node

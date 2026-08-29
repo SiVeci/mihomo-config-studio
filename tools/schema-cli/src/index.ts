@@ -135,21 +135,32 @@ export async function run(argv: readonly string[], privateKeyBase64: string): Pr
 
 export interface CheckArgs {
   readonly sourceDir: string;
+  readonly channel?: BundleChannel;
 }
 
 export function parseCheckArgs(argv: readonly string[]): CheckArgs {
   const flags = parseFlags(argv);
-  return { sourceDir: requireFlag(flags, '--source') };
+  const channel = flags.get('--channel');
+  if (channel !== undefined && channel !== 'stable' && channel !== 'beta') {
+    throw new Error('--channel must be "stable" or "beta".');
+  }
+  return {
+    sourceDir: requireFlag(flags, '--source'),
+    ...(channel !== undefined ? { channel } : {}),
+  };
 }
 
 /**
  * `check` subcommand — only the static-check half of `pack` (FR-UPD-07):
  * no signing, no output file. The local pre-PR gate, and what the release
- * workflow's own "Schema 静态检查" step runs (#14).
+ * workflow's own "Schema 静态检查" step runs (#14). `--channel` is optional
+ * (ADR-031): pass it to also enforce "no `x-unstable` field in a Stable
+ * Bundle" ahead of a real `pack --channel stable` attempt; omit it to check
+ * only the channel-independent rules, as before this flag existed.
  */
 export function runCheck(argv: readonly string[]): void {
   const args = parseCheckArgs(argv);
-  const result = checkDirectoryFiles(args.sourceDir);
+  const result = checkDirectoryFiles(args.sourceDir, args.channel);
   if (!result.ok) {
     for (const issue of result.issues) {
       console.error(`${issue.code}: ${issue.path}`);

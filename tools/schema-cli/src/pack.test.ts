@@ -102,6 +102,38 @@ describe('packDirectory (FR-UPD-07)', () => {
     });
   });
 
+  it('rejects an x-unstable field when the target channel is stable (ADR-031)', async () => {
+    const sourceDir = makeSourceDir({
+      'schemas/dns.json': JSON.stringify({
+        properties: { newField: { type: 'string', 'x-unstable': true } },
+      }),
+    });
+
+    const result = await packDirectory({ ...BASE_OPTIONS, channel: 'stable', sourceDir });
+
+    expect(result).toEqual({
+      ok: false,
+      issues: [
+        {
+          code: 'SCHEMA_CLI_UNSTABLE_FIELD_IN_STABLE_CHANNEL',
+          path: 'schemas/dns.json.properties.newField',
+        },
+      ],
+    });
+  });
+
+  it('accepts the exact same x-unstable field when the target channel is beta', async () => {
+    const sourceDir = makeSourceDir({
+      'schemas/dns.json': JSON.stringify({
+        properties: { newField: { type: 'string', 'x-unstable': true } },
+      }),
+    });
+
+    const result = await packDirectory({ ...BASE_OPTIONS, channel: 'beta', sourceDir });
+
+    expect(result.ok).toBe(true);
+  });
+
   it('packs a clean, nested directory into a manifest with sorted, hashed files', async () => {
     const sourceDir = makeSourceDir({
       'schemas/general.json': JSON.stringify({ type: 'object' }),

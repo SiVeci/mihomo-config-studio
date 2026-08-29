@@ -3,12 +3,16 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  BetaAssetResolutionError,
   currentPlatformKey,
   downloadAndVerifyKernel,
+  downloadAndVerifyLatestKernel,
   KERNEL_DIGESTS,
   KernelDownloadError,
   kernelDownloadUrl,
+  MIHOMO_LATEST_RELEASE_API_URL,
   resolveKernelAsset,
+  resolveLatestAsset,
   verifyKernelBytes,
 } from './download.js';
 
@@ -108,5 +112,118 @@ describe('downloadAndVerifyKernel (injected fetch port — this test never touch
       /no pinned digest/,
     );
     expect(fetchBytes).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Fixture shaped like a real `GET /repos/MetaCubeX/mihomo/releases/latest`
+ * response (verified against the real API, 2026-08-29, tag v1.19.30): a
+ * single release genuinely ships dozens of assets whose name contains
+ * "linux-amd64" — GOAMD64 microarchitecture variants (`-v1-`/`-v2-`/`-v3-`),
+ * `-compatible`, several pinned-Go-toolchain builds, and non-`.gz` package
+ * formats. The intended plain build (`mihomo-linux-amd64-<version>.gz`) sorts
+ * *after* several of the decoys in the real API response, which is exactly
+ * what an unanchored substring match would get wrong — these fixtures keep
+ * that real ordering so the test would fail loudly if `latestAssetPattern`
+ * regressed to something looser.
+ */
+const REAL_SHAPE_DECOY_ASSETS = [
+  { name: 'mihomo-linux-amd64-compatible-v1.19.30.gz', size: 1, browser_download_url: 'x' },
+  { name: 'mihomo-linux-amd64-v1-go120-v1.19.30.gz', size: 1, browser_download_url: 'x' },
+  { name: 'mihomo-linux-amd64-v1-go123-v1.19.30.gz', size: 1, browser_download_url: 'x' },
+  { name: 'mihomo-linux-amd64-v1-v1.19.30.deb', size: 1, browser_download_url: 'x' },
+  { name: 'mihomo-linux-amd64-v1-v1.19.30.gz', size: 1, browser_download_url: 'x' },
+  { name: 'mihomo-linux-amd64-v1-v1.19.30.pkg.tar.zst', size: 1, browser_download_url: 'x' },
+  { name: 'mihomo-linux-amd64-v1-v1.19.30.rpm', size: 1, browser_download_url: 'x' },
+];
+
+const REAL_PLAIN_ASSET = {
+  name: 'mihomo-linux-amd64-v1.19.30.gz',
+  size: 18868732,
+  digest: 'sha256:cf06ce2c7d1421bdbda14ee4a5b6046672dc35ebf8eecd8e77504ec3c0ed9a84',
+  browser_download_url:
+    'https://github.com/MetaCubeX/mihomo/releases/download/v1.19.30/mihomo-linux-amd64-v1.19.30.gz',
+};
+
+describe('resolveLatestAsset (Beta track, ADR-031 — injected JSON fetch, never touches the network)', () => {
+  it('picks the plain build among real-shaped decoys, ignoring GOAMD64/compatible/package-format variants', async () => {
+    const fetchJson = vi.fn(async () => ({
+      tag_name: 'v1.19.30',
+      assets: [...REAL_SHAPE_DECOY_ASSETS, REAL_PLAIN_ASSET],
+    }));
+
+    const resolved = await resolveLatestAsset(fetchJson, 'linux-amd64');
+
+    expect(fetchJson).toHaveBeenCalledWith(MIHOMO_LATEST_RELEASE_API_URL);
+    expect(resolved).toEqual({
+      tag: 'v1.19.30',
+      asset: 'mihomo-linux-amd64-v1.19.30.gz',
+      sha256: 'cf06ce2c7d1421bdbda14ee4a5b6046672dc35ebf8eecd8e77504ec3c0ed9a84',
+      bytes: 18868732,
+      downloadUrl: REAL_PLAIN_ASSET.browser_download_url,
+    });
+  });
+
+  it('throws for a platform other than linux-amd64 without making any request', async () => {
+    const fetchJson = vi.fn();
+    await expect(resolveLatestAsset(fetchJson, 'darwin-arm64')).rejects.toThrow(
+      BetaAssetResolutionError,
+    );
+    expect(fetchJson).not.toHaveBeenCalled();
+  });
+
+  it('throws for a null platform key without making any request', async () => {
+    const fetchJson = vi.fn();
+    await expect(resolveLatestAsset(fetchJson, null)).rejects.toThrow(BetaAssetResolutionError);
+    expect(fetchJson).not.toHaveBeenCalled();
+  });
+
+  it('throws when no asset matches the plain build pattern at all', async () => {
+    const fetchJson = vi.fn(async () => ({
+      tag_name: 'v1.19.30',
+      assets: REAL_SHAPE_DECOY_ASSETS,
+    }));
+    await expect(resolveLatestAsset(fetchJson, 'linux-amd64')).rejects.toThrow(/No asset matching/);
+  });
+
+  it('throws when the matched asset has no GitHub-reported digest to verify against', async () => {
+    const fetchJson = vi.fn(async () => ({
+      tag_name: 'v1.19.30',
+      assets: [{ ...REAL_PLAIN_ASSET, digest: undefined }],
+    }));
+    await expect(resolveLatestAsset(fetchJson, 'linux-amd64')).rejects.toThrow(
+      /no GitHub-reported sha256 digest/,
+    );
+  });
+});
+
+describe('downloadAndVerifyLatestKernel (Beta track — both injected ports, never touches the network)', () => {
+  it('resolves, downloads from the resolved URL, and accepts bytes matching the resolved digest', async () => {
+    const bytes = new Uint8Array(REAL_PLAIN_ASSET.size).fill(3);
+    const sha256 = createHash('sha256').update(bytes).digest('hex');
+    const fetchJson = vi.fn(async () => ({
+      tag_name: 'v1.19.30',
+      assets: [{ ...REAL_PLAIN_ASSET, digest: `sha256:${sha256}` }],
+    }));
+    const fetchBytes = vi.fn(async () => bytes);
+
+    const { bytes: got, resolved } = await downloadAndVerifyLatestKernel(
+      fetchJson,
+      fetchBytes,
+      'linux-amd64',
+    );
+
+    expect(got).toBe(bytes);
+    expect(resolved.tag).toBe('v1.19.30');
+    expect(fetchBytes).toHaveBeenCalledWith(REAL_PLAIN_ASSET.browser_download_url);
+  });
+
+  it('rejects a digest mismatch against the digest resolved from the latest release, not any pinned value', async () => {
+    const fetchJson = vi.fn(async () => ({ tag_name: 'v1.19.30', assets: [REAL_PLAIN_ASSET] }));
+    const fetchBytes = vi.fn(async () => new Uint8Array(REAL_PLAIN_ASSET.size).fill(9));
+
+    await expect(
+      downloadAndVerifyLatestKernel(fetchJson, fetchBytes, 'linux-amd64'),
+    ).rejects.toThrow(/digest mismatch/);
   });
 });

@@ -9,7 +9,12 @@ import {
   type BundleManifestMihomoInfo,
 } from '@mcs/schema-registry';
 
-import { checkExtension, checkJsonContent, type StaticCheckIssue } from './static-check.js';
+import {
+  checkExtension,
+  checkJsonContent,
+  checkNoUnstableFieldsForChannel,
+  type StaticCheckIssue,
+} from './static-check.js';
 
 export interface PackOptions {
   readonly sourceDir: string;
@@ -41,12 +46,21 @@ export type CheckDirectoryResult =
  * loop rather than two that could drift. `tools/**` is the only place
  * allowed to touch `node:fs`, so this is also the only place that can see
  * the full file list to check in the first place.
+ *
+ * `channel` is optional: the standalone `check` subcommand doesn't
+ * necessarily know which channel a directory is destined for, so omitting it
+ * simply skips the channel-specific "no `x-unstable` field in a Stable
+ * Bundle" rule (ADR-031) — `pack` always passes its own `--channel` through.
  */
-export function checkDirectoryFiles(sourceDir: string): CheckDirectoryResult {
+export function checkDirectoryFiles(
+  sourceDir: string,
+  channel?: BundleChannel,
+): CheckDirectoryResult {
   const relativePaths = listFilesRecursively(sourceDir);
 
   const issues: StaticCheckIssue[] = [];
   const fileBytes = new Map<string, Uint8Array>();
+  const jsonText = new Map<string, string>();
   for (const relativePath of relativePaths) {
     const buffer = readFileSync(join(sourceDir, relativePath));
     fileBytes.set(relativePath, new Uint8Array(buffer));
@@ -57,9 +71,14 @@ export function checkDirectoryFiles(sourceDir: string): CheckDirectoryResult {
       continue;
     }
     if (extname(relativePath).toLowerCase() === '.json') {
-      const contentIssue = checkJsonContent(relativePath, buffer.toString('utf8'));
+      const text = buffer.toString('utf8');
+      jsonText.set(relativePath, text);
+      const contentIssue = checkJsonContent(relativePath, text);
       if (contentIssue) issues.push(contentIssue);
     }
+  }
+  if (channel !== undefined) {
+    issues.push(...checkNoUnstableFieldsForChannel(jsonText, channel));
   }
 
   if (issues.length > 0) {
@@ -75,7 +94,7 @@ export function checkDirectoryFiles(sourceDir: string): CheckDirectoryResult {
  * files.
  */
 export async function packDirectory(options: PackOptions): Promise<PackResult> {
-  const checked = checkDirectoryFiles(options.sourceDir);
+  const checked = checkDirectoryFiles(options.sourceDir, options.channel);
   if (!checked.ok) {
     return checked;
   }
