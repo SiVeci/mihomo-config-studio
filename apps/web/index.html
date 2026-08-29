@@ -5,8 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!--
       Baseline CSP: no `unsafe-eval` (ADR-008 already guarantees the schema
-      validator never needs it). Full hardening and a real deployment header
-      are v0.6.0 / v0.9.0 work — this is just the scaffold's starting point.
+      validator never needs it). v0.6.0 deliberately left this unchanged
+      (decision Q2: no remote Bundle update source configured for Beta, so
+      `connect-src 'self'` never needed loosening). Full hardening and a
+      real deployment header are v0.9.0 work — this is still the scaffold's
+      starting point.
     -->
     <meta
       http-equiv="Content-Security-Policy"

@@ -45,14 +45,21 @@ sub-rules）补齐，规则列表（重排、批量操作）、关系图（导�
 真实签发与审批拦截验证需要 GitHub Environment/生产密钥两项先决项由用户在网页侧
 完成后才能执行），如实记录不宣告，见[需求追踪表](docs/requirements-traceability.md)
 与[版本执行计划](docs/releases/plans/v0.5.0.md)。**M5（Android 集成与 PWA，
-v0.6.0）进行中**：见[版本执行计划](docs/releases/plans/v0.6.0.md)。尚未发布可用版本。
+v0.6.0）已收口（Partial）**：产品 Android 壳、PWA 离线、生命周期恢复、存储压力
+降级、Ed25519 纯 JS 回退、冷启动基线、接收其他应用分享（FR-AND-07，可选）均已
+交付并有真机（模拟器）验证证据；十一条退出条件 9 项 Done，1 项 Partial（SAF
+交互式流程未验证），1 项（GitHub Releases 发布）按用户明确决定本次收口不等待
+——发布工作流本身已就绪，真实推送与密钥配置留给用户完成。如实记录不宣告，见
+[需求追踪表](docs/requirements-traceability.md)、
+[版本执行计划](docs/releases/plans/v0.6.0.md)与
+[真机验证记录](docs/releases/plans/v0.6.0-android-evidence.md)。尚未发布可用版本。
 
 ## 仓库结构
 
 ```text
 apps/
-  web/                 Web、PWA、静态部署                     ✅ 三栏布局壳、导入/编辑/差异/导出闭环、Worker 边界（v0.2.0）；+Schema 表单/规则列表/关系图（v0.3.0-v0.4.0）；+Bundle 管理/项目升级/只读保护 UI（v0.5.0 #10-#12）
-  android/             Capacitor Android 壳与原生适配         🚧 产品壳（appId `studio.mihomoconfig.app`、minSdk 29），加载 `apps/web` 构建产物；模拟器验证，Partial（真机推迟）
+  web/                 Web、PWA、静态部署                     ✅ 三栏布局壳、导入/编辑/差异/导出闭环、Worker 边界（v0.2.0）；+Schema 表单/规则列表/关系图（v0.3.0-v0.4.0）；+Bundle 管理/项目升级/只读保护 UI（v0.5.0 #10-#12）；+PWA 离线缓存、窄屏布局、生命周期恢复、存储压力降级、Ed25519 纯 JS 回退（v0.6.0 #6-#11）
+  android/             Capacitor Android 壳与原生适配         ✅ 产品壳（appId `studio.mihomoconfig.app`、minSdk 29）+ 生命周期恢复、接收其他应用分享（FR-AND-07）；模拟器验证 Done、真机推迟（决策 G1）；GitHub Releases 发布留给用户（v0.6.0 #12）
 packages/
   config-model/        领域实体、引用和项目模型               ✅ M0 已验证
   yaml-engine/         AST 解析、局部修改、序列化、差异        ✅ M0 已验证
