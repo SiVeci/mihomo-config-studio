@@ -1,6 +1,15 @@
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 
+// v0.6.0 #12: release signing and version metadata come from the
+// environment, set by .github/workflows/release.yml after decoding a
+// keystore that is never committed (decision G4). Falling back to the
+// existing static defaults when these are absent keeps local
+// `assembleDebug`/`assembleRelease` working unsigned.
+def releaseKeystorePath = System.getenv('MCS_RELEASE_KEYSTORE_PATH')
+def releaseVersionName = System.getenv('MCS_RELEASE_VERSION_NAME') ?: '0.1.0'
+def releaseVersionCode = (System.getenv('MCS_RELEASE_VERSION_CODE') ?: '1') as Integer
+
 android {
     namespace "studio.mihomoconfig.app"
     compileSdk rootProject.ext.compileSdkVersion
@@ -8,8 +17,8 @@ android {
         applicationId "studio.mihomoconfig.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "0.1.0"
+        versionCode releaseVersionCode
+        versionName releaseVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -17,10 +26,23 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (releaseKeystorePath) {
+            release {
+                storeFile file(releaseKeystorePath)
+                storePassword System.getenv('MCS_RELEASE_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('MCS_RELEASE_KEY_ALIAS')
+                keyPassword System.getenv('MCS_RELEASE_KEY_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (releaseKeystorePath) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }
