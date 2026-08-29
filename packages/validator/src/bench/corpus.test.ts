@@ -32,7 +32,23 @@ describe('generateLargeCorpus (bench input sanity)', () => {
   // issues on a large, realistic document. Flagged for #14/#15 rather than
   // fixed here — likely fix is a version counter bumped by every mutating
   // method, compared instead of re-serialising to compare by value.
-  const SLOW_STAGE_TIMEOUT_MS = 10000;
+  //
+  // v0.9.0 #1: raised 10s -> 60s. The original 10s held on a fast dev box but
+  // not on a 2-core shared GitHub runner under v8 coverage instrumentation —
+  // this was the last red step of the repo's first-ever real CI run
+  // (`Test timed out in 10000ms`, corpus.test.ts:37). v0.6.0's plan already
+  // predicted it (risk R2: the 10s margin was "已经不够稳" locally under
+  // --coverage, "若 CI 也复现" it should be handled); this is that
+  // reproduction.
+  //
+  // What is relaxed is a *wall-clock guard on a correctness test*, not a
+  // performance threshold: the two assertions below are "no syntax issues"
+  // and "nothing blocking" — neither says anything about speed, and neither
+  // is touched. The genuine slowness is the `#positionState()` characteristic
+  // described above, and it gets measured for real, with an actual threshold,
+  // by v0.9.0 #10/#11 — not by this timeout. Same reasoning and same value as
+  // v0.6.0 #0's fix for `rule-list-scale.perf.test.tsx`.
+  const SLOW_STAGE_TIMEOUT_MS = 60_000;
 
   it(
     'parses with no syntax issues and is not blocking',
