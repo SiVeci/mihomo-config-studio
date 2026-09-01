@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { AA_NORMAL_TEXT_RATIO, contrastRatio } from './contrast.js';
+import { contrastRatio } from './contrast.js';
+import { CASES, SEVERITY_TINTS, TEXT_ROLE_BY_TINT, TEXT_ROLES } from './contrast-cases.js';
 import { COLORS, isFillOnly } from './tokens.js';
-import type { ColorTokenName } from './tokens.js';
 
 describe('contrastRatio() (WCAG 2.x formula)', () => {
   it('matches the WCAG worked extreme: black on white is exactly 21:1', () => {
@@ -39,134 +39,10 @@ describe('contrastRatio() (WCAG 2.x formula)', () => {
 // of truth for every AA claim ADR-011 §2 and ADR-017 make. A row here failing
 // is what "CI 对比度断言通过" (the version doc's exit condition) means in
 // practice — this file, not a human recalculation, is authoritative from
-// here on.
+// here on. Table itself lives in `contrast-cases.ts` (v0.9.0 #12) so
+// `contrast-usage.test.ts` can check real CSS usage against it without
+// importing test-only code.
 // ---------------------------------------------------------------------------
-
-interface ContrastCase {
-  readonly description: string;
-  readonly foreground: ColorTokenName;
-  readonly background: ColorTokenName;
-  readonly minRatio: number;
-}
-
-const TEXT_ROLES: readonly ColorTokenName[] = [
-  'text-primary',
-  'text-error',
-  'text-warning',
-  'text-success',
-  'text-info',
-  'text-muted',
-  'text-teal',
-];
-
-const SEVERITY_TINTS: readonly ColorTokenName[] = [
-  'error-tint',
-  'warning-tint',
-  'success-tint',
-  'info-tint',
-];
-
-const TEXT_ROLE_BY_TINT: Readonly<Record<string, ColorTokenName>> = {
-  'error-tint': 'text-error',
-  'warning-tint': 'text-warning',
-  'success-tint': 'text-success',
-  'info-tint': 'text-info',
-};
-
-const CASES: readonly ContrastCase[] = [
-  // --- ADR-011 §2: the original palette's passing claims, now CI-enforced. ---
-  {
-    description: 'body on canvas',
-    foreground: 'body',
-    background: 'canvas',
-    minRatio: AA_NORMAL_TEXT_RATIO,
-  },
-  {
-    description: 'muted on canvas',
-    foreground: 'muted',
-    background: 'canvas',
-    minRatio: AA_NORMAL_TEXT_RATIO,
-  },
-  {
-    description: 'primary-active on canvas (the text-bearing coral)',
-    foreground: 'primary-active',
-    background: 'canvas',
-    minRatio: AA_NORMAL_TEXT_RATIO,
-  },
-  {
-    description: 'on-dark on surface-dark',
-    foreground: 'on-dark',
-    background: 'surface-dark',
-    minRatio: AA_NORMAL_TEXT_RATIO,
-  },
-  {
-    description: 'on-dark-soft on surface-dark',
-    foreground: 'on-dark-soft',
-    background: 'surface-dark',
-    minRatio: AA_NORMAL_TEXT_RATIO,
-  },
-
-  // --- ADR-017 §3: white text on the fill colors confirmed NOT fillOnly. ---
-  // The five FILL_ONLY_COLORS are deliberately absent — they are known to
-  // fail this exact check, which is why they carry the flag.
-  {
-    description: 'white text (on-primary) on primary-active',
-    foreground: 'on-primary',
-    background: 'primary-active',
-    minRatio: AA_NORMAL_TEXT_RATIO,
-  },
-  {
-    description: 'white text (on-primary) on error',
-    foreground: 'on-primary',
-    background: 'error',
-    minRatio: AA_NORMAL_TEXT_RATIO,
-  },
-  {
-    description: 'white text (on-primary) on surface-dark',
-    foreground: 'on-primary',
-    background: 'surface-dark',
-    minRatio: AA_NORMAL_TEXT_RATIO,
-  },
-
-  // --- ADR-017 §1: every text-* role against both real text backgrounds. ---
-  ...TEXT_ROLES.flatMap((role) => [
-    {
-      description: `${role} on canvas`,
-      foreground: role,
-      background: 'canvas' as ColorTokenName,
-      minRatio: AA_NORMAL_TEXT_RATIO,
-    },
-    {
-      description: `${role} on surface-card`,
-      foreground: role,
-      background: 'surface-card' as ColorTokenName,
-      minRatio: AA_NORMAL_TEXT_RATIO,
-    },
-  ]),
-
-  // --- ADR-017 §2: each severity tint against its matching text-* role, and
-  // against body/text-muted (a badge can carry secondary text too). ---
-  ...SEVERITY_TINTS.flatMap((tint) => [
-    {
-      description: `${TEXT_ROLE_BY_TINT[tint]} on ${tint}`,
-      foreground: TEXT_ROLE_BY_TINT[tint]!,
-      background: tint,
-      minRatio: AA_NORMAL_TEXT_RATIO,
-    },
-    {
-      description: `body on ${tint}`,
-      foreground: 'body' as ColorTokenName,
-      background: tint,
-      minRatio: AA_NORMAL_TEXT_RATIO,
-    },
-    {
-      description: `text-muted on ${tint}`,
-      foreground: 'text-muted' as ColorTokenName,
-      background: tint,
-      minRatio: AA_NORMAL_TEXT_RATIO,
-    },
-  ]),
-];
 
 describe('token contrast table (ADR-011 §2, ADR-017)', () => {
   it.each(CASES)('$description is at least $minRatio:1', ({ foreground, background, minRatio }) => {

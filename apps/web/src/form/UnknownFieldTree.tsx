@@ -42,6 +42,19 @@ function docsSearchUrl(fieldKey: string): string {
   return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 }
 
+/**
+ * v0.9.0 #12: was `<details open={false}>`/`<summary>` with no state or
+ * click handler ever wired to toggle `open` — the list's own CSS
+ * (`UnknownFieldTree.css`) never hides it either, so every user always saw
+ * it expanded regardless. Harmless-looking on screen, but a closed
+ * `<details>`'s content is excluded from the browser's own Tab sequence
+ * *natively*, independent of any CSS `display` override — confirmed live
+ * (`e2e/a11y.spec.ts`'s keyboard-reachability scan) that the jump/search-docs
+ * controls inside it were visible but not Tab-reachable at all. Since
+ * nothing here ever made this genuinely collapsible, the fix is a plain
+ * always-shown section, not building out real expand/collapse behaviour
+ * nobody asked for.
+ */
 export function UnknownFieldTree({ fields, client, onJump }: UnknownFieldTreeProps): ReactNode {
   if (fields.length === 0) return null;
 
@@ -51,10 +64,13 @@ export function UnknownFieldTree({ fields, client, onJump }: UnknownFieldTreePro
   }
 
   return (
-    <details className="unknown-field-tree" open={false}>
-      <summary className="unknown-field-tree__summary">
+    <section
+      className="unknown-field-tree"
+      aria-label={`${t('unknownFields.title')} (${fields.length})`}
+    >
+      <h2 className="unknown-field-tree__summary">
         {t('unknownFields.title')} ({fields.length})
-      </summary>
+      </h2>
       <ul className="unknown-field-tree__list">
         {fields.map((field) => {
           const pointer = toPointer(field.path);
@@ -84,6 +100,6 @@ export function UnknownFieldTree({ fields, client, onJump }: UnknownFieldTreePro
           );
         })}
       </ul>
-    </details>
+    </section>
   );
 }

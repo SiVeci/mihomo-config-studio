@@ -48,7 +48,7 @@ describe('UnknownFieldTree (FR-VAL-05 UI side, v0.3.0 #16)', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('shows a collapsible summary with the count and every field’s pointer path', () => {
+  it('shows a heading with the count and every field’s pointer path', () => {
     render(
       <UnknownFieldTree
         fields={[unknownField(), unknownField({ path: ['proxies', 0, 'extra-flag'] })]}
@@ -60,6 +60,14 @@ describe('UnknownFieldTree (FR-VAL-05 UI side, v0.3.0 #16)', () => {
     expect(screen.getByText(`${t('unknownFields.title')} (2)`, { exact: false })).toBeDefined();
     expect(screen.getByText('/dns/mystery')).toBeDefined();
     expect(screen.getByText('/proxies/0/extra-flag')).toBeDefined();
+  });
+
+  it('is not a <details> disclosure — v0.9.0 #12 found one that was always visually expanded (no state or click handler ever toggled it) yet still excluded its own content from the keyboard Tab sequence, since a closed <details> does that natively regardless of any CSS override', () => {
+    const { container } = render(
+      <UnknownFieldTree fields={[unknownField()]} client={fakeClient()} onJump={vi.fn()} />,
+    );
+    expect(container.querySelector('details')).toBeNull();
+    expect(screen.getByRole('button', { name: t('unknownFields.jumpToLineButton') })).toBeDefined();
   });
 
   it('shows the raw value for a primitive field, stringified for an object one', () => {
