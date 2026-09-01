@@ -4,8 +4,11 @@ import { describe, expect, it } from 'vitest';
 import {
   collectAllTags,
   collectAllTargetProfiles,
+  deleteProject,
   filterProjects,
+  getProjectDisabledRules,
   listProjects,
+  saveProjectDisabledRules,
   saveProjectManifest,
   type ProjectRecord,
 } from './model.js';
@@ -109,5 +112,39 @@ describe('collectAllTags / collectAllTargetProfiles', () => {
       record({ id: 'c', targetProfile: 'v1.19.29' }),
     ];
     expect(collectAllTargetProfiles(records)).toEqual(['v1.19.29', 'v2.0.0']);
+  });
+});
+
+describe('getProjectDisabledRules / saveProjectDisabledRules (FR-VAL-06, v0.9.0 #15)', () => {
+  it('defaults to an empty list for a project that has never saved one', async () => {
+    const adapter = new MemoryStorageAdapter();
+    expect(await getProjectDisabledRules(adapter, 'p1')).toEqual({ ruleIds: [] });
+  });
+
+  it('round-trips a saved set of disabled rule ids', async () => {
+    const adapter = new MemoryStorageAdapter();
+    await saveProjectDisabledRules(adapter, 'p1', {
+      ruleIds: ['ruleOrder.domainShadowed', 'rule.tuic-token-conflicts-with-uuid-password'],
+    });
+
+    expect(await getProjectDisabledRules(adapter, 'p1')).toEqual({
+      ruleIds: ['ruleOrder.domainShadowed', 'rule.tuic-token-conflicts-with-uuid-password'],
+    });
+  });
+
+  it('keeps two projects independent — one project’s disabled rules never leak into another’s', async () => {
+    const adapter = new MemoryStorageAdapter();
+    await saveProjectDisabledRules(adapter, 'p1', { ruleIds: ['ruleOrder.noMatch'] });
+
+    expect(await getProjectDisabledRules(adapter, 'p2')).toEqual({ ruleIds: [] });
+  });
+
+  it('deleteProject removes the saved disabled-rules key too', async () => {
+    const adapter = new MemoryStorageAdapter();
+    await saveProjectDisabledRules(adapter, 'p1', { ruleIds: ['ruleOrder.noMatch'] });
+
+    await deleteProject(adapter, 'p1');
+
+    expect(await getProjectDisabledRules(adapter, 'p1')).toEqual({ ruleIds: [] });
   });
 });

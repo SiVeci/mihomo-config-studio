@@ -4,6 +4,7 @@ import type {
   ApplyBatchResponse,
   ApplyPatchResponse,
   BuildGraphLayoutOptions,
+  ConfigureDisabledRulesResponse,
   ConfigureModulesResponse,
   ConfigPath,
   DiffResponse,
@@ -198,6 +199,20 @@ export class WorkerClient {
       requestId: this.#makeRequestId(),
       modules,
     }) as Promise<ConfigureModulesResponse>;
+  }
+
+  /**
+   * Swaps which rule ids `runPipeline` mutes, going forward — send before
+   * `parse` for the project `ruleIds` was resolved for, same convention as
+   * `configureModules` (FR-VAL-06, v0.9.0 #15). Never sent, the Worker mutes
+   * nothing.
+   */
+  configureDisabledRules(ruleIds: readonly string[]): Promise<ConfigureDisabledRulesResponse> {
+    return this.#send({
+      type: 'configureDisabledRules',
+      requestId: this.#makeRequestId(),
+      ruleIds,
+    }) as Promise<ConfigureDisabledRulesResponse>;
   }
 
   /**

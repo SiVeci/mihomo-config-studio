@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 import { readMcsproj } from '@mcs/project-format';
-import type { McsProjQuarantine, McsProjSchemaLock } from '@mcs/project-format';
+import type {
+  McsProjDisabledRules,
+  McsProjQuarantine,
+  McsProjSchemaLock,
+} from '@mcs/project-format';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -26,6 +30,7 @@ const PROJECT: ProjectRecord = {
 
 const SCHEMA_LOCK: McsProjSchemaLock = { bundleVersion: '0.5.0', compatibilityProfile: 'v1.19.29' };
 const QUARANTINE: McsProjQuarantine = { fields: [] };
+const DISABLED_RULES: McsProjDisabledRules = { ruleIds: [] };
 
 const BLOCKING_ISSUE: ValidationIssue = {
   severity: 'error',
@@ -58,6 +63,7 @@ describe('ExportDialog / normal export (no blocking issues)', () => {
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={'mode: rule\nport: 7890\n'}
         issues={[]}
         onClose={vi.fn()}
@@ -82,6 +88,7 @@ describe('ExportDialog / normal export (no blocking issues)', () => {
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={'mode: rule\n'}
         issues={[]}
         onClose={vi.fn()}
@@ -111,6 +118,7 @@ describe('ExportDialog / normal export (no blocking issues)', () => {
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={'mode: rule\n'}
         issues={[]}
         onClose={vi.fn()}
@@ -127,6 +135,7 @@ describe('ExportDialog / normal export (no blocking issues)', () => {
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={'mode: rule\n'}
         issues={[]}
         onClose={onClose}
@@ -146,6 +155,7 @@ describe('ExportDialog / blocking issues (FR-YAML-07 mutually exclusive exports)
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={'mode: rule\n  bad: indent'}
         issues={[BLOCKING_ISSUE]}
         onClose={vi.fn()}
@@ -169,6 +179,7 @@ describe('ExportDialog / blocking issues (FR-YAML-07 mutually exclusive exports)
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={'mode: rule\n  bad: indent'}
         issues={[BLOCKING_ISSUE]}
         onClose={vi.fn()}
@@ -194,6 +205,7 @@ describe('ExportDialog / save vs. download button label (v0.6.0 #7, PRD §11.4)'
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={'mode: rule\n'}
         issues={[]}
         onClose={vi.fn()}
@@ -211,6 +223,7 @@ describe('ExportDialog / save vs. download button label (v0.6.0 #7, PRD §11.4)'
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={'mode: rule\n'}
         issues={[]}
         onClose={vi.fn()}
@@ -229,6 +242,7 @@ describe('ExportDialog / save vs. download button label (v0.6.0 #7, PRD §11.4)'
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={'mode: rule\n  bad: indent'}
         issues={[BLOCKING_ISSUE]}
         onClose={vi.fn()}
@@ -247,6 +261,7 @@ describe('ExportDialog / sensitivity warnings (NFR-SEC-08)', () => {
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={'mode: rule\nport: 7890\n'}
         issues={[]}
         onClose={vi.fn()}
@@ -270,6 +285,7 @@ describe('ExportDialog / sensitivity warnings (NFR-SEC-08)', () => {
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={configText}
         issues={[]}
         onClose={vi.fn()}
@@ -290,6 +306,7 @@ describe('ExportDialog / sensitivity warnings (NFR-SEC-08)', () => {
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={configText}
         issues={[]}
         onClose={vi.fn()}
@@ -308,6 +325,7 @@ describe('ExportDialog / share entry point (v0.6.0 #5, FR-AND-03, ADR-026)', () 
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={'mode: rule\n'}
         issues={[]}
         onClose={vi.fn()}
@@ -323,6 +341,7 @@ describe('ExportDialog / share entry point (v0.6.0 #5, FR-AND-03, ADR-026)', () 
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={'mode: rule\n'}
         issues={[]}
         onClose={vi.fn()}
@@ -341,6 +360,7 @@ describe('ExportDialog / share entry point (v0.6.0 #5, FR-AND-03, ADR-026)', () 
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={'mode: rule\n  bad: indent'}
         issues={[BLOCKING_ISSUE]}
         onClose={vi.fn()}

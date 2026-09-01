@@ -1,5 +1,9 @@
 import { writeMcsproj } from '@mcs/project-format';
-import type { McsProjQuarantine, McsProjSchemaLock } from '@mcs/project-format';
+import type {
+  McsProjDisabledRules,
+  McsProjQuarantine,
+  McsProjSchemaLock,
+} from '@mcs/project-format';
 import { useMemo, useState, type ReactNode } from 'react';
 
 import { t } from '../i18n/index.js';
@@ -35,6 +39,7 @@ export interface ShareDialogProps {
   readonly configText: string;
   readonly schemaLock: McsProjSchemaLock;
   readonly quarantine: McsProjQuarantine;
+  readonly disabledRules: McsProjDisabledRules;
   readonly onClose: () => void;
   /** Test-only override; production code leaves this unset so sharing goes through the real platform port. */
   readonly shareDocument?: ShareDocument;
@@ -74,14 +79,15 @@ export function ShareDialog({
   configText,
   schemaLock,
   quarantine,
+  disabledRules,
   onClose,
   shareDocument = defaultShareDocument,
   saveDocument = defaultSaveDocument,
 }: ShareDialogProps): ReactNode {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const findings = useMemo(
-    () => findSensitivity(project, configText, schemaLock, quarantine),
-    [project, configText, schemaLock, quarantine],
+    () => findSensitivity(project, configText, schemaLock, quarantine, disabledRules),
+    [project, configText, schemaLock, quarantine, disabledRules],
   );
   const busy = phase.kind === 'sharing';
 
@@ -110,7 +116,9 @@ export function ShareDialog({
   }
 
   async function handleShareMcsproj(): Promise<void> {
-    const bytes = await writeMcsproj(buildMcsProject(project, configText, schemaLock, quarantine));
+    const bytes = await writeMcsproj(
+      buildMcsProject(project, configText, schemaLock, quarantine, disabledRules),
+    );
     await share({
       suggestedName: `${project.name}.mcsproj`,
       content: bytes,

@@ -48,6 +48,10 @@ function blockingIssue(module: string): ValidationIssue {
   return { severity: 'error', code: 'x', module, messageKey: 'x', blocking: true };
 }
 
+function warningIssue(code: string, module: string): ValidationIssue {
+  return { severity: 'warning', code, module, messageKey: code, blocking: false };
+}
+
 describe('syntaxStage (FR-VAL-01)', () => {
   it('widens every YamlIssue from the parse result via fromYamlIssue', () => {
     const parse = MihomoYamlDocument.parse('a: 1\n  b: 2\n');
@@ -413,6 +417,66 @@ describe('runPipeline', () => {
 
     expect(issues).toEqual([]);
     expect(hasBlockingIssues(issues)).toBe(false);
+  });
+});
+
+describe('runPipeline / disabledRuleIds (FR-VAL-06, v0.9.0 #15)', () => {
+  it('drops a non-blocking issue whose code is disabled', () => {
+    const stage: ValidationStage = {
+      id: 'rule-order',
+      run: () => [warningIssue('ruleOrder.domainShadowed', 'rule-order')],
+    };
+    const ctx: PipelineContext = {
+      parse: MihomoYamlDocument.parse('mode: rule\n'),
+      disabledRuleIds: new Set(['ruleOrder.domainShadowed']),
+    };
+
+    expect(runPipeline(ctx, [syntaxStage, stage])).toEqual([]);
+  });
+
+  it('never drops a blocking issue, even when its own code is in disabledRuleIds (FR-YAML-07 invariant)', () => {
+    const stage: ValidationStage = { id: 'schema', run: () => [blockingIssue('sample')] };
+    const ctx: PipelineContext = {
+      parse: MihomoYamlDocument.parse('mode: rule\n'),
+      // Same code `blockingIssue` always uses — an attempt to disable a
+      // blocking rule id must be a no-op, not a way around FR-YAML-07.
+      disabledRuleIds: new Set(['x']),
+    };
+
+    const issues = runPipeline(ctx, [syntaxStage, stage]);
+
+    expect(issues).toEqual([blockingIssue('sample')]);
+    expect(hasBlockingIssues(issues)).toBe(true);
+  });
+
+  it('leaves a non-blocking issue alone when its code is not in disabledRuleIds', () => {
+    const stage: ValidationStage = {
+      id: 'rule-order',
+      run: () => [warningIssue('ruleOrder.noMatch', 'rule-order')],
+    };
+    const ctx: PipelineContext = {
+      parse: MihomoYamlDocument.parse('mode: rule\n'),
+      disabledRuleIds: new Set(['ruleOrder.domainShadowed']),
+    };
+
+    expect(runPipeline(ctx, [syntaxStage, stage])).toEqual([
+      warningIssue('ruleOrder.noMatch', 'rule-order'),
+    ]);
+  });
+
+  it('changes nothing when disabledRuleIds is omitted or empty', () => {
+    const stage: ValidationStage = {
+      id: 'rule-order',
+      run: () => [warningIssue('ruleOrder.noMatch', 'rule-order')],
+    };
+    const base = { parse: MihomoYamlDocument.parse('mode: rule\n') };
+
+    expect(runPipeline(base, [syntaxStage, stage])).toEqual([
+      warningIssue('ruleOrder.noMatch', 'rule-order'),
+    ]);
+    expect(runPipeline({ ...base, disabledRuleIds: new Set() }, [syntaxStage, stage])).toEqual([
+      warningIssue('ruleOrder.noMatch', 'rule-order'),
+    ]);
   });
 });
 

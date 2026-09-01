@@ -1,5 +1,9 @@
 import { writeMcsproj } from '@mcs/project-format';
-import type { McsProjQuarantine, McsProjSchemaLock } from '@mcs/project-format';
+import type {
+  McsProjDisabledRules,
+  McsProjQuarantine,
+  McsProjSchemaLock,
+} from '@mcs/project-format';
 import { useMemo, useState, type ReactNode } from 'react';
 
 import { t } from '../i18n/index.js';
@@ -41,6 +45,7 @@ export interface ExportDialogProps {
   readonly issues: ValidationIssue[];
   readonly schemaLock: McsProjSchemaLock;
   readonly quarantine: McsProjQuarantine;
+  readonly disabledRules: McsProjDisabledRules;
   readonly onClose: () => void;
   /** Test-only override; production code leaves this unset so every export goes through the real platform port. */
   readonly saveDocument?: SaveDocument;
@@ -79,6 +84,7 @@ export function ExportDialog({
   issues,
   schemaLock,
   quarantine,
+  disabledRules,
   onClose,
   saveDocument = defaultSaveDocument,
   shareDocument = defaultShareDocument,
@@ -87,8 +93,8 @@ export function ExportDialog({
   const [showShareDialog, setShowShareDialog] = useState(false);
   const blocking = hasBlockingIssues(issues);
   const findings = useMemo(
-    () => findSensitivity(project, configText, schemaLock, quarantine),
-    [project, configText, schemaLock, quarantine],
+    () => findSensitivity(project, configText, schemaLock, quarantine, disabledRules),
+    [project, configText, schemaLock, quarantine, disabledRules],
   );
 
   async function handleExportYaml(): Promise<void> {
@@ -100,7 +106,9 @@ export function ExportDialog({
   }
 
   async function handleExportMcsproj(): Promise<void> {
-    const bytes = await writeMcsproj(buildMcsProject(project, configText, schemaLock, quarantine));
+    const bytes = await writeMcsproj(
+      buildMcsProject(project, configText, schemaLock, quarantine, disabledRules),
+    );
     await saveDocument({
       suggestedName: `${project.name}.mcsproj`,
       content: bytes,
@@ -123,6 +131,7 @@ export function ExportDialog({
         configText={configText}
         schemaLock={schemaLock}
         quarantine={quarantine}
+        disabledRules={disabledRules}
         onClose={() => setShowShareDialog(false)}
         shareDocument={shareDocument}
         saveDocument={saveDocument}

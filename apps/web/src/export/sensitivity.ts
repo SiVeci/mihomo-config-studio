@@ -1,6 +1,7 @@
 import { describeSensitivity, MCSPROJ_FORMAT_VERSION } from '@mcs/project-format';
 import type {
   McsProject,
+  McsProjDisabledRules,
   McsProjQuarantine,
   McsProjSchemaLock,
   SensitivityFinding,
@@ -34,6 +35,7 @@ export function buildMcsProject(
   configText: string,
   schemaLock: McsProjSchemaLock,
   quarantine: McsProjQuarantine,
+  disabledRules: McsProjDisabledRules,
 ): McsProject {
   return {
     manifest: {
@@ -49,6 +51,7 @@ export function buildMcsProject(
     uiState: {},
     schemaLock,
     quarantine,
+    disabledRules,
   };
 }
 
@@ -62,6 +65,9 @@ export function findSensitivity(
   configText: string,
   schemaLock: McsProjSchemaLock,
   quarantine: McsProjQuarantine,
+  disabledRules: McsProjDisabledRules,
 ): readonly SensitivityFinding[] {
-  return describeSensitivity(buildMcsProject(project, configText, schemaLock, quarantine));
+  return describeSensitivity(
+    buildMcsProject(project, configText, schemaLock, quarantine, disabledRules),
+  );
 }

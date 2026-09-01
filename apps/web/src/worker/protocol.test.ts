@@ -105,7 +105,7 @@ describe('handleWorkerRequest / validate', () => {
 });
 
 describe('handleWorkerRequest / configureModules (v0.5.0 #11, decision F14)', () => {
-  it('is a pure state write: no requestId re-parse, response just echoes the requestId back', () => {
+  it('is a pure state write: no requestId re-parse, response echoes the requestId and computes toggleableRules (v0.9.0 #15)', () => {
     const state = createWorkerState();
 
     const response = handleWorkerRequest(state, {
@@ -114,7 +114,16 @@ describe('handleWorkerRequest / configureModules (v0.5.0 #11, decision F14)', ()
       modules: [],
     });
 
-    expect(response).toEqual({ type: 'configureModules', requestId: 'r1' });
+    expect(response).toEqual({
+      type: 'configureModules',
+      requestId: 'r1',
+      toggleableRules: [
+        { id: 'ruleOrder.noMatch', messageKey: 'ruleOrder.noMatch.description' },
+        { id: 'ruleOrder.afterMatch', messageKey: 'ruleOrder.afterMatch.description' },
+        { id: 'ruleOrder.domainShadowed', messageKey: 'ruleOrder.domainShadowed.description' },
+        { id: 'ruleOrder.cidrShadowed', messageKey: 'ruleOrder.cidrShadowed.description' },
+      ],
+    });
   });
 
   it('actually changes what later parse/validate calls flag — the default modules flag `rules[0]` unknown-field (per the parse test above); an empty module set does not, because schemaStage has nothing left to check field shapes against', () => {
@@ -129,6 +138,45 @@ describe('handleWorkerRequest / configureModules (v0.5.0 #11, decision F14)', ()
   });
 
   it('a project that never sends configureModules keeps validating against the built-in bundle, unchanged', () => {
+    const state = parsed();
+    const response = handleWorkerRequest(state, { type: 'validate', requestId: 'r1' });
+
+    if (response.type !== 'validate') throw new Error('unreachable');
+    expect(response.issues).toContainEqual(
+      expect.objectContaining({ code: 'unknown-field', module: 'schema', path: ['rules', 0] }),
+    );
+  });
+});
+
+describe('handleWorkerRequest / configureDisabledRules (FR-VAL-06, v0.9.0 #15)', () => {
+  it('is a pure state write: echoes the requestId back', () => {
+    const state = createWorkerState();
+
+    const response = handleWorkerRequest(state, {
+      type: 'configureDisabledRules',
+      requestId: 'r1',
+      ruleIds: ['ruleOrder.domainShadowed'],
+    });
+
+    expect(response).toEqual({ type: 'configureDisabledRules', requestId: 'r1' });
+  });
+
+  it('actually changes what later parse/validate/graphLayout calls report — muting unknown-field makes it vanish from a document that reliably produces it', () => {
+    const state = parsed();
+    handleWorkerRequest(state, {
+      type: 'configureDisabledRules',
+      requestId: 'r0',
+      ruleIds: ['unknown-field'],
+    });
+
+    const validateResponse = handleWorkerRequest(state, { type: 'validate', requestId: 'r1' });
+    if (validateResponse.type !== 'validate') throw new Error('unreachable');
+    expect(validateResponse.issues).not.toContainEqual(
+      expect.objectContaining({ code: 'unknown-field' }),
+    );
+  });
+
+  it('a project that never sends configureDisabledRules mutes nothing, unchanged', () => {
     const state = parsed();
     const response = handleWorkerRequest(state, { type: 'validate', requestId: 'r1' });
 

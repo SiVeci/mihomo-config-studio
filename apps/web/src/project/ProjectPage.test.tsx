@@ -26,6 +26,7 @@ import {
   DEFAULT_TARGET_PROFILE,
   getImportBaseline,
   getProjectConfigText,
+  getProjectDisabledRules,
   getProjectQuarantine,
   getProjectSchemaLock,
   listProjects,
@@ -142,7 +143,16 @@ const FAKE_CLIENT: FakeClient = {
     value: {},
   }),
   previewProvider: async (_text) => ({ type: 'previewProvider', requestId: 'fake', preview: null }),
-  configureModules: async (_modules) => ({ type: 'configureModules', requestId: 'fake' }),
+  configureModules: async (_modules) => ({
+    type: 'configureModules',
+    requestId: 'fake',
+    toggleableRules: [],
+  }),
+  configureDisabledRules: async (_ruleIds) => ({
+    type: 'configureDisabledRules',
+    requestId: 'fake',
+  }),
+  validate: async () => ({ type: 'validate', requestId: 'fake', issues: [] }),
 };
 
 const decoder = new TextDecoder();
@@ -621,6 +631,49 @@ describe('ProjectPage / issue panel wiring (FR-VAL-02 UI wiring)', () => {
       expect(editorTextarea.selectionStart).toBe(6);
       expect(editorTextarea.selectionEnd).toBe(10);
     });
+  });
+});
+
+describe('ProjectPage / rule toggles (FR-VAL-06, v0.9.0 #15)', () => {
+  it('unchecking a rule toggle hides its warning immediately (real re-validate, not the next debounced parse) and persists the preference to storage', async () => {
+    const adapter = new MemoryStorageAdapter();
+    const client = new WorkerClient(new RealWorker());
+    render(<ProjectPage client={client} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    const editorTextarea = await screen.findByLabelText<HTMLTextAreaElement>(t('editor.title'));
+    // Same wait `setUpSelectedProject` (narrow-screen-layout suite) uses:
+    // the real Worker's initial parse is async, and editing before it
+    // settles can lose the edit to React re-rendering the controlled
+    // textarea back to the still-old `configText` state.
+    await waitFor(() => {
+      expect(document.querySelector('[data-module-section="general"]')).not.toBeNull();
+    });
+
+    // No trailing MATCH rule — real content that reliably triggers
+    // ruleOrderStage's `ruleOrder.noMatch` warning (rule-order.ts).
+    fireEvent.change(editorTextarea, {
+      target: { value: 'mode: rule\nrules:\n  - DOMAIN,a.example.com,DIRECT\n' },
+    });
+    await screen.findByText(t('ruleOrder.noMatch'));
+
+    const toggle = await screen.findByLabelText<HTMLInputElement>(
+      t('ruleOrder.noMatch.description'),
+    );
+    expect(toggle.checked).toBe(true);
+
+    fireEvent.click(toggle);
+
+    await waitFor(() => expect(screen.queryByText(t('ruleOrder.noMatch'))).toBeNull());
+    expect(
+      (await screen.findByLabelText<HTMLInputElement>(t('ruleOrder.noMatch.description'))).checked,
+    ).toBe(false);
+
+    const id = (await adapter.list('project/'))
+      .find((key) => key.endsWith('/manifest.json'))!
+      .split('/')[1]!;
+    const disabledRules = await getProjectDisabledRules(adapter, id);
+    expect(disabledRules.ruleIds).toContain('ruleOrder.noMatch');
   });
 });
 

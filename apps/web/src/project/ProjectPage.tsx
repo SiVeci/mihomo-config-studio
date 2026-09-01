@@ -1,4 +1,8 @@
-import type { McsProjQuarantine, McsProjSchemaLock } from '@mcs/project-format';
+import type {
+  McsProjDisabledRules,
+  McsProjQuarantine,
+  McsProjSchemaLock,
+} from '@mcs/project-format';
 import {
   collectUnknownFields,
   type FormMode,
@@ -35,6 +39,7 @@ import type { ImportWorkerClient } from '../import/ImportPanel.js';
 import { t } from '../i18n/index.js';
 import { IssuePanel } from '../issues/IssuePanel.js';
 import type { IssuePanelWorkerClient } from '../issues/IssuePanel.js';
+import { RuleToggles } from '../issues/RuleToggles.js';
 import { DeleteImpactDialog } from '../graph/DeleteImpactDialog.js';
 import { GraphView } from '../graph/GraphView.js';
 import { buildCascadeDeletePatches, buildReplacePatches } from '../graph/impact-patches.js';
@@ -53,6 +58,7 @@ import type {
   ApplyBatchResponse,
   ApplyPatchResponse,
   ConfigPath,
+  ConfigureDisabledRulesResponse,
   ConfigureModulesResponse,
   Entity,
   EntityKind,
@@ -61,7 +67,9 @@ import type {
   Reference,
   RedoResponse,
   TextRange,
+  ToggleableRule,
   UndoResponse,
+  ValidateResponse,
   ValidationIssue,
   ValueResponse,
 } from '../worker/protocol.js';
@@ -73,10 +81,12 @@ import {
   filterProjects,
   getImportBaseline,
   getProjectConfigText,
+  getProjectDisabledRules,
   getProjectQuarantine,
   listProjects,
   saveImportBaseline,
   saveProjectConfigText,
+  saveProjectDisabledRules,
   saveProjectManifest,
   saveProjectQuarantine,
   saveProjectSchemaLock,
@@ -153,6 +163,10 @@ export interface ModuleFormWorkerClient {
   redo(): Promise<RedoResponse>;
   /** Swaps which Bundle's modules the Worker validates against, per the selected project's own schema-lock (v0.5.0 #11, decision F14). */
   configureModules(modules: readonly SchemaModule[]): Promise<ConfigureModulesResponse>;
+  /** Swaps which rule ids the Worker mutes, per the selected project's own preference (FR-VAL-06, v0.9.0 #15). */
+  configureDisabledRules(ruleIds: readonly string[]): Promise<ConfigureDisabledRulesResponse>;
+  /** Re-runs validation on demand — `handleToggleRule` calls this so the issue panel reflects a toggle immediately, not after the next debounced parse. */
+  validate(): Promise<ValidateResponse>;
 }
 
 export interface ProjectPageProps {
@@ -237,6 +251,8 @@ export function ProjectPage({
   // unreachable while this is true.
   const [readOnly, setReadOnly] = useState(false);
   const [quarantine, setQuarantine] = useState<McsProjQuarantine>({ fields: [] });
+  const [disabledRules, setDisabledRules] = useState<McsProjDisabledRules>({ ruleIds: [] });
+  const [toggleableRules, setToggleableRules] = useState<readonly ToggleableRule[]>([]);
   // `null` (not yet parsed) is not "an empty document" — `collectUnknownFields`
   // would otherwise plan every module against `null` and, same as
   // `ModuleFormPage`, transiently report schema-default values as if they
@@ -353,26 +369,40 @@ export function ProjectPage({
       getImportBaseline(adapter, id),
       resolveProjectSchema(adapter, id, trustedPublicKeys),
       getProjectQuarantine(adapter, id),
-    ]).then(async ([savedText, importText, resolvedSchema, resolvedQuarantine]) => {
-      if (cancelled) return;
-      // Must land before `setConfigText` below: `YamlEditor`'s own effect
-      // sends `client.parse(text)` as soon as `configText` changes, and that
-      // parse needs this project's own locked modules already configured
-      // (ADR-004, v0.5.0 #11, decision F14), not a still-live previous
-      // project's or the Worker's built-in default.
-      await client.configureModules(resolvedSchema.modules);
-      if (cancelled) return;
-      setModules(resolvedSchema.modules);
-      setSchemaLock(resolvedSchema.schemaLock);
-      setReadOnly(resolvedSchema.readOnly);
-      setQuarantine(resolvedQuarantine);
-      const text = savedText ?? '';
-      setConfigText(text);
-      setSavedBaseline(text);
-      // No recorded baseline (a project created before this existed) — the
-      // current text is the closest available stand-in.
-      setImportBaseline(importText ?? text);
-    });
+      getProjectDisabledRules(adapter, id),
+    ]).then(
+      async ([
+        savedText,
+        importText,
+        resolvedSchema,
+        resolvedQuarantine,
+        resolvedDisabledRules,
+      ]) => {
+        if (cancelled) return;
+        // Must land before `setConfigText` below: `YamlEditor`'s own effect
+        // sends `client.parse(text)` as soon as `configText` changes, and that
+        // parse needs this project's own locked modules (and muted rule ids,
+        // v0.9.0 #15) already configured (ADR-004, v0.5.0 #11, decision F14),
+        // not a still-live previous project's or the Worker's own defaults.
+        const [configureModulesResponse] = await Promise.all([
+          client.configureModules(resolvedSchema.modules),
+          client.configureDisabledRules(resolvedDisabledRules.ruleIds),
+        ]);
+        if (cancelled) return;
+        setModules(resolvedSchema.modules);
+        setSchemaLock(resolvedSchema.schemaLock);
+        setReadOnly(resolvedSchema.readOnly);
+        setQuarantine(resolvedQuarantine);
+        setDisabledRules(resolvedDisabledRules);
+        setToggleableRules(configureModulesResponse.toggleableRules);
+        const text = savedText ?? '';
+        setConfigText(text);
+        setSavedBaseline(text);
+        // No recorded baseline (a project created before this existed) — the
+        // current text is the closest available stand-in.
+        setImportBaseline(importText ?? text);
+      },
+    );
     return () => {
       cancelled = true;
     };
@@ -618,6 +648,27 @@ export function ProjectPage({
     markSavePending();
   }
 
+  /**
+   * FR-VAL-06 (v0.9.0 #15): a discrete, deliberate action (like create/
+   * import), saved immediately rather than through the debounced
+   * `AutoSaver` — same reasoning as `handleImport`. Re-validates right away
+   * (rather than waiting for the next keystroke's debounced parse) so the
+   * issue panel reflects the new preference the instant the user toggles
+   * it, not up to `VALIDATION_DEBOUNCE_MS` later.
+   */
+  async function handleToggleRule(ruleId: string, nextDisabled: boolean): Promise<void> {
+    if (!selectedId) return;
+    const ruleIds = nextDisabled
+      ? [...new Set([...disabledRules.ruleIds, ruleId])]
+      : disabledRules.ruleIds.filter((id) => id !== ruleId);
+    const updated: McsProjDisabledRules = { ruleIds };
+    await saveProjectDisabledRules(adapter, selectedId, updated);
+    setDisabledRules(updated);
+    await client.configureDisabledRules(ruleIds);
+    const response = await client.validate();
+    setIssues(response.issues);
+  }
+
   async function handleImport(id: string, text: string): Promise<void> {
     // A discrete, deliberate action (like create/delete), not a keystroke —
     // saved immediately rather than through the debounced AutoSaver. Also
@@ -646,11 +697,12 @@ export function ProjectPage({
   async function handleUpgraded(result: UpgradeResult): Promise<void> {
     if (!selectedId) return;
     const id = selectedId;
-    await client.configureModules(result.modules);
+    const configureModulesResponse = await client.configureModules(result.modules);
     await saveProjectConfigText(adapter, id, result.configText);
     await saveProjectSchemaLock(adapter, id, result.schemaLock);
     await saveProjectQuarantine(adapter, id, result.quarantine);
     setModules(result.modules);
+    setToggleableRules(configureModulesResponse.toggleableRules);
     setSchemaLock(result.schemaLock);
     // The just-upgraded lock names the bundle this project's own modules
     // came from — it is definitionally available locally, so read-only
@@ -880,6 +932,11 @@ export function ProjectPage({
               onJumpToField={handleJumpToField}
             />
             <UnknownFieldTree fields={unknownFields} client={client} onJump={handleJumpToIssue} />
+            <RuleToggles
+              rules={toggleableRules}
+              disabledRuleIds={new Set(disabledRules.ruleIds)}
+              onToggle={(ruleId, disabled) => void handleToggleRule(ruleId, disabled)}
+            />
           </>
         ) : undefined
       }
@@ -1072,6 +1129,11 @@ export function ProjectPage({
                       client={client}
                       onJump={handleJumpToIssue}
                     />
+                    <RuleToggles
+                      rules={toggleableRules}
+                      disabledRuleIds={new Set(disabledRules.ruleIds)}
+                      onToggle={(ruleId, disabled) => void handleToggleRule(ruleId, disabled)}
+                    />
                   </>
                 )}
               </div>
@@ -1094,6 +1156,7 @@ export function ProjectPage({
               issues={issues}
               schemaLock={schemaLock}
               quarantine={quarantine}
+              disabledRules={disabledRules}
               onClose={() => setShowExportDialog(false)}
               {...(saveDocument ? { saveDocument } : {})}
             />

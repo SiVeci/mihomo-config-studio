@@ -31,6 +31,17 @@ export interface PipelineContext {
    * against, so nothing is flagged.
    */
   modules?: readonly SchemaModule[];
+  /**
+   * Rule ids (matching `ValidationIssue.code`, see `rule-toggles.ts`) a user
+   * has chosen to mute (FR-VAL-06). Applied once, after every stage has run
+   * (`runPipeline`'s own job, not any one stage's) — a stage never sees this
+   * at all, so a stage can never accidentally special-case it. Never applied
+   * to a `blocking: true` issue: FR-YAML-07's "a blocking issue disables the
+   * normal export path" is decided solely by `hasBlockingIssues`, and that
+   * invariant would break the moment a blocking issue could be filtered away
+   * by anything other than fixing it.
+   */
+  disabledRuleIds?: ReadonlySet<string>;
 }
 
 /**
@@ -286,7 +297,9 @@ export function runPipeline(
     issues.push(...stageIssues);
     if (stage.id === SYNTAX_STAGE_ID && hasBlockingIssues(stageIssues)) break;
   }
-  return issues;
+  const disabled = ctx.disabledRuleIds;
+  if (!disabled || disabled.size === 0) return issues;
+  return issues.filter((issue) => issue.blocking || !disabled.has(issue.code));
 }
 
 /**

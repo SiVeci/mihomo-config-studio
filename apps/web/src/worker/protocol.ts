@@ -10,8 +10,8 @@ import type {
 } from '@mcs/graph';
 import type { SchemaModule } from '@mcs/schema-core';
 import { builtinAsStoredBundle, createRegistry } from '@mcs/schema-registry';
-import type { IssueFix, ValidationIssue } from '@mcs/validator';
-import { runPipeline } from '@mcs/validator';
+import type { IssueFix, ToggleableRule, ValidationIssue } from '@mcs/validator';
+import { listToggleableRules, runPipeline } from '@mcs/validator';
 import type {
   ConfigPath,
   ParseResult,
@@ -39,7 +39,7 @@ import { diffLines, MihomoYamlDocument, YamlEngineError } from '@mcs/yaml-engine
  */
 const DEFAULT_MODULES: readonly SchemaModule[] = createRegistry(builtinAsStoredBundle()).modules();
 
-export type { IssueFix, ValidationIssue } from '@mcs/validator';
+export type { IssueFix, ToggleableRule, ValidationIssue } from '@mcs/validator';
 export type {
   ConfigPath,
   DiffOp,
@@ -165,6 +165,24 @@ export interface ConfigureModulesRequest {
   modules: readonly SchemaModule[];
 }
 
+/**
+ * Swaps which rule ids `runPipeline` mutes for every `parse`/`validate`/
+ * `graphLayout` call going forward (FR-VAL-06, v0.9.0 #15) — same
+ * "sticky Worker state, set once per open project" shape as
+ * `ConfigureModulesRequest`, and deliberately a separate message rather than
+ * a field bolted onto that one: which Schema modules apply and which
+ * warning rules a user has muted are independent per-project settings, and
+ * `configureModules` already has its own well-tested surface not worth
+ * risking a regression in for an unrelated concern. `ruleIds` matches
+ * `ValidationIssue.code` (`@mcs/validator`'s `listToggleableRules`), plain
+ * strings so this stays structured-clone-safe like every other request.
+ */
+export interface ConfigureDisabledRulesRequest {
+  type: 'configureDisabledRules';
+  requestId: string;
+  ruleIds: readonly string[];
+}
+
 export type WorkerRequest =
   | ParseRequest
   | ApplyPatchRequest
@@ -179,7 +197,8 @@ export type WorkerRequest =
   | UndoRequest
   | RedoRequest
   | PreviewProviderRequest
-  | ConfigureModulesRequest;
+  | ConfigureModulesRequest
+  | ConfigureDisabledRulesRequest;
 
 export interface ParseResponse {
   type: 'parse';
@@ -300,6 +319,18 @@ export interface PreviewProviderResponse {
 export interface ConfigureModulesResponse {
   type: 'configureModules';
   requestId: string;
+  /**
+   * Every rule id this Bundle's modules make disableable (FR-VAL-06,
+   * v0.9.0 #15), computed here rather than by the main thread: the
+   * main-thread bundle boundary (NFR-PERF-05, `client.test.ts`'s "main-
+   * thread module boundary") forbids importing `@mcs/validator` outside
+   * this file, and `listToggleableRules` lives there.
+   */
+  toggleableRules: readonly ToggleableRule[];
+}
+export interface ConfigureDisabledRulesResponse {
+  type: 'configureDisabledRules';
+  requestId: string;
 }
 /** NFR-SEC-03: never carries configuration values — only a stable code, an i18n key, and a path. */
 export interface WorkerErrorResponse {
@@ -325,6 +356,7 @@ export type WorkerResponse =
   | RedoResponse
   | PreviewProviderResponse
   | ConfigureModulesResponse
+  | ConfigureDisabledRulesResponse
   | WorkerErrorResponse;
 
 /**
@@ -340,10 +372,17 @@ export interface WorkerState {
   historyStack: HistoryStack;
   /** Defaults to the built-in bundle's modules; `configureModules` (v0.5.0 #11) swaps it per open project. */
   modules: readonly SchemaModule[];
+  /** Defaults to none muted; `configureDisabledRules` (v0.9.0 #15) swaps it per open project. */
+  disabledRuleIds: ReadonlySet<string>;
 }
 
 export function createWorkerState(): WorkerState {
-  return { parseResult: null, historyStack: new HistoryStack(), modules: DEFAULT_MODULES };
+  return {
+    parseResult: null,
+    historyStack: new HistoryStack(),
+    modules: DEFAULT_MODULES,
+    disabledRuleIds: new Set(),
+  };
 }
 
 /**
@@ -381,6 +420,8 @@ export function handleWorkerRequest(state: WorkerState, request: WorkerRequest):
       return handlePreviewProvider(request);
     case 'configureModules':
       return handleConfigureModules(state, request);
+    case 'configureDisabledRules':
+      return handleConfigureDisabledRules(state, request);
   }
 }
 
@@ -418,7 +459,11 @@ function handleParse(state: WorkerState, request: ParseRequest): ParseResponse {
   return {
     type: 'parse',
     requestId: request.requestId,
-    issues: runPipeline({ parse: parseResult, modules: state.modules }),
+    issues: runPipeline({
+      parse: parseResult,
+      modules: state.modules,
+      disabledRuleIds: state.disabledRuleIds,
+    }),
     value: parseResult.document?.toJS() ?? null,
   };
 }
@@ -434,7 +479,20 @@ function handleConfigureModules(
   request: ConfigureModulesRequest,
 ): ConfigureModulesResponse {
   state.modules = request.modules;
-  return { type: 'configureModules', requestId: request.requestId };
+  return {
+    type: 'configureModules',
+    requestId: request.requestId,
+    toggleableRules: listToggleableRules(request.modules),
+  };
+}
+
+/** Same shape as `handleConfigureModules` — purely synchronous, sets state the next `runPipeline` call reads. */
+function handleConfigureDisabledRules(
+  state: WorkerState,
+  request: ConfigureDisabledRulesRequest,
+): ConfigureDisabledRulesResponse {
+  state.disabledRuleIds = new Set(request.ruleIds);
+  return { type: 'configureDisabledRules', requestId: request.requestId };
 }
 
 function handleApplyPatch(
@@ -583,7 +641,11 @@ function handleGraphLayout(
   const entities = new EntityRegistry().extract(document);
   const index = new ReferenceIndex();
   index.rebuild(document, entities);
-  const issues = runPipeline({ parse: state.parseResult!, modules: state.modules });
+  const issues = runPipeline({
+    parse: state.parseResult!,
+    modules: state.modules,
+    disabledRuleIds: state.disabledRuleIds,
+  });
   return {
     type: 'graphLayout',
     requestId: request.requestId,
@@ -666,7 +728,11 @@ function handleValidate(
   return {
     type: 'validate',
     requestId: request.requestId,
-    issues: runPipeline({ parse: state.parseResult, modules: state.modules }),
+    issues: runPipeline({
+      parse: state.parseResult,
+      modules: state.modules,
+      disabledRuleIds: state.disabledRuleIds,
+    }),
   };
 }
 

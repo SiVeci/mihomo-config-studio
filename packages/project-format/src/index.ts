@@ -3,6 +3,7 @@ export { ProjectFormatError, readZip, writeZip } from './zip.js';
 
 export type {
   McsProject,
+  McsProjDisabledRules,
   McsProjManifest,
   McsProjQuarantine,
   McsProjQuarantinedField,

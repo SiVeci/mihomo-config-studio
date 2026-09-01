@@ -25,6 +25,7 @@ function sampleProject(overrides: Partial<McsProject> = {}): McsProject {
     uiState: { collapsedGroups: ['proxies'], selectedEntityId: 'e1' },
     schemaLock: { bundleVersion: '1.0.0', compatibilityProfile: 'v1.19.29' },
     quarantine: { fields: [] },
+    disabledRules: { ruleIds: [] },
     ...overrides,
   };
 }
@@ -89,6 +90,35 @@ describe('writeMcsproj / readMcsproj round-trip', () => {
     const read = await readMcsproj(archive);
 
     expect(read.quarantine).toEqual({ fields: [] });
+  });
+
+  it('round-trips disabled rule ids exactly (FR-VAL-06, v0.9.0 #15)', async () => {
+    const project = sampleProject({
+      disabledRules: {
+        ruleIds: ['ruleOrder.domainShadowed', 'rule.tuic-token-conflicts-with-uuid-password'],
+      },
+    });
+
+    const read = await readMcsproj(await writeMcsproj(project));
+
+    expect(read.disabledRules).toEqual(project.disabledRules);
+  });
+
+  it('defaults disabledRules to an empty list when reading a .mcsproj exported before v0.9.0 #15', async () => {
+    const encoder = new TextEncoder();
+    const project = sampleProject();
+    // Manually built without disabled-rules.json or quarantine.json —
+    // simulates every .mcsproj exported by an earlier version of the app.
+    const archive = await writeZip([
+      { path: 'manifest.json', data: encoder.encode(JSON.stringify(project.manifest)) },
+      { path: 'config.yaml', data: encoder.encode(project.configText) },
+      { path: 'ui-state.json', data: encoder.encode(JSON.stringify(project.uiState)) },
+      { path: 'schema-lock.json', data: encoder.encode(JSON.stringify(project.schemaLock)) },
+    ]);
+
+    const read = await readMcsproj(archive);
+
+    expect(read.disabledRules).toEqual({ ruleIds: [] });
   });
 });
 
@@ -278,6 +308,40 @@ describe('readMcsproj error handling', () => {
     );
 
     await expect(readMcsproj(archive)).rejects.toMatchObject({
+      code: 'PROJECT_FORMAT_INVALID_MANIFEST',
+    });
+  });
+
+  function archiveWithDisabledRules(disabledRulesJson: string): Promise<Uint8Array> {
+    const encoder = new TextEncoder();
+    const project = sampleProject();
+    return writeZip([
+      { path: 'manifest.json', data: encoder.encode(JSON.stringify(project.manifest)) },
+      { path: 'config.yaml', data: encoder.encode(project.configText) },
+      { path: 'ui-state.json', data: encoder.encode(JSON.stringify(project.uiState)) },
+      { path: 'schema-lock.json', data: encoder.encode(JSON.stringify(project.schemaLock)) },
+      { path: 'disabled-rules.json', data: encoder.encode(disabledRulesJson) },
+    ]);
+  }
+
+  it('rejects a disabled-rules.json that is not a JSON object', async () => {
+    const archive = await archiveWithDisabledRules('[1,2,3]');
+
+    await expect(readMcsproj(archive)).rejects.toMatchObject({
+      code: 'PROJECT_FORMAT_INVALID_MANIFEST',
+    });
+  });
+
+  it('rejects a disabled-rules.json whose ruleIds is not an array of strings', async () => {
+    const archive = await archiveWithDisabledRules('{"ruleIds":"nope"}');
+
+    await expect(readMcsproj(archive)).rejects.toMatchObject({
+      code: 'PROJECT_FORMAT_INVALID_MANIFEST',
+    });
+
+    const archive2 = await archiveWithDisabledRules('{"ruleIds":[1,2]}');
+
+    await expect(readMcsproj(archive2)).rejects.toMatchObject({
       code: 'PROJECT_FORMAT_INVALID_MANIFEST',
     });
   });

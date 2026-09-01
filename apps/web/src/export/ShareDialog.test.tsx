@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 import { readMcsproj } from '@mcs/project-format';
-import type { McsProjQuarantine, McsProjSchemaLock } from '@mcs/project-format';
+import type {
+  McsProjDisabledRules,
+  McsProjQuarantine,
+  McsProjSchemaLock,
+} from '@mcs/project-format';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -30,6 +34,7 @@ const PROJECT: ProjectRecord = {
 
 const SCHEMA_LOCK: McsProjSchemaLock = { bundleVersion: '0.5.0', compatibilityProfile: 'v1.19.29' };
 const QUARANTINE: McsProjQuarantine = { fields: [] };
+const DISABLED_RULES: McsProjDisabledRules = { ruleIds: [] };
 
 function fakeShareDocument(outcome: ShareDocumentOutcome): ReturnType<typeof vi.fn> & {
   (options: ShareDocumentOptions): Promise<ShareDocumentOutcome>;
@@ -45,6 +50,7 @@ describe('ShareDialog / sharing (v0.6.0 #5, FR-AND-03)', () => {
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={'mode: rule\nport: 7890\n'}
         onClose={vi.fn()}
         shareDocument={shareDocument}
@@ -68,6 +74,7 @@ describe('ShareDialog / sharing (v0.6.0 #5, FR-AND-03)', () => {
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={'mode: rule\n'}
         onClose={vi.fn()}
         shareDocument={shareDocument}
@@ -91,6 +98,7 @@ describe('ShareDialog / sharing (v0.6.0 #5, FR-AND-03)', () => {
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={'mode: rule\n'}
         onClose={onClose}
       />,
@@ -110,6 +118,7 @@ describe('ShareDialog / cancel is not a failure (PRD §12)', () => {
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={'mode: rule\n'}
         onClose={vi.fn()}
         shareDocument={shareDocument}
@@ -139,6 +148,7 @@ describe('ShareDialog / failure handling — save instead + retry (PRD §12)', (
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={'mode: rule\n'}
         onClose={vi.fn()}
         shareDocument={shareDocument}
@@ -163,6 +173,7 @@ describe('ShareDialog / failure handling — save instead + retry (PRD §12)', (
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={'mode: rule\nport: 7890\n'}
         onClose={vi.fn()}
         shareDocument={shareDocument}
@@ -187,6 +198,7 @@ describe('ShareDialog / failure handling — save instead + retry (PRD §12)', (
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={'mode: rule\n'}
         onClose={vi.fn()}
         shareDocument={shareDocument}
@@ -215,6 +227,7 @@ describe('ShareDialog / failure handling — save instead + retry (PRD §12)', (
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={secretConfigText}
         onClose={vi.fn()}
         shareDocument={shareDocument}
@@ -237,6 +250,7 @@ describe('ShareDialog / sensitivity warnings (NFR-SEC-08, reused from ExportDial
         project={PROJECT}
         schemaLock={SCHEMA_LOCK}
         quarantine={QUARANTINE}
+        disabledRules={DISABLED_RULES}
         configText={`proxies:\n  - password: "${secretPassword}"\n`}
         onClose={vi.fn()}
       />,

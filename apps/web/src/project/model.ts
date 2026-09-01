@@ -1,4 +1,8 @@
-import type { McsProjQuarantine, McsProjSchemaLock } from '@mcs/project-format';
+import type {
+  McsProjDisabledRules,
+  McsProjQuarantine,
+  McsProjSchemaLock,
+} from '@mcs/project-format';
 import type { StorageAdapter } from '@mcs/storage';
 
 export interface ProjectRecord {
@@ -29,6 +33,7 @@ const CONFIG_SUFFIX = '/config.yaml';
 const IMPORT_BASELINE_SUFFIX = '/import-baseline.yaml';
 const SCHEMA_LOCK_SUFFIX = '/schema-lock.json';
 const QUARANTINE_SUFFIX = '/quarantine.json';
+const DISABLED_RULES_SUFFIX = '/disabled-rules.json';
 
 /** `SnapshotManager`'s key prefix for this project's pre-migration snapshots (v0.5.0 #11, NFR-REL-01). */
 export function projectSnapshotPrefix(id: string): string {
@@ -53,6 +58,10 @@ function schemaLockKey(id: string): string {
 
 function quarantineKey(id: string): string {
   return `${PROJECT_PREFIX}${id}${QUARANTINE_SUFFIX}`;
+}
+
+function disabledRulesKey(id: string): string {
+  return `${PROJECT_PREFIX}${id}${DISABLED_RULES_SUFFIX}`;
 }
 
 const encoder = new TextEncoder();
@@ -204,10 +213,28 @@ export async function saveProjectQuarantine(
   await adapter.put(quarantineKey(id), encoder.encode(JSON.stringify(quarantine)));
 }
 
+/** Rule ids (matching `ValidationIssue.code`) this project has muted (FR-VAL-06, v0.9.0 #15) — project-level, same reasoning as `getProjectQuarantine`. Absent for a project created before this existed — defaults to empty. */
+export async function getProjectDisabledRules(
+  adapter: StorageAdapter,
+  id: string,
+): Promise<McsProjDisabledRules> {
+  const bytes = await adapter.get(disabledRulesKey(id));
+  return bytes ? (JSON.parse(decoder.decode(bytes)) as McsProjDisabledRules) : { ruleIds: [] };
+}
+
+export async function saveProjectDisabledRules(
+  adapter: StorageAdapter,
+  id: string,
+  disabledRules: McsProjDisabledRules,
+): Promise<void> {
+  await adapter.put(disabledRulesKey(id), encoder.encode(JSON.stringify(disabledRules)));
+}
+
 export async function deleteProject(adapter: StorageAdapter, id: string): Promise<void> {
   await adapter.delete(manifestKey(id));
   await adapter.delete(configKey(id));
   await adapter.delete(importBaselineKey(id));
   await adapter.delete(schemaLockKey(id));
   await adapter.delete(quarantineKey(id));
+  await adapter.delete(disabledRulesKey(id));
 }

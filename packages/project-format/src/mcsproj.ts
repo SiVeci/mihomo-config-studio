@@ -13,6 +13,7 @@ const CONFIG_ENTRY = 'config.yaml';
 const UI_STATE_ENTRY = 'ui-state.json';
 const SCHEMA_LOCK_ENTRY = 'schema-lock.json';
 const QUARANTINE_ENTRY = 'quarantine.json';
+const DISABLED_RULES_ENTRY = 'disabled-rules.json';
 
 export interface McsProjManifest {
   readonly formatVersion: number;
@@ -48,6 +49,11 @@ export interface McsProjQuarantine {
   readonly fields: readonly McsProjQuarantinedField[];
 }
 
+/** FR-VAL-06 (v0.9.0 #15): rule ids (matching `ValidationIssue.code`) this project's own validation has muted — project-level, not global, so opening the same `.mcsproj` on another device sees the same issue list (same reasoning as ADR-004's schema lock). */
+export interface McsProjDisabledRules {
+  readonly ruleIds: readonly string[];
+}
+
 export interface McsProject {
   readonly manifest: McsProjManifest;
   /** Stored and restored verbatim — never re-serialized (M0-1 losslessness must survive the container, too). */
@@ -57,6 +63,8 @@ export interface McsProject {
   readonly schemaLock: McsProjSchemaLock;
   /** Fields moved out of `config.yaml` by a downgrade migration (v0.5.0 #9). Absent in any `.mcsproj` exported before this — `readMcsproj` defaults it to `{ fields: [] }` rather than requiring every existing project to be re-exported. */
   readonly quarantine: McsProjQuarantine;
+  /** Absent in any `.mcsproj` exported before v0.9.0 #15 — `readMcsproj` defaults it to `{ ruleIds: [] }`, same backward-compatibility posture as `quarantine`. */
+  readonly disabledRules: McsProjDisabledRules;
 }
 
 const textEncoder = new TextEncoder();
@@ -180,6 +188,23 @@ function parseQuarantine(raw: unknown): McsProjQuarantine {
   return { fields: record.fields.map((entry, index) => parseQuarantinedField(entry, index)) };
 }
 
+function parseDisabledRules(raw: unknown): McsProjDisabledRules {
+  if (raw === null || typeof raw !== 'object') {
+    throw new ProjectFormatError(
+      'PROJECT_FORMAT_INVALID_MANIFEST',
+      'disabled-rules.json must be an object.',
+    );
+  }
+  const record = raw as Record<string, unknown>;
+  if (!Array.isArray(record.ruleIds) || record.ruleIds.some((id) => typeof id !== 'string')) {
+    throw new ProjectFormatError(
+      'PROJECT_FORMAT_INVALID_MANIFEST',
+      '"disabledRules.ruleIds" must be an array of strings.',
+    );
+  }
+  return { ruleIds: record.ruleIds as string[] };
+}
+
 function parseUiState(raw: unknown): Record<string, unknown> {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new ProjectFormatError(
@@ -198,6 +223,10 @@ export async function writeMcsproj(project: McsProject): Promise<Uint8Array> {
     { path: UI_STATE_ENTRY, data: textEncoder.encode(stableStringify(project.uiState)) },
     { path: SCHEMA_LOCK_ENTRY, data: textEncoder.encode(stableStringify(project.schemaLock)) },
     { path: QUARANTINE_ENTRY, data: textEncoder.encode(stableStringify(project.quarantine)) },
+    {
+      path: DISABLED_RULES_ENTRY,
+      data: textEncoder.encode(stableStringify(project.disabledRules)),
+    },
   ];
   return writeZip(entries);
 }
@@ -220,12 +249,20 @@ export async function readMcsproj(bytes: Uint8Array): Promise<McsProject> {
     ? parseQuarantine(parseJsonEntry(entries, QUARANTINE_ENTRY))
     : { fields: [] };
 
+  // Same backward-compatibility posture as quarantine above — absent in any
+  // .mcsproj exported before v0.9.0 #15.
+  const disabledRulesEntry = entries.find((entry) => entry.path === DISABLED_RULES_ENTRY);
+  const disabledRules = disabledRulesEntry
+    ? parseDisabledRules(parseJsonEntry(entries, DISABLED_RULES_ENTRY))
+    : { ruleIds: [] };
+
   return {
     manifest: parseManifest(parseJsonEntry(entries, MANIFEST_ENTRY)),
     configText: textDecoder.decode(configEntry.data),
     uiState: parseUiState(parseJsonEntry(entries, UI_STATE_ENTRY)),
     schemaLock: parseSchemaLock(parseJsonEntry(entries, SCHEMA_LOCK_ENTRY)),
     quarantine,
+    disabledRules,
   };
 }
 
