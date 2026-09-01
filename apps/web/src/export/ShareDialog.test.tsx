@@ -23,6 +23,7 @@ const PROJECT: ProjectRecord = {
   name: 'My Project',
   description: 'desc',
   targetProfile: 'v1.19.29',
+  tags: [],
   createdAt: '2026-08-01T00:00:00.000Z',
   updatedAt: '2026-08-02T00:00:00.000Z',
 };

@@ -335,10 +335,10 @@ function FieldRow({ field, controls, onChange, translate }: FieldRowProps): JSX.
       {Control ? (
         isContainer ? (
           <div role="group" aria-labelledby={labelId}>
-            <Control field={field} id={pointer} onChange={onChange} />
+            <Control field={field} id={pointer} onChange={onChange} translate={translate} />
           </div>
         ) : (
-          <Control field={field} id={pointer} onChange={onChange} />
+          <Control field={field} id={pointer} onChange={onChange} translate={translate} />
         )
       ) : null}
 

@@ -73,6 +73,22 @@ describe('SchemaForm (FR-SCHEMA-01, FR-SCHEMA-05)', () => {
     expect((screen.getByLabelText('secret') as HTMLInputElement).type).toBe('text');
   });
 
+  it('translates the reveal/hide button and the sensitivity hint through the real `t` prop, not a hardcoded key (regression, v0.9.0 #14: FieldRow already received a real translate function but never forwarded it into the control itself, so every reveal/hide button and hint in the real app rendered its literal i18n key)', () => {
+    function translate(key: string): string {
+      if (key === 'field.reveal') return '显示';
+      if (key === 'field.hide') return '隐藏';
+      if (key === 'field.sensitiveHint') return '敏感字段';
+      return key;
+    }
+    renderForm({ t: translate });
+
+    expect(screen.getByRole('button', { name: '显示' })).toBeDefined();
+    expect(screen.getByText('敏感字段')).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: '显示' }));
+    expect(screen.getByRole('button', { name: '隐藏' })).toBeDefined();
+  });
+
   it('honours visibleWhen without unmounting the underlying value', () => {
     renderForm();
     expect(fieldNode('/sample/bind-address')).toBeNull();
@@ -470,7 +486,7 @@ const SECRET_TAGS_MODULE: SchemaModule = {
 };
 
 describe('secret-tags control (NFR-SEC-02, v0.9.0 #13)', () => {
-  function renderSecretTags() {
+  function renderSecretTags(overrides: Partial<Parameters<typeof SchemaForm>[0]> = {}) {
     const onChange = vi.fn<(path: ConfigPath, value: unknown) => void>();
     render(
       <SchemaForm
@@ -478,6 +494,7 @@ describe('secret-tags control (NFR-SEC-02, v0.9.0 #13)', () => {
         value={{ creds: { authentication: ['alice:s3cret', 'bob:hunter2'] } }}
         mode="advanced"
         onChange={onChange}
+        {...overrides}
       />,
     );
     return onChange;
@@ -523,5 +540,13 @@ describe('secret-tags control (NFR-SEC-02, v0.9.0 #13)', () => {
     ) as HTMLTextAreaElement;
     expect(textarea.value).not.toContain('s3cret');
     expect(textarea.readOnly).toBe(true);
+  });
+
+  it('translates its reveal/hide button and hint through the real `t` prop too (regression, v0.9.0 #14 — same fix as SecretControl)', () => {
+    function translate(key: string): string {
+      return key === 'field.reveal' ? '显示' : key;
+    }
+    renderSecretTags({ t: translate });
+    expect(screen.getByRole('button', { name: '显示' })).toBeDefined();
   });
 });

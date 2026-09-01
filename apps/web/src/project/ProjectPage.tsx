@@ -69,6 +69,8 @@ import {
   deleteProject,
   DEFAULT_PROJECT_CONFIG_TEXT,
   DEFAULT_TARGET_PROFILE,
+  EMPTY_PROJECT_FILTER_QUERY,
+  filterProjects,
   getImportBaseline,
   getProjectConfigText,
   getProjectQuarantine,
@@ -79,7 +81,8 @@ import {
   saveProjectQuarantine,
   saveProjectSchemaLock,
 } from './model.js';
-import type { ProjectRecord } from './model.js';
+import type { ProjectFilterQuery, ProjectRecord } from './model.js';
+import { ProjectFilter } from './ProjectFilter.js';
 import './ProjectPage.css';
 import { resolveProjectSchema } from './schema-resolution.js';
 
@@ -187,6 +190,7 @@ export function ProjectPage({
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [filterQuery, setFilterQuery] = useState<ProjectFilterQuery>(EMPTY_PROJECT_FILTER_QUERY);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   // FR-AND-07 (v0.6.0 #13): a share can arrive before any project is open
   // (or before ImportPanel is mounted at all), so this is owned here, not
@@ -570,6 +574,7 @@ export function ProjectPage({
       name: t('project.untitledName'),
       description: '',
       targetProfile: DEFAULT_TARGET_PROFILE,
+      tags: [],
       createdAt: nowIso,
       updatedAt: nowIso,
     };
@@ -592,6 +597,19 @@ export function ProjectPage({
     const updated = projectsRef.current.map((project) =>
       project.id === selectedId
         ? { ...project, [field]: value, updatedAt: new Date(now()).toISOString() }
+        : project,
+    );
+    projectsRef.current = updated;
+    setProjects(updated);
+    manifestAutoSaverRef.current?.touch(now());
+    markSavePending();
+  }
+
+  /** `tags` is `readonly string[]`, not `string` — kept separate from `handleFieldChange` rather than widening `ProjectField`'s value type for every other field. */
+  function handleTagsChange(tags: readonly string[]): void {
+    const updated = projectsRef.current.map((project) =>
+      project.id === selectedId
+        ? { ...project, tags, updatedAt: new Date(now()).toISOString() }
         : project,
     );
     projectsRef.current = updated;
@@ -811,6 +829,7 @@ export function ProjectPage({
   }
 
   const selected = projects.find((project) => project.id === selectedId) ?? null;
+  const filteredProjects = filterProjects(projects, filterQuery);
 
   return (
     <AppShell
@@ -829,8 +848,14 @@ export function ProjectPage({
           {loaded && projects.length === 0 && (
             <p className="project-sidebar__empty">{t('project.emptyState')}</p>
           )}
+          {projects.length > 0 && (
+            <ProjectFilter records={projects} query={filterQuery} onQueryChange={setFilterQuery} />
+          )}
+          {loaded && projects.length > 0 && filteredProjects.length === 0 && (
+            <p className="project-sidebar__empty">{t('projectFilter.noResults')}</p>
+          )}
           <ul className="project-sidebar__list">
-            {projects.map((project) => (
+            {filteredProjects.map((project) => (
               <li key={project.id}>
                 <button
                   type="button"
@@ -995,6 +1020,7 @@ export function ProjectPage({
                   onUndo={() => void handleUndo()}
                   onRedo={() => void handleRedo()}
                   onFieldChange={handleFieldChange}
+                  onTagsChange={handleTagsChange}
                   onExportClick={() => setShowExportDialog(true)}
                   onUpgradeClick={() => setShowUpgradeDialog(true)}
                   confirmingDelete={confirmingDeleteId === selected.id}
@@ -1111,6 +1137,7 @@ interface ProjectDetailProps {
   readonly onUndo: () => void;
   readonly onRedo: () => void;
   readonly onFieldChange: (field: ProjectField, value: string) => void;
+  readonly onTagsChange: (tags: readonly string[]) => void;
   readonly onExportClick: () => void;
   readonly onUpgradeClick: () => void;
   readonly confirmingDelete: boolean;
@@ -1126,6 +1153,7 @@ function ProjectDetail({
   onUndo,
   onRedo,
   onFieldChange,
+  onTagsChange,
   onExportClick,
   onUpgradeClick,
   confirmingDelete,
@@ -1177,6 +1205,18 @@ function ProjectDetail({
         type="text"
         value={project.targetProfile}
         onChange={(event) => onFieldChange('targetProfile', event.target.value)}
+      />
+
+      <label className="project-detail__label" htmlFor="project-tags">
+        {t('project.tagsLabel')}
+      </label>
+      <textarea
+        id="project-tags"
+        value={project.tags.join('\n')}
+        onChange={(event) => {
+          const lines = event.target.value.split('\n').filter((line) => line.trim() !== '');
+          onTagsChange(lines);
+        }}
       />
 
       <dl className="project-detail__meta">

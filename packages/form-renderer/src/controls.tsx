@@ -12,6 +12,8 @@ export interface ControlProps {
   id: string;
   onChange: (path: ConfigPath, value: unknown) => void;
   disabled?: boolean;
+  /** `FieldRow`'s own `translate` (defaults to the identity function when the caller supplies no `t`) — controls that render user-facing text of their own (reveal/hide, hints) must go through this rather than a hardcoded string. */
+  translate: (key: string) => string;
 }
 
 export type ControlComponent = (props: ControlProps) => JSX.Element;
@@ -106,7 +108,7 @@ function SelectControl({ field, id, onChange, disabled }: ControlProps): JSX.Ele
  * Values are hidden until the user asks for them, and the reveal is a discrete
  * action rather than a hover (NFR-SEC-02).
  */
-function SecretControl({ field, id, onChange, disabled }: ControlProps): JSX.Element {
+function SecretControl({ field, id, onChange, disabled, translate }: ControlProps): JSX.Element {
   const [revealed, setRevealed] = useState(false);
   const describedBy = useId();
   return (
@@ -122,10 +124,10 @@ function SecretControl({ field, id, onChange, disabled }: ControlProps): JSX.Ele
         onChange={(event) => onChange(field.path, event.target.value)}
       />
       <button type="button" onClick={() => setRevealed((current) => !current)}>
-        {revealed ? 'field.hide' : 'field.reveal'}
+        {translate(revealed ? 'field.hide' : 'field.reveal')}
       </button>
       <span id={describedBy} data-sensitive="true">
-        field.sensitiveHint
+        {translate('field.sensitiveHint')}
       </span>
     </span>
   );
@@ -142,7 +144,13 @@ function SecretControl({ field, id, onChange, disabled }: ControlProps): JSX.Ele
  * fixed-width placeholder per entry that (unlike `SecretControl`'s dot-per-
  * character masking) does not even reveal each entry's real length.
  */
-function SecretTagsControl({ field, id, onChange, disabled }: ControlProps): JSX.Element {
+function SecretTagsControl({
+  field,
+  id,
+  onChange,
+  disabled,
+  translate,
+}: ControlProps): JSX.Element {
   const [revealed, setRevealed] = useState(false);
   const describedBy = useId();
   const items = Array.isArray(field.value) ? field.value : [];
@@ -164,10 +172,10 @@ function SecretTagsControl({ field, id, onChange, disabled }: ControlProps): JSX
         }}
       />
       <button type="button" onClick={() => setRevealed((current) => !current)}>
-        {revealed ? 'field.hide' : 'field.reveal'}
+        {translate(revealed ? 'field.hide' : 'field.reveal')}
       </button>
       <span id={describedBy} data-sensitive="true">
-        field.sensitiveHint
+        {translate('field.sensitiveHint')}
       </span>
     </span>
   );

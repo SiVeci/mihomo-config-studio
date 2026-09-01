@@ -1,0 +1,16 @@
+.project-filter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mcs-spacing-xxs);
+  padding: 0 0 var(--mcs-spacing-sm);
+}
+
+.project-filter__label {
+  font-size: var(--mcs-font-size-caption);
+  color: var(--mcs-color-text-muted);
+}
+
+.project-filter__text,
+.project-filter select {
+  width: 100%;
+}

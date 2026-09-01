@@ -6,6 +6,7 @@ export interface ProjectRecord {
   readonly name: string;
   readonly description: string;
   readonly targetProfile: string;
+  readonly tags: readonly string[];
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -64,10 +65,62 @@ export async function listProjects(adapter: StorageAdapter): Promise<ProjectReco
     manifestKeys.map(async (key) => {
       const bytes = await adapter.get(key);
       if (!bytes) return null;
-      return JSON.parse(decoder.decode(bytes)) as ProjectRecord;
+      const record = JSON.parse(decoder.decode(bytes)) as ProjectRecord;
+      // A manifest saved before v0.9.0 #14 has no `tags` at all — backfilled
+      // on read, same as `getProjectQuarantine`'s `{ fields: [] }` fallback;
+      // the stored bytes are never rewritten just for this, only on the next
+      // real edit (`saveProjectManifest` always writes the full record).
+      return record.tags ? record : { ...record, tags: [] };
     }),
   );
   return records.filter((record): record is ProjectRecord => record !== null);
+}
+
+export interface ProjectFilterQuery {
+  /** Matched against `name`, case-insensitively; empty matches everything. */
+  readonly text: string;
+  /** `null` means "any tag". */
+  readonly tag: string | null;
+  /** `null` means "any target profile". */
+  readonly targetProfile: string | null;
+}
+
+export const EMPTY_PROJECT_FILTER_QUERY: ProjectFilterQuery = {
+  text: '',
+  tag: null,
+  targetProfile: null,
+};
+
+/**
+ * Pure and in-memory (FR-PROJ-07): a user's project count is dozens, not
+ * thousands, so there is no index to keep in sync, only a filter to apply
+ * fresh on every render.
+ */
+export function filterProjects(
+  records: readonly ProjectRecord[],
+  query: ProjectFilterQuery,
+): readonly ProjectRecord[] {
+  const text = query.text.trim().toLowerCase();
+  return records.filter((record) => {
+    if (text && !record.name.toLowerCase().includes(text)) return false;
+    if (query.tag !== null && !record.tags.includes(query.tag)) return false;
+    if (query.targetProfile !== null && record.targetProfile !== query.targetProfile) {
+      return false;
+    }
+    return true;
+  });
+}
+
+/** Every distinct tag across all records, sorted for a stable dropdown order — not hardcoded, since tags are entirely user-authored. */
+export function collectAllTags(records: readonly ProjectRecord[]): readonly string[] {
+  return [...new Set(records.flatMap((record) => record.tags))].sort((a, b) => a.localeCompare(b));
+}
+
+/** Every distinct target profile across all records — ADR-012 locks only the *first* Stable profile; a second one is expected later, so this is never a hardcoded enum. */
+export function collectAllTargetProfiles(records: readonly ProjectRecord[]): readonly string[] {
+  return [...new Set(records.map((record) => record.targetProfile))].sort((a, b) =>
+    a.localeCompare(b),
+  );
 }
 
 export async function saveProjectManifest(

@@ -40,7 +40,14 @@ function field(overrides: Partial<PlannedField> = {}): PlannedField {
 
 function renderField(overrides: Partial<PlannedField> = {}) {
   const onChange = vi.fn<(path: ConfigPath, value: unknown) => void>();
-  render(<SubscriptionField field={field(overrides)} id="url-input" onChange={onChange} />);
+  render(
+    <SubscriptionField
+      field={field(overrides)}
+      id="url-input"
+      onChange={onChange}
+      translate={(key) => key}
+    />,
+  );
   return onChange;
 }
 

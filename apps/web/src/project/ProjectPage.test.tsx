@@ -269,6 +269,71 @@ describe('ProjectPage / editing description and target profile', () => {
   });
 });
 
+describe('ProjectPage / tags and filtering (FR-PROJ-07, v0.9.0 #14)', () => {
+  it('editing the tags textarea splits it into one tag per non-blank line, independent of the other fields', async () => {
+    const adapter = new MemoryStorageAdapter();
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+
+    fireEvent.change(screen.getByLabelText(t('project.tagsLabel')), {
+      target: { value: 'home\n\nwork\n' },
+    });
+
+    // Blank lines are dropped, same convention as `form-renderer`'s own
+    // `TagsControl`. Persistence to storage goes through the same debounced
+    // `manifestAutoSaverRef` as name/description/targetProfile (real-clock
+    // `touch()`, not a fake timer) — covered at the DOM level here, same as
+    // the sibling "editing description and target profile" test above.
+    expect(screen.getByLabelText<HTMLTextAreaElement>(t('project.tagsLabel')).value).toBe(
+      'home\nwork',
+    );
+    expect(screen.getByLabelText<HTMLInputElement>(t('project.nameLabel')).value).toBe(
+      t('project.untitledName'),
+    );
+  });
+
+  it('the sidebar search box hides projects whose name does not match, in the real component tree', async () => {
+    const adapter = new MemoryStorageAdapter();
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+    fireEvent.change(screen.getByLabelText(t('project.nameLabel')), {
+      target: { value: 'Home Router' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText<HTMLInputElement>(t('project.nameLabel'));
+    fireEvent.change(screen.getByLabelText(t('project.nameLabel')), {
+      target: { value: 'Office VPN' },
+    });
+
+    fireEvent.change(screen.getByLabelText(t('projectFilter.searchLabel')), {
+      target: { value: 'router' },
+    });
+
+    expect(screen.getByRole('button', { name: 'Home Router' })).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Office VPN' })).toBeNull();
+  });
+
+  it('shows a distinct empty state when the filter matches nothing, without claiming there are no projects at all', async () => {
+    const adapter = new MemoryStorageAdapter();
+    render(<ProjectPage client={FAKE_CLIENT} adapter={adapter} />);
+    await screen.findByText(t('project.emptyState'));
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+
+    fireEvent.change(screen.getByLabelText(t('projectFilter.searchLabel')), {
+      target: { value: 'no such project' },
+    });
+
+    expect(screen.getByText(t('projectFilter.noResults'))).toBeDefined();
+    expect(screen.queryByText(t('project.emptyState'))).toBeNull();
+  });
+});
+
 describe('ProjectPage / import (FR-YAML-01 wiring)', () => {
   it('a successful import overwrites the selected project config.yaml and bumps updatedAt', async () => {
     const adapter = new MemoryStorageAdapter();
@@ -915,6 +980,7 @@ describe('ProjectPage / diff panel wiring (FR-YAML-06 UI wiring)', () => {
       name: 'Legacy project',
       description: '',
       targetProfile: DEFAULT_TARGET_PROFILE,
+      tags: [],
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
     };
@@ -944,6 +1010,7 @@ describe('ProjectPage / diff panel wiring (FR-YAML-06 UI wiring)', () => {
       name: 'Orphaned project',
       description: '',
       targetProfile: DEFAULT_TARGET_PROFILE,
+      tags: [],
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
     };
