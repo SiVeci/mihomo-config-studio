@@ -60,15 +60,20 @@ export const BUILTIN_MODULE: SchemaModule = GENERAL_MODULE;
  * step (#14's plan notes list it as a prerequisite the assistant never
  * performs) and had not happened as of #14's own commit. Swap this array's
  * only entry for the real public key and re-run `tools/schema-cli`'s `pack`
- * (via the workflow, never locally) once that step is done.
+ * (via the workflow, never locally) once that step is done. v0.9.0 #13 found
+ * and fixed a real NFR-SEC-02 gap in `general`'s content (`authentication`
+ * was unmasked — see that slice's plan notes) — the first module-content
+ * change since v0.5.0 #1, so this re-issued a fresh bootstrap keypair (same
+ * discard-after-signing process as every prior re-issue) and bumped
+ * `version` to `0.9.0`, the release arc this content now ships with.
  */
 export const BUILTIN_TRUST_ANCHORS_HEX: readonly string[] = [
-  '5dcade308a5c8b24f40c0a5e7c4e0a10c6f70cbf13be442d777314750d5220fc',
+  '4b3d44beffdd48c67d3ed0a831bb3ceed02ebad14f3bdc2c063e9cae8f13b590',
 ];
 
 export const BUILTIN_MANIFEST: BundleManifest = {
   bundleId: 'builtin',
-  version: '0.5.0',
+  version: '0.9.0',
   channel: 'stable',
   formatVersion: 1,
   requiresApp: '0.1.0',
@@ -88,7 +93,7 @@ export const BUILTIN_MANIFEST: BundleManifest = {
     },
     {
       path: BUILTIN_MODULE_PATH,
-      sha256: 'cf6e4ce91e964f0b5621f3c5983f4ba7545faca744fd7441fad3cdb6dbd465fb',
+      sha256: '7421a4c128e832d82d8f5e60a552f9d318c653c93a6113daa007e19c3819a250',
     },
     {
       path: 'modules/inbound.json',
@@ -124,8 +129,8 @@ export const BUILTIN_MANIFEST: BundleManifest = {
     },
   ],
   signature:
-    '25d58e362c3a647f1e26193e7819d729e48939c99224199fd641037f00c3eada3213dc3d441c38006dc1d170c22c93b4f2c79f55f88b7c5592fbce586fb90e09',
-  signedAt: '2026-08-27T00:00:00Z',
+    '9976fcf202a262db63cc94494b4489854e063b112b1b58fd9ba49f5ca6015df274b0844e662191162f5a9c89dd2593f3873a12d874f0f2f2673257f0162e990f',
+  signedAt: '2026-09-02T00:00:00Z',
 };
 
 export interface BuiltinBundle {

@@ -1,5 +1,10 @@
 // @vitest-environment jsdom
-import { bundleStoreFrom, createRegistry, installBundle } from '@mcs/schema-registry';
+import {
+  BUILTIN_MANIFEST,
+  bundleStoreFrom,
+  createRegistry,
+  installBundle,
+} from '@mcs/schema-registry';
 import type { SchemaModule } from '@mcs/schema-core';
 import { MemoryStorageAdapter } from '@mcs/storage';
 import { SnapshotManager } from '@mcs/storage';
@@ -77,7 +82,11 @@ describe('UpgradeDialog — up to date (v0.5.0 #11)', () => {
         adapter={adapter}
         projectId="p1"
         configText="mode: rule\n"
-        schemaLock={{ bundleVersion: '0.5.0', compatibilityProfile: '1.19.29' }}
+        // No custom bundle installed, so `UpgradeDialog` falls back to the
+        // real built-in bundle — matching its version here (rather than a
+        // hardcoded literal) is what keeps this "already up to date" against
+        // a future bootstrap-manifest re-issue, not a snapshot of today's.
+        schemaLock={{ bundleVersion: BUILTIN_MANIFEST.version, compatibilityProfile: '1.19.29' }}
         quarantine={{ fields: [] }}
         oldModules={[]}
         onUpgraded={vi.fn()}

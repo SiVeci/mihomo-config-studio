@@ -61,7 +61,9 @@
       "group": "lan",
       "order": 3,
       "docs": "https://wiki.metacubex.one/config/general/",
-      "safety": "safe"
+      "safety": "safe",
+      "sensitive": true,
+      "control": "secret-tags"
     },
     "skip-auth-prefixes": {
       "label": "field.skip-auth-prefixes",

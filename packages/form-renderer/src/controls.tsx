@@ -131,6 +131,48 @@ function SecretControl({ field, id, onChange, disabled }: ControlProps): JSX.Ele
   );
 }
 
+/**
+ * `TagsControl`'s newline-per-entry editing with `SecretControl`'s
+ * reveal-gate, for array-of-string fields holding literal credentials (e.g.
+ * `general`'s `authentication`, `"username:password"` entries — NFR-SEC-02,
+ * v0.9.0 #13). HTML has no password-typed `<textarea>`, and a CSS masking
+ * trick (`-webkit-text-security`) has no Firefox equivalent, so masking here
+ * means the real value simply never enters the DOM until revealed, rather
+ * than a browser-dependent visual effect: `readOnly` while hidden, and a
+ * fixed-width placeholder per entry that (unlike `SecretControl`'s dot-per-
+ * character masking) does not even reveal each entry's real length.
+ */
+function SecretTagsControl({ field, id, onChange, disabled }: ControlProps): JSX.Element {
+  const [revealed, setRevealed] = useState(false);
+  const describedBy = useId();
+  const items = Array.isArray(field.value) ? field.value : [];
+  const shownValue = revealed
+    ? items.map((item) => String(item)).join('\n')
+    : items.map(() => '••••••••').join('\n');
+  return (
+    <span>
+      <textarea
+        id={id}
+        data-control="secret-tags"
+        value={shownValue}
+        readOnly={field.readOnly || !revealed}
+        disabled={disabled ?? false}
+        aria-describedby={describedBy}
+        onChange={(event) => {
+          const lines = event.target.value.split('\n').filter((line) => line.trim() !== '');
+          onChange(field.path, lines);
+        }}
+      />
+      <button type="button" onClick={() => setRevealed((current) => !current)}>
+        {revealed ? 'field.hide' : 'field.reveal'}
+      </button>
+      <span id={describedBy} data-sensitive="true">
+        field.sensitiveHint
+      </span>
+    </span>
+  );
+}
+
 /** Newline-separated editing keeps list order visible and keyboard-reachable. */
 function TagsControl({ field, id, onChange, disabled }: ControlProps): JSX.Element {
   const items = Array.isArray(field.value) ? field.value : [];
@@ -283,6 +325,7 @@ export const DEFAULT_CONTROLS: Record<string, ControlComponent> = {
   'multi-select': MultiSelectControl,
   tags: TagsControl,
   secret: SecretControl,
+  'secret-tags': SecretTagsControl,
   'key-value': KeyValueControl,
   object: ContainerControl,
   list: TagsControl,

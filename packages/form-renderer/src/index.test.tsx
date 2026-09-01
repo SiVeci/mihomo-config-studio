@@ -455,3 +455,73 @@ describe('SchemaArrayForm (FR-SCHEMA-01, v0.3.0 #14)', () => {
     expect(onDeleteEntry).toHaveBeenCalledExactlyOnceWith(['items', 1]);
   });
 });
+
+// `general`'s real `authentication` field shape: an array of "user:pass"
+// strings a plain `TagsControl` would show in the clear (v0.9.0 #13 found
+// this — neither the `SENSITIVE_KEY` heuristic nor an explicit override
+// covered it before this slice).
+const SECRET_TAGS_MODULE: SchemaModule = {
+  manifest: { id: 'creds', root: ['creds'], version: '1.0.0' },
+  schema: {
+    type: 'object',
+    properties: { authentication: { type: 'array', items: { type: 'string' } } },
+  },
+  ui: { fields: { authentication: { sensitive: true, control: 'secret-tags' } } },
+};
+
+describe('secret-tags control (NFR-SEC-02, v0.9.0 #13)', () => {
+  function renderSecretTags() {
+    const onChange = vi.fn<(path: ConfigPath, value: unknown) => void>();
+    render(
+      <SchemaForm
+        module={SECRET_TAGS_MODULE}
+        value={{ creds: { authentication: ['alice:s3cret', 'bob:hunter2'] } }}
+        mode="advanced"
+        onChange={onChange}
+      />,
+    );
+    return onChange;
+  }
+
+  it('never puts the real values in the DOM until revealed', () => {
+    renderSecretTags();
+    const textarea = fieldNode('/creds/authentication')?.querySelector(
+      'textarea',
+    ) as HTMLTextAreaElement;
+
+    expect(textarea.value).not.toContain('s3cret');
+    expect(textarea.value).not.toContain('hunter2');
+    expect(textarea.readOnly).toBe(true);
+    expect(fieldNode('/creds/authentication')?.getAttribute('data-sensitive')).toBe('true');
+  });
+
+  it('reveals the real newline-joined values on request, and lets them be edited', () => {
+    const onChange = renderSecretTags();
+    fireEvent.click(screen.getByRole('button', { name: 'field.reveal' }));
+
+    const textarea = fieldNode('/creds/authentication')?.querySelector(
+      'textarea',
+    ) as HTMLTextAreaElement;
+    expect(textarea.value).toBe('alice:s3cret\nbob:hunter2');
+    expect(textarea.readOnly).toBe(false);
+
+    fireEvent.change(textarea, { target: { value: 'alice:s3cret\nbob:hunter2\ncarol:pw3' } });
+    expect(onChange).toHaveBeenCalledWith(
+      ['creds', 'authentication'],
+      ['alice:s3cret', 'bob:hunter2', 'carol:pw3'],
+    );
+  });
+
+  it('hides the values again after a second click, back to the masked placeholder', () => {
+    renderSecretTags();
+    const reveal = screen.getByRole('button', { name: 'field.reveal' });
+    fireEvent.click(reveal);
+    fireEvent.click(screen.getByRole('button', { name: 'field.hide' }));
+
+    const textarea = fieldNode('/creds/authentication')?.querySelector(
+      'textarea',
+    ) as HTMLTextAreaElement;
+    expect(textarea.value).not.toContain('s3cret');
+    expect(textarea.readOnly).toBe(true);
+  });
+});

@@ -9,6 +9,18 @@ function file(path: string, content: string): EgressSourceFile {
 }
 
 describe('checkEgress (NFR-SEC-01, v0.5.0 #3)', () => {
+  // v0.9.0 #13's full NFR-SEC-01 re-check: the four negative cases below
+  // (unchanged since v0.5.0 #3) plus this one both still hold as of this
+  // slice. A real scan of the current `packages/` tree — the part this
+  // in-memory assertion cannot cover, since `EGRESS_ALLOWLIST` matching
+  // depends on the exact `rootDir` a caller passes `run()` — was re-run by
+  // hand as this slice's own acceptance command
+  // (`node tools/egress-check/dist/index.js packages`) and reported zero
+  // violations; see the traceability doc's NFR-SEC-01 row for that result.
+  it('still allowlists exactly one file, and it is still updater.ts (not a second entry someone added instead of asking)', () => {
+    expect(EGRESS_ALLOWLIST).toEqual(['packages/schema-registry/src/updater.ts']);
+  });
+
   it('passes an empty file list', () => {
     expect(checkEgress([])).toEqual({ ok: true, violations: [] });
   });
