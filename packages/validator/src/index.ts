@@ -17,6 +17,8 @@ export {
   VALIDATION_DEBOUNCE_MS,
 } from './pipeline.js';
 export type { PipelineContext, ValidationStage } from './pipeline.js';
+export { explainRule } from './rule-explain.js';
+export type { RuleExplanation, RuleExplanationLine } from './rule-explain.js';
 export { REFERENCE_STAGE_ID, referenceStage } from './reference.js';
 export { RULE_ORDER_STAGE_ID, ruleOrderStage } from './rule-order.js';
 export { listToggleableRules } from './rule-toggles.js';

@@ -53,6 +53,7 @@ import type { IncomingDocument } from '../platform/incoming-document.js';
 import { registerBackgroundFlush } from '../platform/lifecycle.js';
 import { collectRuleEntityNames } from '../rules/entity-names.js';
 import { RuleListPage } from '../rules/RuleListPage.js';
+import type { RuleListWorkerClient } from '../rules/RuleListPage.js';
 import type {
   AnalyzeImpactResponse,
   ApplyBatchResponse,
@@ -185,7 +186,8 @@ export interface ProjectPageProps {
     YamlEditorWorkerClient &
     IssuePanelWorkerClient &
     DiffPanelWorkerClient &
-    ModuleFormWorkerClient;
+    ModuleFormWorkerClient &
+    RuleListWorkerClient;
   /** Injectable clock so autosave timing is exactly assertable in tests. */
   readonly now?: () => number;
   /** Forwarded to `ExportDialog` as-is; test-only override for the platform port (ADR-026) — jsdom has no `URL.createObjectURL`/`showSaveFilePicker` (see `ExportDialog`'s own doc comment). */
@@ -1044,6 +1046,7 @@ export function ProjectPage({
                       <RuleListPage
                         rules={rules}
                         catalog={ruleCatalog}
+                        client={client}
                         proxyTargetNames={ruleEntityNames.proxyTargetNames}
                         ruleProviderNames={ruleEntityNames.ruleProviderNames}
                         subRuleGroupNames={ruleEntityNames.subRuleGroupNames}

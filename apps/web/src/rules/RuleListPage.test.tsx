@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../i18n/index.js';
 import type { IssueFix } from '../worker/protocol.js';
 import { RuleListPage } from './RuleListPage.js';
-import type { RuleListPageProps } from './RuleListPage.js';
+import type { RuleListPageProps, RuleListWorkerClient } from './RuleListPage.js';
 
 afterEach(() => {
   cleanup();
@@ -28,10 +28,19 @@ function manyRules(count: number): string[] {
   return Array.from({ length: count }, (_, i) => `DOMAIN-SUFFIX,rule-${i}.example.com,DIRECT`);
 }
 
+const FAKE_EXPLAIN_CLIENT: RuleListWorkerClient = {
+  explainRule: vi.fn().mockResolvedValue({
+    type: 'explainRule',
+    requestId: 'x',
+    explanation: { kind: 'raw' },
+  }),
+};
+
 function baseProps(overrides: Partial<RuleListPageProps> = {}): RuleListPageProps {
   return {
     rules: [],
     catalog: CATALOG,
+    client: FAKE_EXPLAIN_CLIENT,
     proxyTargetNames: [],
     ruleProviderNames: [],
     subRuleGroupNames: [],

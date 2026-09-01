@@ -6,32 +6,41 @@ import en from '../i18n/en.json';
 import zhCN from '../i18n/zh-CN.json';
 import { IssuePanel } from '../issues/IssuePanel.js';
 import type { ValidationIssue } from '../worker/protocol.js';
+import { RuleExplainer } from './RuleExplainer.js';
 
 afterEach(() => {
   cleanup();
 });
 
 /**
- * FR-RULE-04 wording audit (v0.4.0 #18): PRD §8.6's closing line and NG-07
- * both require this app to never claim its static rule-order analysis
- * (MATCH position, obvious shadowing — `packages/validator/src/
- * rule-order.ts`) is equivalent to what the real mihomo kernel does at
- * match time. This is a machine assertion, not a one-time read-through —
- * per the plan's own "退出条件用测试代码固化" precedent (v0.3.0 #22), a
- * *future* `ruleOrder.*` key that slips in assertive wording fails this
- * test automatically, the same way a missing translation already fails
+ * FR-RULE-04/FR-RULE-06 wording audit (v0.4.0 #18, extended by v0.9.0 #16):
+ * PRD §8.6's closing line and NG-07 both require this app to never claim its
+ * static analysis — rule-order (MATCH position, obvious shadowing,
+ * `packages/validator/src/rule-order.ts`) or rule composition (`rule-
+ * explain.ts`) — is equivalent to what the real mihomo kernel does at match
+ * time. This is a machine assertion, not a one-time read-through — per the
+ * plan's own "退出条件用测试代码固化" precedent (v0.3.0 #22), a *future*
+ * `ruleOrder.*`/`ruleExplain.*` key that slips in assertive wording fails
+ * this test automatically, the same way a missing translation already fails
  * `i18n.test.ts`'s key-set parity check.
  *
+ * v0.9.0 #16 extended this *same* file to cover `ruleExplain.*` rather than
+ * building a second wording-review mechanism for `RuleExplainer` — two
+ * independent copies of the same policy would drift the moment only one of
+ * them gained a new forbidden pattern.
+ *
  * File extension is `.tsx`, not the plan text's literal `.test.ts` — this
- * file renders `IssuePanel` (JSX), which `.ts` cannot parse at all; every
- * other React-rendering test in this codebase is already `.tsx` (e.g.
- * `IssuePanel.test.tsx` itself), so this follows existing convention rather
- * than diverging from it.
+ * file renders `IssuePanel`/`RuleExplainer` (JSX), which `.ts` cannot parse
+ * at all; every other React-rendering test in this codebase is already
+ * `.tsx` (e.g. `IssuePanel.test.tsx` itself), so this follows existing
+ * convention rather than diverging from it.
  */
-const RULE_ORDER_KEY_PREFIX = 'ruleOrder.';
+const AUDITED_KEY_PREFIXES = ['ruleOrder.', 'ruleExplain.'];
 
-function ruleOrderKeys(resource: Record<string, string>): string[] {
-  return Object.keys(resource).filter((key) => key.startsWith(RULE_ORDER_KEY_PREFIX));
+function auditedKeys(resource: Record<string, string>): string[] {
+  return Object.keys(resource).filter((key) =>
+    AUDITED_KEY_PREFIXES.some((prefix) => key.startsWith(prefix)),
+  );
 }
 
 /**
@@ -67,9 +76,9 @@ const FORBIDDEN_PATTERNS_EN: readonly RegExp[] = [
   /\bunreachable\b/i,
 ];
 
-describe('ruleOrder.* i18n wording never asserts kernel-runtime equivalence (FR-RULE-04, PRD §8.6, NG-07, v0.4.0 #18)', () => {
-  it('zh-CN: no ruleOrder.* value contains an assertive/absolute claim word', () => {
-    const keys = ruleOrderKeys(zhCN);
+describe('ruleOrder.*/ruleExplain.* i18n wording never asserts kernel-runtime equivalence (FR-RULE-04/FR-RULE-06, PRD §8.6, NG-07, v0.4.0 #18, v0.9.0 #16)', () => {
+  it('zh-CN: no audited value contains an assertive/absolute claim word', () => {
+    const keys = auditedKeys(zhCN);
     expect(keys.length).toBeGreaterThan(0); // sanity: the audit is actually covering something
     for (const key of keys) {
       const value = zhCN[key as keyof typeof zhCN];
@@ -81,8 +90,8 @@ describe('ruleOrder.* i18n wording never asserts kernel-runtime equivalence (FR-
     }
   });
 
-  it('en: no ruleOrder.* value contains an assertive/absolute claim phrase', () => {
-    const keys = ruleOrderKeys(en);
+  it('en: no audited value contains an assertive/absolute claim phrase', () => {
+    const keys = auditedKeys(en);
     expect(keys.length).toBeGreaterThan(0);
     for (const key of keys) {
       const value = en[key as keyof typeof en];
@@ -94,8 +103,8 @@ describe('ruleOrder.* i18n wording never asserts kernel-runtime equivalence (FR-
     }
   });
 
-  it('zh-CN and en cover exactly the same ruleOrder.* keys (i18n.test.ts already enforces this globally; re-asserted narrowly here so this file is self-contained)', () => {
-    expect(ruleOrderKeys(zhCN).sort()).toEqual(ruleOrderKeys(en).sort());
+  it('zh-CN and en cover exactly the same audited keys (i18n.test.ts already enforces this globally; re-asserted narrowly here so this file is self-contained)', () => {
+    expect(auditedKeys(zhCN).sort()).toEqual(auditedKeys(en).sort());
   });
 });
 
@@ -159,4 +168,20 @@ describe('IssuePanel always renders the static-analysis caveat alongside a rule-
     );
     expect(screen.queryByText(zhCN['ruleOrder.staticAnalysisCaveat'])).toBeNull();
   });
+});
+
+describe('RuleExplainer always renders the static-analysis caveat (FR-RULE-06, v0.9.0 #16)', () => {
+  it.each([
+    ['raw', { kind: 'raw' } as const],
+    [
+      'structured',
+      { kind: 'structured', lines: [{ messageKey: 'ruleExplain.type.MATCH' }] } as const,
+    ],
+  ])(
+    'shows the caveat for a %s explanation, unconditionally — not gated on whether there is anything else to explain',
+    (_label, explanation) => {
+      render(<RuleExplainer explanation={explanation} />);
+      expect(screen.getByText(zhCN['ruleOrder.staticAnalysisCaveat'])).not.toBeNull();
+    },
+  );
 });

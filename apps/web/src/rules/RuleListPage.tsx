@@ -11,7 +11,7 @@ import {
 } from 'react';
 
 import { t } from '../i18n/index.js';
-import type { IssueFix } from '../worker/protocol.js';
+import type { ExplainRuleResponse, IssueFix, RuleExplanation } from '../worker/protocol.js';
 import {
   buildBatchCopyPatches,
   buildBatchDeletePatches,
@@ -19,8 +19,14 @@ import {
   buildBatchReplaceTargetPatches,
 } from './batch.js';
 import { RuleEditor } from './RuleEditor.js';
+import { RuleExplainer } from './RuleExplainer.js';
 import { computeReorderTarget, type ReorderOperation } from './reorder.js';
 import './RuleListPage.css';
+
+/** Minimal interface for FR-RULE-06 (v0.9.0 #16) — the same "narrow, per-consumer client" convention `ModuleFormWorkerClient`/`IssuePanelWorkerClient` already use. */
+export interface RuleListWorkerClient {
+  explainRule(catalog: readonly RuleTypeSpec[], ruleText: string): Promise<ExplainRuleResponse>;
+}
 
 const DEFAULT_ROW_HEIGHT = 32;
 const DEFAULT_CONTAINER_HEIGHT = 480;
@@ -50,6 +56,8 @@ export interface RuleListPageProps {
   readonly containerHeight?: number;
   /** Forwarded to `RuleEditor` as-is (v0.4.0 #8) — see its own doc comment. */
   readonly catalog: readonly RuleTypeSpec[];
+  /** FR-RULE-06 (v0.9.0 #16): explains the selected row's own composition — `explainRule` itself lives in `@mcs/validator`, which only the Worker may import (NFR-PERF-05's main-thread module boundary), so this component only ever consumes an already-computed `RuleExplanation`, never the function directly. */
+  readonly client: RuleListWorkerClient;
   readonly proxyTargetNames: readonly string[];
   readonly ruleProviderNames: readonly string[];
   readonly subRuleGroupNames: readonly string[];
@@ -78,6 +86,7 @@ export function RuleListPage({
   rowHeight = DEFAULT_ROW_HEIGHT,
   containerHeight: containerHeightProp,
   catalog,
+  client,
   proxyTargetNames,
   ruleProviderNames,
   subRuleGroupNames,
@@ -90,6 +99,7 @@ export function RuleListPage({
   const [creating, setCreating] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [explanation, setExplanation] = useState<RuleExplanation | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [announcement, setAnnouncement] = useState('');
@@ -107,6 +117,25 @@ export function RuleListPage({
     observer.observe(element);
     return () => observer.disconnect();
   }, [containerHeightProp]);
+
+  // Depends on the selected row's own text, not the whole `rules` array —
+  // `rules` is a fresh array reference on every parent re-render regardless
+  // of content, which would otherwise re-fetch on every keystroke elsewhere
+  // in the document (FR-RULE-06, v0.9.0 #16).
+  const selectedRuleText = selectedIndex !== null ? rules[selectedIndex] : undefined;
+  useEffect(() => {
+    if (selectedRuleText === undefined) {
+      setExplanation(null);
+      return;
+    }
+    let cancelled = false;
+    void client.explainRule(catalog, selectedRuleText).then((response) => {
+      if (!cancelled) setExplanation(response.explanation);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, catalog, selectedRuleText]);
 
   const containerHeight =
     containerHeightProp ?? (measuredHeight > 0 ? measuredHeight : DEFAULT_CONTAINER_HEIGHT);
@@ -403,6 +432,8 @@ export function RuleListPage({
       <div className="rule-list-page__live-region" role="status" aria-live="polite">
         {announcement}
       </div>
+
+      {selectedIndex !== null && <RuleExplainer explanation={explanation} />}
 
       {creating && (
         <RuleEditor

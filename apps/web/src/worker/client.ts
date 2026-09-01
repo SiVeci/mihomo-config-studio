@@ -1,3 +1,5 @@
+import type { RuleTypeSpec } from '@mcs/schema-core';
+
 import { VALIDATION_DEBOUNCE_MS } from './protocol.js';
 import type {
   AnalyzeImpactResponse,
@@ -8,6 +10,7 @@ import type {
   ConfigureModulesResponse,
   ConfigPath,
   DiffResponse,
+  ExplainRuleResponse,
   GraphLayoutResponse,
   IssueFix,
   LocateResponse,
@@ -185,6 +188,16 @@ export class WorkerClient {
       requestId: this.#makeRequestId(),
       text,
     }) as Promise<PreviewProviderResponse>;
+  }
+
+  /** Explains one rule line's own composition (FR-RULE-06, v0.9.0 #16) — stateless, unrelated to the currently open project's document, same as `previewProvider` above. */
+  explainRule(catalog: readonly RuleTypeSpec[], ruleText: string): Promise<ExplainRuleResponse> {
+    return this.#send({
+      type: 'explainRule',
+      requestId: this.#makeRequestId(),
+      catalog,
+      ruleText,
+    }) as Promise<ExplainRuleResponse>;
   }
 
   /**

@@ -14,6 +14,7 @@ import type { YamlEditorWorkerClient } from '../editor/YamlEditor.js';
 import { t } from '../i18n/index.js';
 import type { ImportWorkerClient } from '../import/ImportPanel.js';
 import type { IssuePanelWorkerClient } from '../issues/IssuePanel.js';
+import type { RuleListWorkerClient } from '../rules/RuleListPage.js';
 import { buildSignedBundle, generateTestKeyPair, minimalModule } from '../testing/signed-bundle.js';
 import {
   createWorkerState,
@@ -88,7 +89,8 @@ type FakeClient = ImportWorkerClient &
   YamlEditorWorkerClient &
   IssuePanelWorkerClient &
   DiffPanelWorkerClient &
-  ModuleFormWorkerClient;
+  ModuleFormWorkerClient &
+  RuleListWorkerClient;
 
 /** ProjectPage requires a client but most of these tests exercise neither import, the editor, the issue panel, nor the diff panel directly. */
 const FAKE_CLIENT: FakeClient = {
@@ -153,6 +155,11 @@ const FAKE_CLIENT: FakeClient = {
     requestId: 'fake',
   }),
   validate: async () => ({ type: 'validate', requestId: 'fake', issues: [] }),
+  explainRule: async (_catalog, _ruleText) => ({
+    type: 'explainRule',
+    requestId: 'fake',
+    explanation: { kind: 'raw' },
+  }),
 };
 
 const decoder = new TextDecoder();

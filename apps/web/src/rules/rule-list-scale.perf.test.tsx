@@ -96,6 +96,7 @@ describe('rule list at v0.4.0 scale — 1,000 entities + 10,000 rules (NFR-PERF-
         rowHeight={ROW_HEIGHT}
         containerHeight={CONTAINER_HEIGHT}
         catalog={catalog}
+        client={client}
         proxyTargetNames={[]}
         ruleProviderNames={[]}
         subRuleGroupNames={[]}

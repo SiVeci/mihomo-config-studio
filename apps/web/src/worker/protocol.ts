@@ -8,10 +8,10 @@ import type {
   ImpactResult,
   RelevantIssue,
 } from '@mcs/graph';
-import type { SchemaModule } from '@mcs/schema-core';
+import type { RuleTypeSpec, SchemaModule } from '@mcs/schema-core';
 import { builtinAsStoredBundle, createRegistry } from '@mcs/schema-registry';
-import type { IssueFix, ToggleableRule, ValidationIssue } from '@mcs/validator';
-import { listToggleableRules, runPipeline } from '@mcs/validator';
+import type { IssueFix, RuleExplanation, ToggleableRule, ValidationIssue } from '@mcs/validator';
+import { explainRule, listToggleableRules, runPipeline } from '@mcs/validator';
 import type {
   ConfigPath,
   ParseResult,
@@ -39,7 +39,7 @@ import { diffLines, MihomoYamlDocument, YamlEngineError } from '@mcs/yaml-engine
  */
 const DEFAULT_MODULES: readonly SchemaModule[] = createRegistry(builtinAsStoredBundle()).modules();
 
-export type { IssueFix, ToggleableRule, ValidationIssue } from '@mcs/validator';
+export type { IssueFix, RuleExplanation, ToggleableRule, ValidationIssue } from '@mcs/validator';
 export type {
   ConfigPath,
   DiffOp,
@@ -152,6 +152,23 @@ export interface PreviewProviderRequest {
 }
 
 /**
+ * FR-RULE-06 (v0.9.0 #16): explains one rule line's own composition — never
+ * a match simulator (`explainRule`'s own doc comment, `@mcs/validator`).
+ * Stateless, same as `previewProvider` above: `catalog` arrives already
+ * resolved on the main thread (`RuleListPage`'s own `catalog` prop), so the
+ * Worker only exists here as the one place allowed to import
+ * `@mcs/validator` at all (`client.test.ts`'s "main-thread module
+ * boundary", NFR-PERF-05) — not because this computation needs a document
+ * or any other Worker-owned state.
+ */
+export interface ExplainRuleRequest {
+  type: 'explainRule';
+  requestId: string;
+  catalog: readonly RuleTypeSpec[];
+  ruleText: string;
+}
+
+/**
  * Swaps which Bundle's modules `parse`/`validate` run against (v0.5.0 #11,
  * decision F14). `modules` is plain, structured-clone-safe declarative data
  * (ADR-002) resolved on the main thread — the Worker only stores it, no
@@ -198,7 +215,8 @@ export type WorkerRequest =
   | RedoRequest
   | PreviewProviderRequest
   | ConfigureModulesRequest
-  | ConfigureDisabledRulesRequest;
+  | ConfigureDisabledRulesRequest
+  | ExplainRuleRequest;
 
 export interface ParseResponse {
   type: 'parse';
@@ -316,6 +334,11 @@ export interface PreviewProviderResponse {
   requestId: string;
   preview: ProviderPreview | null;
 }
+export interface ExplainRuleResponse {
+  type: 'explainRule';
+  requestId: string;
+  explanation: RuleExplanation;
+}
 export interface ConfigureModulesResponse {
   type: 'configureModules';
   requestId: string;
@@ -357,6 +380,7 @@ export type WorkerResponse =
   | PreviewProviderResponse
   | ConfigureModulesResponse
   | ConfigureDisabledRulesResponse
+  | ExplainRuleResponse
   | WorkerErrorResponse;
 
 /**
@@ -422,6 +446,8 @@ export function handleWorkerRequest(state: WorkerState, request: WorkerRequest):
       return handleConfigureModules(state, request);
     case 'configureDisabledRules':
       return handleConfigureDisabledRules(state, request);
+    case 'explainRule':
+      return handleExplainRule(request);
   }
 }
 
@@ -787,6 +813,14 @@ function handlePreviewProvider(request: PreviewProviderRequest): PreviewProvider
     type: 'previewProvider',
     requestId: request.requestId,
     preview: summarizeProviderFile(parseResult.document?.toJS() ?? null),
+  };
+}
+
+function handleExplainRule(request: ExplainRuleRequest): ExplainRuleResponse {
+  return {
+    type: 'explainRule',
+    requestId: request.requestId,
+    explanation: explainRule(request.catalog, request.ruleText),
   };
 }
 
