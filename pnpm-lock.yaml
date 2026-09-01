@@ -353,6 +353,9 @@ importers:
       '@mcs/schema-registry':
         specifier: workspace:*
         version: link:../../packages/schema-registry
+      '@mcs/yaml-engine':
+        specifier: workspace:*
+        version: link:../../packages/yaml-engine
 
 packages:
 

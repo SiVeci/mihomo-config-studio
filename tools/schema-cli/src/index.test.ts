@@ -10,10 +10,12 @@ import {
   parseCheckArgs,
   parseCliArgs,
   parseDiffArgs,
+  parsePreviewArgs,
   parseSignArgs,
   run,
   runCheck,
   runDiff,
+  runPreview,
   runSign,
 } from './index.js';
 
@@ -409,5 +411,83 @@ describe('runSign (ADR-010 §1/§4, v0.5.0 #13)', () => {
       trustedPublicKeys: [publicKeyRaw],
     });
     expect(result).toEqual({ ok: true, manifest: signed });
+  });
+});
+
+describe('parsePreviewArgs (FR-SCHEMA-07, v0.9.0 #18)', () => {
+  it("parses a bare positional module directory, matching the plan's own manual command shape", () => {
+    expect(parsePreviewArgs(['./modules/dns'])).toEqual({
+      moduleDir: './modules/dns',
+      json: false,
+    });
+  });
+
+  it('parses --json as a flag alongside the positional directory, in either order', () => {
+    expect(parsePreviewArgs(['./modules/dns', '--json'])).toEqual({
+      moduleDir: './modules/dns',
+      json: true,
+    });
+    expect(parsePreviewArgs(['--json', './modules/dns'])).toEqual({
+      moduleDir: './modules/dns',
+      json: true,
+    });
+  });
+
+  it('throws when no module directory is given', () => {
+    expect(() => parsePreviewArgs([])).toThrow(/module source directory/);
+    expect(() => parsePreviewArgs(['--json'])).toThrow(/module source directory/);
+  });
+});
+
+describe('runPreview (FR-SCHEMA-07, v0.9.0 #18)', () => {
+  const tempDirs: string[] = [];
+  afterEach(() => {
+    for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+
+  function makeModuleDir(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'schema-cli-preview-cmd-test-'));
+    tempDirs.push(dir);
+    writeFileSync(
+      join(dir, 'module.manifest.json'),
+      JSON.stringify({ id: 'demo', root: ['demo'], version: '1.0.0' }),
+    );
+    writeFileSync(
+      join(dir, 'config.schema.json'),
+      JSON.stringify({ type: 'object', properties: { mode: { type: 'string' } } }),
+    );
+    writeFileSync(join(dir, 'ui.schema.json'), JSON.stringify({}));
+    return dir;
+  }
+
+  it('prints plain text to stdout by default', () => {
+    const dir = makeModuleDir();
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    runPreview([dir]);
+
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    expect(logSpy.mock.calls[0]?.[0]).toContain('module: demo');
+    expect(logSpy.mock.calls[0]?.[0]).toContain('demo.mode');
+    logSpy.mockRestore();
+  });
+
+  it('prints structured JSON with --json', () => {
+    const dir = makeModuleDir();
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    runPreview([dir, '--json']);
+
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    const parsed = JSON.parse(logSpy.mock.calls[0]?.[0] as string) as { moduleId: string };
+    expect(parsed.moduleId).toBe('demo');
+    logSpy.mockRestore();
+  });
+
+  it('throws a clear error for a directory missing a required file, naming which one', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'schema-cli-preview-cmd-test-'));
+    tempDirs.push(dir);
+
+    expect(() => runPreview([dir])).toThrow(/module\.manifest\.json/);
   });
 });

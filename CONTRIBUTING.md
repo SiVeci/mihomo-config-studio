@@ -20,7 +20,8 @@ pnpm install && pnpm run check
 3. `pnpm run test` 通过，且新增代码有对应测试。
 4. 涉及 YAML 的改动：未知字段、注释、锚点在 round-trip 后不丢失。
 5. 涉及引用的改动：重命名后不留下断裂引用。
-6. 涉及 Schema 的改动：同时补齐 schema、示例、校验和测试。
+6. 涉及 Schema 的改动：同时补齐 schema、示例、校验和测试；提交签名前，用
+   `schema-cli preview <module-dir>`（见下）确认渲染结果与预期一致。
 7. [需求追踪表](docs/requirements-traceability.md) 中对应行已更新，并指向具体测试文件。
 
 不接受占位实现、空函数或"看起来能跑"的测试。
@@ -32,6 +33,34 @@ pnpm install && pnpm run check
 - 与第三方库或平台能力相关的改动，请核对其当前官方文档，不要凭记忆写。
 - 若发现 PRD 与 Mihomo 官方当前行为冲突：以官方行为为准，
   并在 [docs/upstream-divergences.md](docs/upstream-divergences.md) 记录差异。**不要静默修改需求。**
+
+## Schema 预览（FR-SCHEMA-07）
+
+在一个模块的 Bundle 被签名前，用 `schema-cli` 的 `preview` 子命令把它渲染成
+每字段一行的纯文本，确认控件种类、是否必填、是否遮罩、显示条件与预期一致——
+渲染逻辑与应用本身完全相同（`@mcs/schema-core` 的 `buildFormPlan`），预览看到
+的就是签名后用户会看到的。判别式联合字段会展开列出每个分支各自的字段。
+
+```bash
+node tools/schema-cli/dist/index.js preview packages/schema-builtin/modules/dns
+node tools/schema-cli/dist/index.js preview packages/schema-builtin/modules/dns --json
+```
+
+> 注意：`tools/schema-cli` 依赖 `packages/**` 的 ADR-007 源码导出（`.ts` 直接
+> 作为包入口，不预编译），纯 `node` 目前无法在不借助 TS-aware loader 的情况下
+> 解析这些依赖之间的相对导入。这不是 `preview` 独有的限制——`pack`/`check`/
+> `diff`/`sign` 四个既有子命令同样如此，`schema-release.yml` 的 CI 也因此改为
+> 用 vitest 跑同一段逻辑，而不是字面调用 `node dist/index.js`。本地想验证某个
+> 模块目录，可以直接用 vitest 跑通同一份代码：
+>
+> ```bash
+> pnpm exec vitest run tools/schema-cli/src/preview.test.ts -t "loads and previews"
+> ```
+>
+> 或参照 `preview.test.ts` 写一个几行的临时测试文件，直接调用
+> `loadModuleFromDirectory`/`buildModulePreview`/`renderModulePreviewText`
+> 并 `console.log` 结果——vitest 自己的 TS 转换不经过这条 Node 解析路径，
+> 不受此限制。
 
 ## 包边界
 

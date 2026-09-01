@@ -5,6 +5,7 @@ import type { BundleChannel, BundleManifest, BundleManifestMihomoInfo } from '@m
 
 import { diffDirectories, formatDiffReport } from './diff.js';
 import { checkDirectoryFiles, packDirectory } from './pack.js';
+import { buildModulePreview, loadModuleFromDirectory, renderModulePreviewText } from './preview.js';
 import { decodePrivateKeyBase64, signManifest } from './sign.js';
 
 export interface CliArgs {
@@ -216,6 +217,37 @@ export async function runSign(argv: readonly string[], privateKeyBase64: string)
   console.log(`Wrote ${args.outFile}`);
 }
 
+export interface PreviewArgs {
+  readonly moduleDir: string;
+  readonly json: boolean;
+}
+
+export function parsePreviewArgs(argv: readonly string[]): PreviewArgs {
+  const [moduleDir] = argv.filter((arg) => arg !== '--json');
+  if (!moduleDir) {
+    throw new Error('Missing required argument: a module source directory (e.g. preview <dir>).');
+  }
+  return { moduleDir, json: argv.includes('--json') };
+}
+
+/**
+ * `preview` subcommand (FR-SCHEMA-07) — renders exactly what
+ * `buildFormPlan` (`@mcs/schema-core`, the same function the app itself
+ * calls) would turn a module's schema/UI files into, so a contributor can
+ * check a field's control/required/masked/visible state before a Bundle is
+ * ever signed. Plain text to stdout by default; `--json` for a structured
+ * result a contributor's own script can consume.
+ */
+export function runPreview(argv: readonly string[]): void {
+  const args = parsePreviewArgs(argv);
+  const loaded = loadModuleFromDirectory(args.moduleDir);
+  if (!loaded.ok) {
+    throw new Error(`Failed to load module from ${args.moduleDir}: ${loaded.error}`);
+  }
+  const preview = buildModulePreview(loaded.module);
+  console.log(args.json ? JSON.stringify(preview, null, 2) : renderModulePreviewText(preview));
+}
+
 async function main(): Promise<void> {
   const [subcommand, ...rest] = process.argv.slice(2);
   switch (subcommand) {
@@ -231,9 +263,12 @@ async function main(): Promise<void> {
     case 'sign':
       await runSign(rest, await readStdin());
       return;
+    case 'preview':
+      runPreview(rest);
+      return;
     default:
       throw new Error(
-        `Unknown subcommand "${subcommand ?? ''}". Expected one of: pack, check, diff, sign.`,
+        `Unknown subcommand "${subcommand ?? ''}". Expected one of: pack, check, diff, sign, preview.`,
       );
   }
 }
