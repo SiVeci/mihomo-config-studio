@@ -1,0 +1,72 @@
+name: Bug 报告
+description: 报告一个可复现的问题
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。在提交前请确认：这**不是**安全漏洞——安全问题请改用
+        [SECURITY.md](https://github.com/SiVeci/mihomo-config-studio/blob/main/SECURITY.md)
+        说明的私密报告渠道，不要通过公开 Issue 报告。
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 平台
+      options:
+        - Web
+        - Android
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: 版本号或 Release 标签（例如 v0.9.0-rc.1）
+      placeholder: v0.9.0-rc.1
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从打开应用开始，逐步列出操作
+      placeholder: |
+        1. 打开应用
+        2. ……
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 补充信息（可选）
+      description: 浏览器/设备型号、控制台报错、截图等
+
+  - type: checkboxes
+    id: no-sensitive-data
+    attributes:
+      label: 敏感信息确认
+      options:
+        - label: >-
+            我确认本 Issue（包括任何配置片段、截图或复现样例）不包含真实的
+            订阅 URL、密码、UUID、证书或私钥——如需提供样例，已替换为明显的
+            占位符
+          required: true
