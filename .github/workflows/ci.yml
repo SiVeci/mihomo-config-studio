@@ -44,6 +44,21 @@ jobs:
       - name: Format check
         run: pnpm run format:check
 
+      # PRD §13.5 release blocker (docs/release-blockers.md): import/export
+      # must never lose an unknown field, comment or anchor. Already runs as
+      # part of the full suite below — pulled out to its own named step
+      # (v0.9.0 #19) so a failure here reads as "the release blocker
+      # tripped", not "some test in a 2000+-case run broke", in GitHub's own
+      # Checks list.
+      - name: Golden round-trip (release blocker)
+        run: pnpm exec vitest run packages/validator/src/golden.test.ts
+
+      # PRD §13.5 release blocker: a Bundle must never be able to carry
+      # executable content, an unknown migration opcode, or a disallowed
+      # file — same reasoning as the step above (v0.9.0 #19).
+      - name: Schema static check (release blocker)
+        run: pnpm exec vitest run packages/schema-registry/src/static-check.test.ts
+
       - name: Unit tests with coverage
         run: pnpm run test:coverage
 

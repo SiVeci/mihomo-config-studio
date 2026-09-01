@@ -139,6 +139,7 @@ pnpm run e2e
 - [设计系统](docs/design-system.md)
 - [版本执行计划](docs/releases/README.md)
 - [需求追踪表](docs/requirements-traceability.md)
+- [发布阻断项 → CI 映射](docs/release-blockers.md)
 - [PRD 与上游行为差异记录](docs/upstream-divergences.md)
 - [自托管部署头（CSP 等）](docs/self-hosting-headers.md)
 - [贡献指南](CONTRIBUTING.md)
