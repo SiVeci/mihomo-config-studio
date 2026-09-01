@@ -33,6 +33,27 @@
 }
 
 /*
+ * `SchemaArrayForm`'s virtualized container (v0.9.0 #11, ADR-022) needs an
+ * explicit, self-contained height for its internal scrollbar to mean
+ * anything at all — without one, a `ResizeObserver` measuring an
+ * `overflow-y: auto` box with no height constraint just reports back
+ * "however tall its own content currently is", which never produces a real
+ * scroll region. A fixed height here (rather than `height: 100%`, which
+ * `RuleListPage`'s `.rule-list` uses) is deliberate: this component is
+ * reused across several module-form contexts (`proxies`/`proxy-groups`/
+ * `proxy-providers`/`rule-providers`), each embedded differently in the
+ * surrounding page flow, so it should not depend on a specific ancestor
+ * establishing a height context the way the dedicated 规则 tab's layout
+ * does for `RuleListPage`.
+ */
+[data-array-form] {
+  overflow-y: auto;
+  height: 480px;
+  border: 1px solid var(--mcs-color-hairline);
+  border-radius: var(--mcs-rounded-xs);
+}
+
+/*
  * Deprecated/experimental/dangerous field badges (NFR-A11Y): text carries
  * the meaning (see form-renderer's translate() wiring), this border+tint
  * treatment is a supplementary visual cue only, never the sole signal.

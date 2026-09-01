@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { computeVirtualWindow } from './virtual-list.js';
+import { computeVariableVirtualWindow, computeVirtualWindow } from './virtual-list.js';
 
 const ITEM_HEIGHT = 32;
 const CONTAINER_HEIGHT = 320; // 10 rows visible
@@ -143,5 +143,141 @@ describe('computeVirtualWindow (ADR-022)', () => {
       scrollTop: 4321 * ITEM_HEIGHT,
     };
     expect(computeVirtualWindow(input)).toEqual(computeVirtualWindow(input));
+  });
+});
+
+describe('computeVariableVirtualWindow (v0.9.0 #11, ADR-022)', () => {
+  it('returns an empty window for a zero-item list', () => {
+    expect(
+      computeVariableVirtualWindow({ itemHeights: [], containerHeight: 500, scrollTop: 0 }),
+    ).toEqual({ startIndex: 0, endIndex: 0, topPadding: 0, bottomPadding: 0, totalHeight: 0 });
+  });
+
+  it('reduces to the same answer as the fixed-height function when every item shares one height', () => {
+    const itemHeights = Array.from({ length: 200 }, () => ITEM_HEIGHT);
+    const fixed = computeVirtualWindow({
+      itemCount: 200,
+      itemHeight: ITEM_HEIGHT,
+      containerHeight: CONTAINER_HEIGHT,
+      scrollTop: 50 * ITEM_HEIGHT,
+    });
+    const variable = computeVariableVirtualWindow({
+      itemHeights,
+      containerHeight: CONTAINER_HEIGHT,
+      scrollTop: 50 * ITEM_HEIGHT,
+    });
+    expect(variable).toEqual(fixed);
+  });
+
+  it('a zero-height container (not yet measured) renders nothing but still reports the true total height', () => {
+    const itemHeights = [100, 200, 150];
+    const window = computeVariableVirtualWindow({ itemHeights, containerHeight: 0, scrollTop: 0 });
+    expect(window.endIndex - window.startIndex).toBe(0);
+    expect(window.totalHeight).toBe(450);
+  });
+
+  it('mixed heights: the window lands on the right index by real cumulative offset, not an average height guess', () => {
+    // Items 0-2 are short (50 each, 150 total), item 3 is very tall (900),
+    // items 4+ are short again — a naive "totalHeight / itemCount" average
+    // would misplace the window; cumulative offsets must not.
+    const itemHeights = [50, 50, 50, 900, 50, 50, 50, 50];
+    const window = computeVariableVirtualWindow({
+      itemHeights,
+      containerHeight: 100,
+      scrollTop: 160, // just past item 3's start (offset 150)
+    });
+    expect(window.startIndex).toBe(3);
+    expect(window.topPadding).toBe(150);
+  });
+
+  it('a container taller than the whole (mixed-height) list renders every item with no padding', () => {
+    const itemHeights = [80, 300, 40, 500];
+    const window = computeVariableVirtualWindow({
+      itemHeights,
+      containerHeight: 10_000,
+      scrollTop: 0,
+    });
+    expect(window.startIndex).toBe(0);
+    expect(window.endIndex).toBe(4);
+    expect(window.topPadding).toBe(0);
+    expect(window.bottomPadding).toBe(0);
+  });
+
+  it('last screen: scrolled to the maximum offset never lets endIndex exceed itemCount', () => {
+    const itemHeights = Array.from({ length: 50 }, (_, i) => 40 + i);
+    const totalHeight = itemHeights.reduce((sum, h) => sum + h, 0);
+    const window = computeVariableVirtualWindow({
+      itemHeights,
+      containerHeight: 200,
+      scrollTop: totalHeight,
+    });
+    expect(window.endIndex).toBe(50);
+    expect(window.bottomPadding).toBe(0);
+  });
+
+  it('overscan extends the window on both sides without changing totalHeight', () => {
+    const itemHeights = Array.from({ length: 100 }, () => 30);
+    const withoutOverscan = computeVariableVirtualWindow({
+      itemHeights,
+      containerHeight: 200,
+      scrollTop: 1500,
+    });
+    const withOverscan = computeVariableVirtualWindow({
+      itemHeights,
+      containerHeight: 200,
+      scrollTop: 1500,
+      overscan: 3,
+    });
+    expect(withOverscan.startIndex).toBe(withoutOverscan.startIndex - 3);
+    expect(withOverscan.endIndex).toBe(withoutOverscan.endIndex + 3);
+    expect(withOverscan.totalHeight).toBe(withoutOverscan.totalHeight);
+  });
+
+  it('never lets overscan push startIndex below 0 near the top of the list', () => {
+    const itemHeights = Array.from({ length: 100 }, () => 30);
+    const window = computeVariableVirtualWindow({
+      itemHeights,
+      containerHeight: 200,
+      scrollTop: 0,
+      overscan: 20,
+    });
+    expect(window.startIndex).toBe(0);
+  });
+
+  it('topPadding + rendered items + bottomPadding always reconstructs the exact totalHeight', () => {
+    const itemHeights = Array.from({ length: 3182 }, (_, i) => 120 + (i % 7) * 30);
+    const totalHeight = itemHeights.reduce((sum, h) => sum + h, 0);
+    for (const scrollTop of [0, 12_345, totalHeight / 2, totalHeight - 1]) {
+      const window = computeVariableVirtualWindow({
+        itemHeights,
+        containerHeight: 480,
+        scrollTop,
+        overscan: 4,
+      });
+      const renderedHeight = itemHeights
+        .slice(window.startIndex, window.endIndex)
+        .reduce((sum, h) => sum + h, 0);
+      expect(window.topPadding + renderedHeight + window.bottomPadding).toBe(window.totalHeight);
+    }
+  });
+
+  it('at 3,182 real-scale items, the rendered window is a small slice of the total — the whole point of virtualizing', () => {
+    const itemHeights = Array.from({ length: 3182 }, () => 220);
+    const window = computeVariableVirtualWindow({
+      itemHeights,
+      containerHeight: 480,
+      scrollTop: 0,
+      overscan: 6,
+    });
+    expect(window.endIndex - window.startIndex).toBeLessThan(20);
+  });
+
+  it('is a pure function: the same input always produces the same output, independent of call order', () => {
+    const input = {
+      itemHeights: Array.from({ length: 500 }, (_, i) => 100 + (i % 3) * 10),
+      containerHeight: 480,
+      scrollTop: 12_345,
+    };
+    expect(computeVariableVirtualWindow(input)).toEqual(computeVariableVirtualWindow(input));
   });
 });

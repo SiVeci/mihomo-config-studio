@@ -7,5 +7,5 @@
     "types": ["node", "@playwright/test"]
   },
   "include": ["*.ts", "../playwright.config.ts"],
-  "references": [{ "path": "../packages/schema-registry" }]
+  "references": [{ "path": "../packages/schema-registry" }, { "path": "../packages/test-fixtures" }]
 }

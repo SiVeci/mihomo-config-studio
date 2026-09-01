@@ -151,6 +151,9 @@ importers:
       '@mcs/schema-registry':
         specifier: workspace:*
         version: link:../packages/schema-registry
+      '@mcs/test-fixtures':
+        specifier: workspace:*
+        version: link:../packages/test-fixtures
 
   packages/config-model:
     dependencies:
@@ -167,6 +170,9 @@ importers:
       '@mcs/schema-core':
         specifier: workspace:*
         version: link:../schema-core
+      '@mcs/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@mcs/yaml-engine':
         specifier: workspace:*
         version: link:../yaml-engine
@@ -330,6 +336,8 @@ importers:
   tools/egress-check: {}
 
   tools/log-redaction-check: {}
+
+  tools/perf-gate: {}
 
   tools/schema-cli:
     dependencies:

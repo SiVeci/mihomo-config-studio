@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@mcs/schema-core": "workspace:*",
+    "@mcs/ui": "workspace:*",
     "@mcs/yaml-engine": "workspace:*"
   },
   "peerDependencies": {

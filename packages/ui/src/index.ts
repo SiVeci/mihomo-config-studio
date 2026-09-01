@@ -26,5 +26,9 @@ export type {
   TokenSource,
   TypographyToken,
 } from './tokens.js';
-export { computeVirtualWindow } from './virtual-list.js';
-export type { VirtualWindow, VirtualWindowInput } from './virtual-list.js';
+export { computeVariableVirtualWindow, computeVirtualWindow } from './virtual-list.js';
+export type {
+  VariableVirtualWindowInput,
+  VirtualWindow,
+  VirtualWindowInput,
+} from './virtual-list.js';

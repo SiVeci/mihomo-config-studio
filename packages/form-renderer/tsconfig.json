@@ -8,5 +8,5 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "references": [{ "path": "../yaml-engine" }, { "path": "../schema-core" }]
+  "references": [{ "path": "../yaml-engine" }, { "path": "../schema-core" }, { "path": "../ui" }]
 }
