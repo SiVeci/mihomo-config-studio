@@ -241,6 +241,9 @@ importers:
 
   packages/schema-registry:
     dependencies:
+      '@mcs/migration':
+        specifier: workspace:*
+        version: link:../migration
       '@mcs/schema-builtin':
         specifier: workspace:*
         version: link:../schema-builtin

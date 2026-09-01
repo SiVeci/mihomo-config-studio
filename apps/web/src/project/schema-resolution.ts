@@ -5,6 +5,7 @@ import {
   createRegistry,
   resolveActiveBundle,
   resolveBundleByVersion,
+  type BundleTrust,
 } from '@mcs/schema-registry';
 import type { StorageAdapter } from '@mcs/storage';
 
@@ -14,6 +15,15 @@ import { getProjectSchemaLock, saveProjectSchemaLock } from './model.js';
 export interface ResolvedProjectSchema {
   readonly modules: readonly SchemaModule[];
   readonly schemaLock: McsProjSchemaLock;
+  /**
+   * FR-UPD-09 (v0.9.0 #17): which Bundle this project's modules actually
+   * came from — `'untrusted'` means a manually-imported community Bundle
+   * whose signature was never checked against a known trust anchor. The
+   * caller shows a persistent warning for that case (ADR-002: the Bundle
+   * decides what a form renders, so the user needs to always know whose
+   * knowledge that is), not just at the moment it was installed.
+   */
+  readonly bundleTrust: BundleTrust;
   /**
    * ADR-004 point 6 / PRD §9.5 point 3 (v0.5.0 #12): `true` when the locked
    * version could not be found locally but *some* other Bundle content
@@ -68,7 +78,12 @@ export async function resolveProjectSchema(
 
   const locked = await resolveBundleByVersion(store, schemaLock.bundleVersion, options);
   if (locked) {
-    return { modules: createRegistry(locked).modules(), schemaLock, readOnly: false };
+    return {
+      modules: createRegistry(locked).modules(),
+      schemaLock,
+      bundleTrust: locked.trust,
+      readOnly: false,
+    };
   }
 
   const storeIsEmpty = (await store.list()).length === 0;
@@ -76,6 +91,7 @@ export async function resolveProjectSchema(
   return {
     modules: createRegistry(active).modules(),
     schemaLock,
+    bundleTrust: active.trust,
     readOnly: !storeIsEmpty,
   };
 }

@@ -34,14 +34,18 @@ export type {
 export {
   builtinAsStoredBundle,
   installBundle,
+  installUntrustedBundle,
   resolveActiveBundle,
   resolveBundleByVersion,
   rollbackBundle,
 } from './store.js';
 export type {
+  BundleInstallErrorCode,
+  BundleInstallFailure,
   BundleInstallResult,
   BundleRollbackResult,
   BundleStore,
+  BundleTrust,
   StoredBundle,
 } from './store.js';
 export { bundleStoreFrom } from './storage-bridge.js';
@@ -64,6 +68,7 @@ export {
   sha256Hex,
   SubtleCryptoEd25519Verifier,
   verifyBundle,
+  verifyBundleWithoutSignature,
 } from './verify.js';
 export type {
   BundleVerifyErrorCode,
@@ -72,4 +77,13 @@ export type {
   BundleVerifySuccess,
   Ed25519Verifier,
   VerifyBundleOptions,
+  VerifyBundleWithoutSignatureOptions,
 } from './verify.js';
+export {
+  checkExtension,
+  checkFile,
+  checkFiles,
+  checkJsonContent,
+  checkNoUnstableFieldsForChannel,
+} from './static-check.js';
+export type { StaticCheckIssue, StaticCheckIssueCode } from './static-check.js';

@@ -15,7 +15,7 @@ function bundleOf(entries: Record<string, unknown>): StoredBundle {
   }
   // The manifest itself is irrelevant to createRegistry (verifyBundle already
   // ran); a minimal stand-in keeps the fixture focused on `files`.
-  return { manifest: {} as StoredBundle['manifest'], files };
+  return { manifest: {} as StoredBundle['manifest'], files, trust: 'signed' };
 }
 
 function module(id: string, overrides: Partial<SchemaModule['manifest']> = {}): SchemaModule {

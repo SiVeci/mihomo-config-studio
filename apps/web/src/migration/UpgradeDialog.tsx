@@ -9,7 +9,12 @@ import type {
   McsProjSchemaLock,
 } from '@mcs/project-format';
 import type { SchemaModule } from '@mcs/schema-core';
-import { bundleStoreFrom, createRegistry, resolveActiveBundle } from '@mcs/schema-registry';
+import {
+  bundleStoreFrom,
+  createRegistry,
+  resolveActiveBundle,
+  type BundleTrust,
+} from '@mcs/schema-registry';
 import { SnapshotManager, type StorageAdapter } from '@mcs/storage';
 import { MihomoYamlDocument } from '@mcs/yaml-engine';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -31,6 +36,8 @@ export interface UpgradeResult {
   readonly quarantine: McsProjQuarantine;
   /** The new active bundle's modules, already resolved — the caller feeds this straight into `client.configureModules`, no second resolution needed. */
   readonly modules: readonly SchemaModule[];
+  /** FR-UPD-09 (v0.9.0 #17): the new active bundle's trust level — an upgrade can land on an `'untrusted'` bundle if that is genuinely what is active for the project's channel (e.g. a manually-imported Beta bundle), so the caller must re-derive its persistent warning from this, not assume the previous value still holds. */
+  readonly bundleTrust: BundleTrust;
 }
 
 export interface UpgradeDialogProps {
@@ -66,6 +73,7 @@ const ERROR_KEY: Record<ApplyMigrationErrorCode, TranslationKey> = {
 interface ActiveTarget {
   readonly modules: readonly SchemaModule[];
   readonly schemaLock: McsProjSchemaLock;
+  readonly bundleTrust: BundleTrust;
 }
 
 export function UpgradeDialog({
@@ -97,7 +105,7 @@ export function UpgradeDialog({
           bundleVersion: active.manifest.version,
           compatibilityProfile: active.manifest.mihomo.minVersion,
         };
-        setTarget({ modules: newModules, schemaLock: newLock });
+        setTarget({ modules: newModules, schemaLock: newLock, bundleTrust: active.trust });
         setPreview(
           buildUpgradePreview(
             oldModules,
@@ -161,6 +169,7 @@ export function UpgradeDialog({
       schemaLock: target.schemaLock,
       quarantine: { fields: [...quarantine.fields, ...newQuarantineFields] },
       modules: target.modules,
+      bundleTrust: target.bundleTrust,
     });
   }
 

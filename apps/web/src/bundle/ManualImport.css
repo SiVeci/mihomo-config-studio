@@ -1,0 +1,38 @@
+.manual-import {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mcs-spacing-xs);
+  border: 1px solid var(--mcs-color-border);
+  border-radius: var(--mcs-rounded-sm);
+  padding: var(--mcs-spacing-sm);
+}
+
+.manual-import h2 {
+  font-size: var(--mcs-font-size-body-md);
+  margin: 0;
+}
+
+.manual-import__description {
+  color: var(--mcs-color-text-muted);
+  font-size: var(--mcs-font-size-body-sm);
+  margin: 0;
+}
+
+.manual-import__button {
+  background-color: var(--mcs-color-primary-active);
+  color: var(--mcs-color-on-primary);
+  border: none;
+  border-radius: var(--mcs-rounded-sm);
+  padding: var(--mcs-spacing-xs) var(--mcs-spacing-sm);
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.manual-import__button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.manual-import__outcome {
+  font-size: var(--mcs-font-size-body-sm);
+}

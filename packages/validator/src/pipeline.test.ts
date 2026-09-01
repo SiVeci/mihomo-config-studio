@@ -41,7 +41,7 @@ function builtinAsStoredBundle(): StoredBundle {
       new TextEncoder().encode(JSON.stringify(module)),
     ]),
   );
-  return { manifest: BUILTIN_BUNDLE.manifest, files };
+  return { manifest: BUILTIN_BUNDLE.manifest, files, trust: 'builtin' };
 }
 
 function blockingIssue(module: string): ValidationIssue {

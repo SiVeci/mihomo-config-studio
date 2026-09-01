@@ -110,11 +110,14 @@ export interface BundleVerifySuccess {
 
 export type BundleVerifyResult = BundleVerifySuccess | BundleVerifyFailure;
 
-export interface VerifyBundleOptions {
+export interface VerifyBundleWithoutSignatureOptions {
   /** This build's own version, compared against `manifest.requiresApp`. */
   readonly currentAppVersion: string;
   readonly minFormatVersion: number;
   readonly maxFormatVersion: number;
+}
+
+export interface VerifyBundleOptions extends VerifyBundleWithoutSignatureOptions {
   /** Trust anchor array (ADR-010 §3): verifying against any one is enough. */
   readonly trustedPublicKeys: readonly Uint8Array[];
   /** Defaults to `SubtleCryptoEd25519Verifier`; inject a fake in tests or a future pure-JS backend. */
@@ -122,16 +125,18 @@ export interface VerifyBundleOptions {
 }
 
 /**
- * Fixed, short-circuiting order (cheapest checks first, signature last):
- * manifest shape → formatVersion → requiresApp → per-file SHA-256 →
- * manifest signature. A failure at any step stops immediately; later steps
- * would be meaningless (or, for the signature, needlessly expensive) once
- * an earlier one has already failed.
+ * Every `verifyBundle` step except the signature: manifest shape →
+ * formatVersion → requiresApp → per-file SHA-256. Factored out for FR-UPD-09
+ * (v0.9.0 #17): a manually-imported community Bundle must still pass all of
+ * these — the *only* thing that flow ever skips is "signed by a known trust
+ * anchor" (`store.ts`'s `installUntrustedBundle`, which persists the result
+ * marked `trust: 'untrusted'` rather than treating a skipped signature check
+ * as if it were a passed one).
  */
-export async function verifyBundle(
+export async function verifyBundleWithoutSignature(
   manifestValue: unknown,
   files: ReadonlyMap<string, Uint8Array>,
-  options: VerifyBundleOptions,
+  options: VerifyBundleWithoutSignatureOptions,
 ): Promise<BundleVerifyResult> {
   const shapeIssues = validateBundleManifest(manifestValue);
   const [firstShapeIssue] = shapeIssues;
@@ -161,6 +166,27 @@ export async function verifyBundle(
       return { ok: false, code: 'BUNDLE_HASH_MISMATCH', path: file.path };
     }
   }
+
+  return { ok: true, manifest };
+}
+
+/**
+ * Fixed, short-circuiting order (cheapest checks first, signature last):
+ * everything `verifyBundleWithoutSignature` already checks, then manifest
+ * signature. A failure at any step stops immediately; later steps would be
+ * meaningless (or, for the signature, needlessly expensive) once an earlier
+ * one has already failed.
+ */
+export async function verifyBundle(
+  manifestValue: unknown,
+  files: ReadonlyMap<string, Uint8Array>,
+  options: VerifyBundleOptions,
+): Promise<BundleVerifyResult> {
+  const withoutSignature = await verifyBundleWithoutSignature(manifestValue, files, options);
+  if (!withoutSignature.ok) {
+    return withoutSignature;
+  }
+  const { manifest } = withoutSignature;
 
   const verifier = options.verifier ?? new SubtleCryptoEd25519Verifier();
   const message = new TextEncoder().encode(canonicalManifestJson(manifest));

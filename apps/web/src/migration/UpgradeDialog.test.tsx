@@ -35,7 +35,7 @@ async function oldModulesFor(bundle: {
   manifest: Awaited<ReturnType<typeof buildSignedBundle>>['manifest'];
   files: Map<string, Uint8Array>;
 }): Promise<readonly SchemaModule[]> {
-  return createRegistry(bundle).modules();
+  return createRegistry({ ...bundle, trust: 'signed' }).modules();
 }
 
 describe('UpgradeDialog — up to date (v0.5.0 #11)', () => {

@@ -62,7 +62,7 @@ describe('bundleStoreFrom (NFR-REL-01)', () => {
       ['modules/dns.json', new TextEncoder().encode('{"b":2}')],
     ]);
 
-    await store.write('active', { manifest, files });
+    await store.write('active', { manifest, files, trust: 'signed' });
     const read = await store.read('active');
 
     expect(read?.manifest).toEqual(manifest);
@@ -71,17 +71,45 @@ describe('bundleStoreFrom (NFR-REL-01)', () => {
     expect(read?.files.get('modules/dns.json')).toEqual(files.get('modules/dns.json'));
   });
 
+  it('round-trips trust (FR-UPD-09, v0.9.0 #17), independently of manifest/files content', async () => {
+    const store = bundleStoreFrom(new MemoryStorageAdapter());
+
+    await store.write('active', {
+      manifest: manifestFixture('v1'),
+      files: new Map(),
+      trust: 'untrusted',
+    });
+
+    expect((await store.read('active'))?.trust).toBe('untrusted');
+  });
+
+  it("defaults a bundle written before trust.json existed to 'signed' (backward compatibility)", async () => {
+    const adapter = new MemoryStorageAdapter();
+    const store = bundleStoreFrom(adapter);
+    await store.write('active', {
+      manifest: manifestFixture('v1'),
+      files: new Map(),
+      trust: 'untrusted',
+    });
+    // Simulates a pre-#17 write: no trust.json key at all.
+    await adapter.delete('active/trust.json');
+
+    expect((await store.read('active'))?.trust).toBe('signed');
+  });
+
   it('replaces the whole file set on a second write, leaving no stale files behind', async () => {
     const adapter = new MemoryStorageAdapter();
     const store = bundleStoreFrom(adapter);
     await store.write('active', {
       manifest: manifestFixture('v1'),
       files: new Map([['modules/a.json', new TextEncoder().encode('a')]]),
+      trust: 'signed',
     });
 
     await store.write('active', {
       manifest: manifestFixture('v2'),
       files: new Map([['modules/b.json', new TextEncoder().encode('b')]]),
+      trust: 'signed',
     });
 
     const read = await store.read('active');
@@ -93,25 +121,36 @@ describe('bundleStoreFrom (NFR-REL-01)', () => {
   it('list() returns every written bundle key and nothing else', async () => {
     const adapter = new MemoryStorageAdapter();
     const store = bundleStoreFrom(adapter);
-    await store.write('active', { manifest: manifestFixture('v1'), files: new Map() });
-    await store.write('previous', { manifest: manifestFixture('v0'), files: new Map() });
+    await store.write('active', {
+      manifest: manifestFixture('v1'),
+      files: new Map(),
+      trust: 'signed',
+    });
+    await store.write('previous', {
+      manifest: manifestFixture('v0'),
+      files: new Map(),
+      trust: 'signed',
+    });
     // An unrelated key that happens to share a prefix must not be mistaken for a bundle.
     await adapter.put('active/files/decoy', new TextEncoder().encode('not a bundle'));
 
     expect([...(await store.list())].sort()).toEqual(['active', 'previous']);
   });
 
-  it('remove() deletes the manifest and every file, and list() forgets the key', async () => {
-    const store = bundleStoreFrom(new MemoryStorageAdapter());
+  it('remove() deletes the manifest, trust marker and every file, and list() forgets the key', async () => {
+    const adapter = new MemoryStorageAdapter();
+    const store = bundleStoreFrom(adapter);
     await store.write('active', {
       manifest: manifestFixture('v1'),
       files: new Map([['modules/a.json', new TextEncoder().encode('a')]]),
+      trust: 'signed',
     });
 
     await store.remove('active');
 
     expect(await store.read('active')).toBeNull();
     expect(await store.list()).toEqual([]);
+    expect(await adapter.get('active/trust.json')).toBeNull();
   });
 
   it('is a faithful BundleStore: installBundle and rollbackBundle work against it unmodified', async () => {

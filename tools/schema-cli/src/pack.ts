@@ -2,19 +2,16 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 
 import {
+  checkExtension,
+  checkJsonContent,
+  checkNoUnstableFieldsForChannel,
   sha256Hex,
   type BundleChannel,
   type BundleFileEntry,
   type BundleManifest,
   type BundleManifestMihomoInfo,
-} from '@mcs/schema-registry';
-
-import {
-  checkExtension,
-  checkJsonContent,
-  checkNoUnstableFieldsForChannel,
   type StaticCheckIssue,
-} from './static-check.js';
+} from '@mcs/schema-registry';
 
 export interface PackOptions {
   readonly sourceDir: string;

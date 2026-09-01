@@ -1,4 +1,10 @@
-import { BUILTIN_BUNDLE, bundleStoreFrom, installBundle } from '@mcs/schema-registry';
+import {
+  BUILTIN_BUNDLE,
+  bundleStoreFrom,
+  channelSlotKey,
+  installBundle,
+  installUntrustedBundle,
+} from '@mcs/schema-registry';
 import { MemoryStorageAdapter } from '@mcs/storage';
 import { describe, expect, it } from 'vitest';
 
@@ -19,6 +25,7 @@ describe('resolveProjectSchema (ADR-004, v0.5.0 #11, decision F14)', () => {
     });
     expect(result.modules.map((module) => module.manifest.id).sort()).toContain('general');
     expect(result.readOnly).toBe(false);
+    expect(result.bundleTrust).toBe('builtin');
     // The backfill is persisted, not just returned — a second read sees it too.
     expect(await getProjectSchemaLock(adapter, 'p1')).toEqual(result.schemaLock);
   });
@@ -68,8 +75,41 @@ describe('resolveProjectSchema (ADR-004, v0.5.0 #11, decision F14)', () => {
 
     expect(result.schemaLock).toEqual({ bundleVersion: '1.0.0', compatibilityProfile: 'v1.19.29' });
     expect(result.readOnly).toBe(false);
+    expect(result.bundleTrust).toBe('signed');
     const general = result.modules.find((module) => module.manifest.id === 'general');
     expect(general?.schema).toEqual({ title: 'v1' });
+  });
+
+  it('reports bundleTrust: untrusted for a project locked to a manually-imported community Bundle version (FR-UPD-09, v0.9.0 #17)', async () => {
+    const adapter = new MemoryStorageAdapter();
+    const store = bundleStoreFrom(adapter);
+    const keyPair = await generateTestKeyPair();
+    const { manifest, files } = await buildSignedBundle({
+      keyPair,
+      bundleId: 'community-1',
+      version: '1.5.0',
+      channel: 'beta',
+      manifestOverrides: { signature: '00'.repeat(64) },
+    });
+    expect(
+      (
+        await installUntrustedBundle(store, manifest, files, {
+          currentAppVersion: '0.1.0',
+          minFormatVersion: 1,
+          maxFormatVersion: 1,
+        })
+      ).ok,
+    ).toBe(true);
+    expect(await store.read(channelSlotKey('beta', 'active'))).not.toBeNull();
+    await saveProjectSchemaLock(adapter, 'p1', {
+      bundleVersion: '1.5.0',
+      compatibilityProfile: 'v1.19.29',
+    });
+
+    const result = await resolveProjectSchema(adapter, 'p1', [keyPair.publicKeyRaw]);
+
+    expect(result.bundleTrust).toBe('untrusted');
+    expect(result.readOnly).toBe(false);
   });
 
   it('state 3 — falls back to the active (built-in) bundle, writable, when the store is completely empty (ADR-004 point 6, v0.5.0 #12)', async () => {
@@ -86,6 +126,7 @@ describe('resolveProjectSchema (ADR-004, v0.5.0 #11, decision F14)', () => {
     // matching `resolveActiveBundle`'s own long-standing default behavior.
     expect(result.modules.map((module) => module.manifest.id).sort()).toContain('general');
     expect(result.readOnly).toBe(false);
+    expect(result.bundleTrust).toBe('builtin');
     // The lock itself is left untouched — falling back to serve the project
     // must not silently rewrite what it is actually locked to.
     expect(await getProjectSchemaLock(adapter, 'p1')).toEqual({
@@ -128,6 +169,7 @@ describe('resolveProjectSchema (ADR-004, v0.5.0 #11, decision F14)', () => {
     await store.write('stable/active', {
       manifest,
       files: new Map([['modules/general.json', new TextEncoder().encode('{"corrupted":true}')]]),
+      trust: 'signed',
     });
     await saveProjectSchemaLock(adapter, 'p1', {
       bundleVersion: '1.0.0',

@@ -7,6 +7,7 @@ import { createRegistry } from './registry.js';
 import {
   builtinAsStoredBundle,
   installBundle,
+  installUntrustedBundle,
   resolveActiveBundle,
   resolveBundleByVersion,
   rollbackBundle,
@@ -336,7 +337,7 @@ describe('rollbackBundle (FR-UPD-04)', () => {
     const keyPair = await generateTestKeyPair();
     const { manifest, files } = await buildSignedBundle({ keyPair, bundleId: 'only-previous' });
     // Populate `previous` directly, bypassing installBundle, so `active` stays empty.
-    await store.write(STABLE_PREVIOUS, { manifest, files });
+    await store.write(STABLE_PREVIOUS, { manifest, files, trust: 'signed' });
 
     const result = await rollbackBundle(store);
 
@@ -372,6 +373,7 @@ describe('resolveActiveBundle (FR-UPD-01, FR-UPD-04)', () => {
     await store.write(STABLE_ACTIVE, {
       manifest: v2,
       files: new Map([['modules/general.json', new TextEncoder().encode('{"corrupted":true}')]]),
+      trust: 'signed',
     });
 
     const resolved = await resolveActiveBundle(store, options);
@@ -387,12 +389,14 @@ describe('resolveActiveBundle (FR-UPD-01, FR-UPD-04)', () => {
     const shapeInvalid: StoredBundle = {
       manifest: {} as unknown as BundleManifest,
       files: new Map(),
+      trust: 'signed',
     };
     const { manifest: badlySigned } = await buildSignedBundle({ keyPair, bundleId: 'previous' });
     await store.write(STABLE_ACTIVE, shapeInvalid);
     await store.write(STABLE_PREVIOUS, {
       manifest: { ...badlySigned, signature: bytesToHex(new Uint8Array(64)) },
       files: new Map(),
+      trust: 'signed',
     });
 
     const resolved = await resolveActiveBundle(store, options);
@@ -483,6 +487,7 @@ describe('resolveBundleByVersion (ADR-004, v0.5.0 #11)', () => {
     await store.write(STABLE_ACTIVE, {
       manifest,
       files: new Map([['modules/general.json', new TextEncoder().encode('{"corrupted":true}')]]),
+      trust: 'signed',
     });
 
     const resolved = await resolveBundleByVersion(store, '9.9.9', options);
@@ -524,5 +529,139 @@ describe('builtinAsStoredBundle (v0.3.0 #14)', () => {
     const direct = builtinAsStoredBundle();
     expect(direct.manifest).toEqual(resolved.manifest);
     expect([...direct.files.keys()].sort()).toEqual([...resolved.files.keys()].sort());
+  });
+
+  it('is marked trust: builtin', () => {
+    expect(builtinAsStoredBundle().trust).toBe('builtin');
+  });
+});
+
+describe('installUntrustedBundle (FR-UPD-09, v0.9.0 #17)', () => {
+  it('installs a Beta-channel bundle with no valid signature at all, marked trust: untrusted', async () => {
+    const store = new MemoryBundleStore();
+    const keyPair = await generateTestKeyPair();
+    const { manifest, files } = await buildSignedBundle({
+      keyPair,
+      bundleId: 'community-1',
+      manifestOverrides: { channel: 'beta', signature: '00'.repeat(64) },
+    });
+
+    const result = await installUntrustedBundle(store, manifest, files, DEFAULT_OPTIONS);
+
+    expect(result).toEqual({ ok: true });
+    const stored = await store.read(BETA_ACTIVE);
+    expect(stored?.manifest.bundleId).toBe('community-1');
+    expect(stored?.trust).toBe('untrusted');
+  });
+
+  it('hard-rejects a Stable-channel manifest, regardless of what it claims about itself, and never touches the Stable slot', async () => {
+    const store = new MemoryBundleStore();
+    const keyPair = await generateTestKeyPair();
+    const { manifest, files } = await buildSignedBundle({
+      keyPair,
+      bundleId: 'community-stable',
+      manifestOverrides: { channel: 'stable', signature: '00'.repeat(64) },
+    });
+
+    const result = await installUntrustedBundle(store, manifest, files, DEFAULT_OPTIONS);
+
+    expect(result).toEqual({ ok: false, code: 'BUNDLE_UNTRUSTED_STABLE_CHANNEL', path: 'channel' });
+    expect(await store.read(STABLE_ACTIVE)).toBeNull();
+  });
+
+  it('still enforces hash self-consistency — "untrusted" only ever waives the signature step', async () => {
+    const store = new MemoryBundleStore();
+    const keyPair = await generateTestKeyPair();
+    const { manifest, files } = await buildSignedBundle({
+      keyPair,
+      bundleId: 'community-2',
+      manifestOverrides: { channel: 'beta', signature: '00'.repeat(64) },
+    });
+    files.set('modules/general.json', new TextEncoder().encode('{"tampered":true}'));
+
+    const result = await installUntrustedBundle(store, manifest, files, DEFAULT_OPTIONS);
+
+    expect(result).toEqual({
+      ok: false,
+      code: 'BUNDLE_HASH_MISMATCH',
+      path: 'modules/general.json',
+    });
+  });
+
+  it('still enforces the format version range', async () => {
+    const store = new MemoryBundleStore();
+    const keyPair = await generateTestKeyPair();
+    const { manifest, files } = await buildSignedBundle({
+      keyPair,
+      bundleId: 'community-3',
+      manifestOverrides: { channel: 'beta', signature: '00'.repeat(64), formatVersion: 99 },
+    });
+
+    const result = await installUntrustedBundle(store, manifest, files, DEFAULT_OPTIONS);
+
+    expect(result).toEqual({ ok: false, code: 'BUNDLE_FORMAT_UNSUPPORTED', path: 'formatVersion' });
+  });
+
+  it('an installed untrusted bundle resolves normally afterward — re-verification never re-demands a signature it was never given (regression: resolveActiveBundle used to always call the full verifyBundle, which would silently evict every untrusted install back to the built-in bundle on the very next read)', async () => {
+    const store = new MemoryBundleStore();
+    const keyPair = await generateTestKeyPair();
+    const { manifest, files } = await buildSignedBundle({
+      keyPair,
+      bundleId: 'community-4',
+      manifestOverrides: { channel: 'beta', signature: '00'.repeat(64) },
+    });
+    await installUntrustedBundle(store, manifest, files, DEFAULT_OPTIONS);
+
+    const resolved = await resolveActiveBundle(
+      store,
+      { ...DEFAULT_OPTIONS, trustedPublicKeys: [keyPair.publicKeyRaw] },
+      'beta',
+    );
+
+    expect(resolved.manifest.bundleId).toBe('community-4');
+    expect(resolved.trust).toBe('untrusted');
+  });
+
+  it('resolveBundleByVersion also resolves an untrusted install by its locked version', async () => {
+    const store = new MemoryBundleStore();
+    const keyPair = await generateTestKeyPair();
+    const { manifest, files } = await buildSignedBundle({
+      keyPair,
+      bundleId: 'community-5',
+      manifestOverrides: { channel: 'beta', signature: '00'.repeat(64), version: '5.0.0' },
+    });
+    await installUntrustedBundle(store, manifest, files, DEFAULT_OPTIONS);
+
+    const resolved = await resolveBundleByVersion(store, '5.0.0', {
+      ...DEFAULT_OPTIONS,
+      trustedPublicKeys: [keyPair.publicKeyRaw],
+    });
+
+    expect(resolved?.manifest.bundleId).toBe('community-5');
+    expect(resolved?.trust).toBe('untrusted');
+  });
+
+  it('an untrusted bundle whose hash no longer checks out (on-disk corruption) is not resolved, same as a signed one', async () => {
+    const store = new MemoryBundleStore();
+    const keyPair = await generateTestKeyPair();
+    const { manifest, files } = await buildSignedBundle({
+      keyPair,
+      bundleId: 'community-6',
+      manifestOverrides: { channel: 'beta', signature: '00'.repeat(64) },
+    });
+    await installUntrustedBundle(store, manifest, files, DEFAULT_OPTIONS);
+    await store.write(BETA_ACTIVE, {
+      manifest,
+      files: new Map([['modules/general.json', new TextEncoder().encode('{"corrupted":true}')]]),
+      trust: 'untrusted',
+    });
+
+    const resolved = await resolveActiveBundle(
+      store,
+      { ...DEFAULT_OPTIONS, trustedPublicKeys: [keyPair.publicKeyRaw] },
+      'beta',
+    );
+
+    expect(resolved.manifest.bundleId).toBe(BUILTIN_BUNDLE.manifest.bundleId);
   });
 });

@@ -10,6 +10,7 @@ import {
   sha256Hex,
   SubtleCryptoEd25519Verifier,
   verifyBundle,
+  verifyBundleWithoutSignature,
   type Ed25519Verifier,
 } from './verify.js';
 
@@ -331,6 +332,68 @@ describe('verifyBundle (FR-UPD-03, NFR-SEC-04)', () => {
       verifier: alwaysFalse,
     });
     expect(failing).toEqual({ ok: false, code: 'BUNDLE_SIGNATURE_INVALID', path: 'signature' });
+  });
+});
+
+describe('verifyBundleWithoutSignature (FR-UPD-09, v0.9.0 #17)', () => {
+  it('accepts a well-formed, correctly-hashed bundle with no valid signature at all', async () => {
+    const keyPair = await generateTestKeyPair();
+    const { manifest, files } = await buildSignedBundle({
+      keyPair,
+      manifestOverrides: { signature: '00'.repeat(64) },
+    });
+
+    const result = await verifyBundleWithoutSignature(manifest, files, DEFAULT_OPTIONS);
+
+    expect(result).toEqual({ ok: true, manifest });
+  });
+
+  it('still rejects a bundle with an invalid shape, before any hash or signature concern', async () => {
+    const result = await verifyBundleWithoutSignature(
+      { not: 'a manifest' },
+      new Map(),
+      DEFAULT_OPTIONS,
+    );
+
+    expect(result.ok).toBe(false);
+  });
+
+  it('still rejects a formatVersion outside the supported range', async () => {
+    const keyPair = await generateTestKeyPair();
+    const { manifest, files } = await buildSignedBundle({
+      keyPair,
+      manifestOverrides: { formatVersion: 99 },
+    });
+
+    const result = await verifyBundleWithoutSignature(manifest, files, DEFAULT_OPTIONS);
+
+    expect(result).toEqual({ ok: false, code: 'BUNDLE_FORMAT_UNSUPPORTED', path: 'formatVersion' });
+  });
+
+  it('still rejects a requiresApp higher than the current app version', async () => {
+    const keyPair = await generateTestKeyPair();
+    const { manifest, files } = await buildSignedBundle({
+      keyPair,
+      manifestOverrides: { requiresApp: '99.0.0' },
+    });
+
+    const result = await verifyBundleWithoutSignature(manifest, files, DEFAULT_OPTIONS);
+
+    expect(result).toEqual({ ok: false, code: 'BUNDLE_APP_TOO_OLD', path: 'requiresApp' });
+  });
+
+  it('still rejects a tampered file with BUNDLE_HASH_MISMATCH naming the offending path', async () => {
+    const keyPair = await generateTestKeyPair();
+    const { manifest, files } = await buildSignedBundle({ keyPair });
+    files.set('modules/general.json', new TextEncoder().encode('{"tampered":true}'));
+
+    const result = await verifyBundleWithoutSignature(manifest, files, DEFAULT_OPTIONS);
+
+    expect(result).toEqual({
+      ok: false,
+      code: 'BUNDLE_HASH_MISMATCH',
+      path: 'modules/general.json',
+    });
   });
 });
 

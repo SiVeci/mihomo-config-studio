@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 import { GENERAL_MODULE } from '@mcs/schema-builtin';
-import { BUILTIN_BUNDLE, bundleStoreFrom, installBundle } from '@mcs/schema-registry';
+import {
+  BUILTIN_BUNDLE,
+  bundleStoreFrom,
+  installBundle,
+  installUntrustedBundle,
+} from '@mcs/schema-registry';
 import { MemoryStorageAdapter } from '@mcs/storage';
 import type { StorageAdapter, StorageQuota } from '@mcs/storage';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -33,6 +38,7 @@ import {
   listProjects,
   saveProjectConfigText,
   saveProjectManifest,
+  saveProjectSchemaLock,
 } from './model.js';
 import type { ProjectRecord } from './model.js';
 import { ProjectPage } from './ProjectPage.js';
@@ -2060,6 +2066,51 @@ describe('ProjectPage / schema-lock (ADR-004, v0.5.0 #11, decision F14/F15)', ()
       value: 'hunter2',
       moduleId: 'general',
     });
+  });
+
+  it('shows a persistent untrusted-Bundle warning for a project locked to a manually-imported community Bundle version, and not for a normal project (FR-UPD-09, v0.9.0 #17)', async () => {
+    const adapter = new MemoryStorageAdapter();
+    const store = bundleStoreFrom(adapter);
+    const keyPair = await generateTestKeyPair();
+    const trustedPublicKeys = [keyPair.publicKeyRaw];
+    const { manifest, files } = await buildSignedBundle({
+      keyPair,
+      bundleId: 'community-1',
+      version: '1.5.0',
+      channel: 'beta',
+      manifestOverrides: { signature: '00'.repeat(64) },
+    });
+    expect(
+      (
+        await installUntrustedBundle(store, manifest, files, {
+          currentAppVersion: '0.1.0',
+          minFormatVersion: 1,
+          maxFormatVersion: 1,
+        })
+      ).ok,
+    ).toBe(true);
+
+    const client = new WorkerClient(new RealWorker());
+    render(<ProjectPage client={client} adapter={adapter} trustedPublicKeys={trustedPublicKeys} />);
+    await screen.findByText(t('project.emptyState'));
+    fireEvent.click(screen.getByRole('button', { name: t('project.newButton') }));
+    await screen.findByLabelText(t('project.nameLabel'));
+    expect(screen.queryByText(t('bundle.trust.untrustedWarning'))).toBeNull();
+
+    const [record] = await listProjects(adapter);
+    if (!record) throw new Error('project was not persisted');
+    await saveProjectSchemaLock(adapter, record.id, {
+      bundleVersion: '1.5.0',
+      compatibilityProfile: 'v1.19.29',
+    });
+
+    // Simulate reopening the project so the effect that resolves its schema
+    // re-runs against the lock just written directly (mirrors the existing
+    // "installing a newer Bundle..." test's unmount/remount technique above).
+    fireEvent.click(screen.getByRole('button', { name: t('statusBar.backButton') }));
+    fireEvent.click(await screen.findByRole('button', { name: t('project.untitledName') }));
+
+    expect(await screen.findByText(t('bundle.trust.untrustedWarning'))).toBeDefined();
   });
 });
 

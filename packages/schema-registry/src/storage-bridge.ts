@@ -1,10 +1,21 @@
 import type { StorageAdapter } from '@mcs/storage';
 
 import type { BundleManifest } from './manifest.js';
-import type { BundleStore } from './store.js';
+import type { BundleStore, BundleTrust } from './store.js';
 
 const MANIFEST_KEY_SUFFIX = '/manifest.json';
+const TRUST_KEY_SUFFIX = '/trust.json';
 const FILE_KEY_PREFIX = '/files/';
+
+/**
+ * Anything written before FR-UPD-09 (v0.9.0 #17) added this field has no
+ * `trust.json` key at all — always `'signed'`, since every install path that
+ * existed before this slice ran the full signature check (`installBundle`
+ * was the only writer). Never `'untrusted'`: that trust level cannot exist
+ * without this slice's `installUntrustedBundle`, which always writes its own
+ * `trust.json` alongside the manifest.
+ */
+const DEFAULT_TRUST_FOR_PRE_EXISTING_INSTALLS: BundleTrust = 'signed';
 
 /**
  * Adapts a generic `StorageAdapter` (`@mcs/storage`) into the `BundleStore`
@@ -21,7 +32,11 @@ export function bundleStoreFrom(adapter: StorageAdapter): BundleStore {
       if (!manifestBytes) return null;
       const manifest = JSON.parse(new TextDecoder().decode(manifestBytes)) as BundleManifest;
       const files = await readFiles(adapter, key);
-      return { manifest, files };
+      const trustBytes = await adapter.get(trustKey(key));
+      const trust = trustBytes
+        ? (JSON.parse(new TextDecoder().decode(trustBytes)) as BundleTrust)
+        : DEFAULT_TRUST_FOR_PRE_EXISTING_INSTALLS;
+      return { manifest, files, trust };
     },
 
     async write(key, bundle) {
@@ -29,6 +44,7 @@ export function bundleStoreFrom(adapter: StorageAdapter): BundleStore {
       // absent from the new one must not linger as a stale leftover.
       await clearFiles(adapter, key);
       await adapter.put(manifestKey(key), encodeManifest(bundle.manifest));
+      await adapter.put(trustKey(key), new TextEncoder().encode(JSON.stringify(bundle.trust)));
       for (const [path, bytes] of bundle.files) {
         await adapter.put(fileKey(key, path), bytes);
       }
@@ -47,6 +63,7 @@ export function bundleStoreFrom(adapter: StorageAdapter): BundleStore {
 
     async remove(key) {
       await adapter.delete(manifestKey(key));
+      await adapter.delete(trustKey(key));
       await clearFiles(adapter, key);
     },
   };
@@ -70,6 +87,10 @@ async function clearFiles(adapter: StorageAdapter, key: string): Promise<void> {
 
 function manifestKey(key: string): string {
   return `${key}${MANIFEST_KEY_SUFFIX}`;
+}
+
+function trustKey(key: string): string {
+  return `${key}${TRUST_KEY_SUFFIX}`;
 }
 
 function filePrefix(key: string): string {

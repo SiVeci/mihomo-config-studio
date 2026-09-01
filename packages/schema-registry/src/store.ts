@@ -1,13 +1,31 @@
 import { BUILTIN_BUNDLE } from './builtin.js';
 import { channelSlotKey, DEFAULT_BUNDLE_CHANNEL } from './channel.js';
 import type { BundleChannel, BundleManifest } from './manifest.js';
-import { verifyBundle, type BundleVerifyFailure, type VerifyBundleOptions } from './verify.js';
+import {
+  verifyBundle,
+  verifyBundleWithoutSignature,
+  type BundleVerifyErrorCode,
+  type VerifyBundleOptions,
+  type VerifyBundleWithoutSignatureOptions,
+} from './verify.js';
 
 const ALL_CHANNELS: readonly BundleChannel[] = ['stable', 'beta'];
+
+/**
+ * FR-UPD-09 (v0.9.0 #17): whether this installation's signature was ever
+ * checked against a known trust anchor at all. `'builtin'` is the bundle
+ * compiled into the app (never written through `installBundle`/
+ * `installUntrustedBundle`, so it never occupies a store slot in the first
+ * place); `'signed'` passed the full `verifyBundle` pipeline, signature
+ * included; `'untrusted'` only ever comes from `installUntrustedBundle` —
+ * every other check still ran, but nobody vouched for *who* produced it.
+ */
+export type BundleTrust = 'builtin' | 'signed' | 'untrusted';
 
 export interface StoredBundle {
   readonly manifest: BundleManifest;
   readonly files: ReadonlyMap<string, Uint8Array>;
+  readonly trust: BundleTrust;
 }
 
 /**
@@ -25,24 +43,58 @@ export interface BundleStore {
   remove(key: string): Promise<void>;
 }
 
-export type BundleInstallResult = { readonly ok: true } | BundleVerifyFailure;
+export type BundleInstallErrorCode = BundleVerifyErrorCode | 'BUNDLE_UNTRUSTED_STABLE_CHANNEL';
+
+/** Never carries a message, and never the hash/signature/key values themselves (NFR-SEC-03). */
+export interface BundleInstallFailure {
+  readonly ok: false;
+  readonly code: BundleInstallErrorCode;
+  readonly path: string;
+}
+
+export type BundleInstallResult = { readonly ok: true } | BundleInstallFailure;
+
+/**
+ * Shared verify-then-switch mechanics for both `installBundle` and
+ * `installUntrustedBundle`: never write-then-verify — the manifest is
+ * already-verified by the time this runs, so a failed verification never
+ * reaches here and `active`/`previous` stay exactly as they were. On
+ * success, the old `active` becomes the new `previous`, discarding whatever
+ * `previous` held before — the store only ever holds two slots per channel,
+ * so a third generation is dropped automatically rather than needing an
+ * explicit prune step.
+ *
+ * The slot-pair written is `manifest.channel`, never a caller-supplied value
+ * (FR-UPD-02, v0.5.0 #2): the manifest decides which channel it belongs to,
+ * not whoever called this — otherwise a Beta-channelled bundle could be
+ * installed into the Stable slot-pair simply because the caller said so,
+ * defeating the whole point of separate channels.
+ */
+async function writeVerifiedBundle(
+  store: BundleStore,
+  manifest: BundleManifest,
+  files: ReadonlyMap<string, Uint8Array>,
+  trust: Exclude<BundleTrust, 'builtin'>,
+): Promise<BundleInstallResult> {
+  const activeSlot = channelSlotKey(manifest.channel, 'active');
+  const previousSlot = channelSlotKey(manifest.channel, 'previous');
+
+  const oldActive = await store.read(activeSlot);
+  if (oldActive) {
+    await store.write(previousSlot, oldActive);
+  }
+  await store.write(activeSlot, { manifest, files, trust });
+  return { ok: true };
+}
 
 /**
  * Verify-then-switch, never write-then-verify: `verifyBundle` runs entirely
  * against the in-memory candidate before the store is touched, so a failed
  * install leaves `active` (and `previous`) exactly as they were — this is
- * what "staging" means here, not a literal third slot. On success, the old
- * `active` becomes the new `previous`, discarding whatever `previous` held
- * before — the store only ever holds two slots per channel, so a third
- * generation is dropped automatically rather than needing an explicit prune
- * step.
- *
- * The slot-pair written is `result.manifest.channel`, never a
- * caller-supplied value (FR-UPD-02, v0.5.0 #2): the manifest decides which
- * channel it belongs to, not whoever called `installBundle` — otherwise a
- * Beta-channelled bundle could be installed into the Stable slot-pair simply
- * because the caller said so, defeating the whole point of separate
- * channels.
+ * what "staging" means here, not a literal third slot. Always persists with
+ * `trust: 'signed'` — this is the only install path that ever ran the real
+ * signature-against-trust-anchor check (see `installUntrustedBundle` for the
+ * deliberately-weaker FR-UPD-09 path).
  */
 export async function installBundle(
   store: BundleStore,
@@ -54,16 +106,38 @@ export async function installBundle(
   if (!result.ok) {
     return result;
   }
+  return writeVerifiedBundle(store, result.manifest, files, 'signed');
+}
 
-  const activeSlot = channelSlotKey(result.manifest.channel, 'active');
-  const previousSlot = channelSlotKey(result.manifest.channel, 'previous');
-
-  const oldActive = await store.read(activeSlot);
-  if (oldActive) {
-    await store.write(previousSlot, oldActive);
+/**
+ * FR-UPD-09 (v0.9.0 #17): installs a manually-imported community Bundle that
+ * has passed every check `installBundle` runs *except* the signature — shape,
+ * format version range, app-version compatibility, and per-file SHA-256 all
+ * still apply unchanged (`verifyBundleWithoutSignature`). "Untrusted" here
+ * names exactly the one thing that was skipped (nobody vouched for who
+ * signed this), not a general safety downgrade.
+ *
+ * Hard-rejects the Stable channel regardless of what the manifest itself
+ * claims (`BUNDLE_UNTRUSTED_STABLE_CHANNEL`): Stable is the one channel
+ * PRD §13.5's release-blocker gate holds to the full kernel test matrix, and
+ * a community package cannot buy its way in just by setting `channel:
+ * "stable"` in its own manifest. This is a second, independent line from
+ * #3's own Stable release gate — either one alone would still stop this.
+ */
+export async function installUntrustedBundle(
+  store: BundleStore,
+  manifestValue: unknown,
+  files: ReadonlyMap<string, Uint8Array>,
+  options: VerifyBundleWithoutSignatureOptions,
+): Promise<BundleInstallResult> {
+  const result = await verifyBundleWithoutSignature(manifestValue, files, options);
+  if (!result.ok) {
+    return result;
   }
-  await store.write(activeSlot, { manifest: result.manifest, files });
-  return { ok: true };
+  if (result.manifest.channel === 'stable') {
+    return { ok: false, code: 'BUNDLE_UNTRUSTED_STABLE_CHANNEL', path: 'channel' };
+  }
+  return writeVerifiedBundle(store, result.manifest, files, 'untrusted');
 }
 
 export type BundleRollbackResult =
@@ -98,6 +172,27 @@ export async function rollbackBundle(
 }
 
 /**
+ * Re-verifies a slot's stored candidate to the same standard it was
+ * originally installed under — never more. An `untrusted` install
+ * (`installUntrustedBundle`, FR-UPD-09) never had a signature any trust
+ * anchor produced in the first place, so re-demanding one on every read
+ * would make it fail "re-verification" unconditionally and silently evict
+ * itself to the built-in bundle the moment it is read back, defeating the
+ * entire feature. `signed` still gets the full signature check every time,
+ * unchanged from before this field existed.
+ */
+async function reverifyStoredCandidate(
+  candidate: StoredBundle,
+  options: VerifyBundleOptions,
+): Promise<boolean> {
+  const result =
+    candidate.trust === 'untrusted'
+      ? await verifyBundleWithoutSignature(candidate.manifest, candidate.files, options)
+      : await verifyBundle(candidate.manifest, candidate.files, options);
+  return result.ok;
+}
+
+/**
  * Resolves the bundle that should actually be used for one channel
  * (defaults to Stable, FR-UPD-02): that channel's `active`, falling back to
  * its `previous`, falling back to the built-in bundle if both slots are
@@ -115,8 +210,7 @@ export async function resolveActiveBundle(
   for (const slot of [channelSlotKey(channel, 'active'), channelSlotKey(channel, 'previous')]) {
     const candidate = await store.read(slot);
     if (!candidate) continue;
-    const result = await verifyBundle(candidate.manifest, candidate.files, options);
-    if (result.ok) return candidate;
+    if (await reverifyStoredCandidate(candidate, options)) return candidate;
   }
   return builtinAsStoredBundle();
 }
@@ -146,8 +240,7 @@ export async function resolveBundleByVersion(
     for (const slot of [channelSlotKey(channel, 'active'), channelSlotKey(channel, 'previous')]) {
       const candidate = await store.read(slot);
       if (!candidate || candidate.manifest.version !== version) continue;
-      const result = await verifyBundle(candidate.manifest, candidate.files, options);
-      if (result.ok) return candidate;
+      if (await reverifyStoredCandidate(candidate, options)) return candidate;
     }
   }
   return null;
@@ -167,5 +260,5 @@ export function builtinAsStoredBundle(): StoredBundle {
   for (const [path, module] of Object.entries(BUILTIN_BUNDLE.modules)) {
     files.set(path, new TextEncoder().encode(JSON.stringify(module)));
   }
-  return { manifest: BUILTIN_BUNDLE.manifest, files };
+  return { manifest: BUILTIN_BUNDLE.manifest, files, trust: 'builtin' };
 }

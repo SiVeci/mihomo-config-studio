@@ -9,7 +9,7 @@ import {
   type RuleTypeSpec,
   type SchemaModule,
 } from '@mcs/schema-core';
-import { builtinAsStoredBundle, createRegistry } from '@mcs/schema-registry';
+import { builtinAsStoredBundle, createRegistry, type BundleTrust } from '@mcs/schema-registry';
 import { AutoSaver, DEFAULT_AUTOSAVE_INTERVAL_MS, SnapshotManager } from '@mcs/storage';
 import type { SnapshotDegradationSignal, StorageAdapter } from '@mcs/storage';
 import {
@@ -31,6 +31,7 @@ import { UpgradeDialog } from '../migration/UpgradeDialog.js';
 import type { UpgradeResult } from '../migration/UpgradeDialog.js';
 import { ReadOnlyGuard } from './ReadOnlyGuard.js';
 import { StoragePressureNotice } from './StoragePressureNotice.js';
+import { UntrustedBundleNotice } from './UntrustedBundleNotice.js';
 import { ModuleFormPage } from '../form/ModuleFormPage.js';
 import type { ModuleFormPageHandle } from '../form/ModuleFormPage.js';
 import { UnknownFieldTree } from '../form/UnknownFieldTree.js';
@@ -246,6 +247,10 @@ export function ProjectPage({
     createRegistry(builtinAsStoredBundle()).modules(),
   );
   const [schemaLock, setSchemaLock] = useState<McsProjSchemaLock | null>(null);
+  // FR-UPD-09 (v0.9.0 #17): 'builtin' is a safe default while nothing is
+  // selected yet or resolution hasn't landed — it never triggers the
+  // untrusted-Bundle notice below.
+  const [bundleTrust, setBundleTrust] = useState<BundleTrust>('builtin');
   // ADR-004 point 6 / PRD §9.5 point 3 (v0.5.0 #12): `true` when the locked
   // Bundle version could not be found locally but something else was — the
   // editing surface below is not mounted at all in that case (never merely
@@ -357,6 +362,7 @@ export function ProjectPage({
       setCanRedo(false);
       setGraphData(null);
       setReadOnly(false);
+      setBundleTrust('builtin');
       return;
     }
     let cancelled = false;
@@ -394,6 +400,7 @@ export function ProjectPage({
         setModules(resolvedSchema.modules);
         setSchemaLock(resolvedSchema.schemaLock);
         setReadOnly(resolvedSchema.readOnly);
+        setBundleTrust(resolvedSchema.bundleTrust);
         setQuarantine(resolvedQuarantine);
         setDisabledRules(resolvedDisabledRules);
         setToggleableRules(configureModulesResponse.toggleableRules);
@@ -706,6 +713,7 @@ export function ProjectPage({
     setModules(result.modules);
     setToggleableRules(configureModulesResponse.toggleableRules);
     setSchemaLock(result.schemaLock);
+    setBundleTrust(result.bundleTrust);
     // The just-upgraded lock names the bundle this project's own modules
     // came from — it is definitionally available locally, so read-only
     // protection (if it was active) no longer applies.
@@ -955,6 +963,7 @@ export function ProjectPage({
             signal={snapshotSignal}
             onExportClick={() => setShowExportDialog(true)}
           />
+          <UntrustedBundleNotice bundleTrust={bundleTrust} />
           {readOnly ? (
             <ReadOnlyGuard
               lockedVersion={schemaLock?.bundleVersion ?? ''}

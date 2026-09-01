@@ -1,16 +1,24 @@
-import { extname } from 'node:path';
-
 import { MIGRATION_OPERATION_KINDS } from '@mcs/migration';
-import type { BundleChannel } from '@mcs/schema-registry';
+
+import type { BundleChannel } from './manifest.js';
 
 /**
- * Pure content checks — no filesystem access here (`pack.ts` owns reading
- * the source tree). Allowlist rather than blocklist (FR-UPD-07): only
+ * Pure content checks — no filesystem access here (the CLI's own file-walking
+ * loop owns reading the source tree; this package only ever sees already-read
+ * path/content strings). Allowlist rather than blocklist (FR-UPD-07): only
  * `.json`/`.yaml`/`.md` may ship in a Bundle at all, and `.json` content is
  * additionally walked for values shaped like executable code. This is a
  * mechanical check of the invariant `schema-core/src/types.ts` documents —
  * "there is deliberately no place to put a function, an expression string,
  * or a module specifier" — not a general malware scanner.
+ *
+ * v0.9.0 #17: relocated here from `tools/schema-cli` so `apps/web`'s upcoming
+ * manual community-Bundle import flow (FR-UPD-09) can run the exact same
+ * checks the packaging CLI already runs, rather than a second hand-maintained
+ * copy. The file was already fs-free before the move — its only Node-specific
+ * dependency was `node:path`'s pure `extname`, replaced below with a local
+ * equivalent so this package (already consumed directly by `apps/web`) stays
+ * entirely free of Node built-ins.
  */
 export type StaticCheckIssueCode =
   | 'SCHEMA_CLI_DISALLOWED_EXTENSION'
@@ -22,6 +30,14 @@ export type StaticCheckIssueCode =
 export interface StaticCheckIssue {
   readonly code: StaticCheckIssueCode;
   readonly path: string;
+}
+
+/** Minimal pure port of `node:path`'s `extname`: last `.` in the final path segment, excluding a leading dotfile's own dot (`.gitignore` → `''`, matching Node). */
+function extname(path: string): string {
+  const base = path.slice(path.lastIndexOf('/') + 1);
+  const dotIndex = base.lastIndexOf('.');
+  if (dotIndex <= 0) return '';
+  return base.slice(dotIndex);
 }
 
 const ALLOWED_EXTENSIONS = new Set(['.json', '.yaml', '.md']);

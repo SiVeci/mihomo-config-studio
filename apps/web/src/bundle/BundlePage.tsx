@@ -20,6 +20,7 @@ import type { StorageAdapter } from '@mcs/storage';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { t, type TranslationKey } from '../i18n/index.js';
+import { ManualImport } from './ManualImport.js';
 import { BUNDLE_TRUST_ANCHORS } from './trust-anchors.js';
 import { resolveEd25519Verifier } from './verify-options.js';
 import './BundlePage.css';
@@ -258,7 +259,15 @@ export function BundlePage({
             </dd>
           </dl>
         )}
+        {/* FR-UPD-09 (v0.9.0 #17): persistent, not just shown at install time — ADR-002's own reasoning is that the Bundle decides what a form renders, so the user needs to always know whose knowledge that is. */}
+        {activeBundle?.trust === 'untrusted' && (
+          <p className="bundle-page__untrusted-warning" role="status">
+            {t('bundle.trust.untrustedWarning')}
+          </p>
+        )}
       </section>
+
+      <ManualImport store={store} onImported={() => void refresh(channel)} />
 
       <section className="bundle-page__section" aria-labelledby="bundle-install-heading">
         <h2 id="bundle-install-heading">{t('bundle.install.heading')}</h2>
