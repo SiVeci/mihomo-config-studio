@@ -1,3 +1,4 @@
+import { BUILTIN_MANIFEST } from '@mcs/schema-registry';
 import { expect, test } from '@playwright/test';
 
 import { loadBundleFixtureSet, serveBundleAt, type BundleFixtureSet } from './bundle-fixtures.js';
@@ -36,8 +37,12 @@ test.beforeEach(async ({ page }) => {
   // `activeBundle` starts `undefined` until the mount effect's
   // `resolveActiveBundle` resolves — the install button stays disabled
   // until then, and every scenario below needs a real baseline to compare
-  // against anyway (the built-in Bundle, version 0.5.0 — `builtin.ts`).
-  await expect(page.getByText('0.5.0')).toBeVisible();
+  // against anyway (the built-in Bundle — `BUILTIN_MANIFEST.version`, read
+  // live rather than hardcoded, since `builtin.ts` gets re-issued to a new
+  // version routinely; a hardcoded literal here silently went stale the
+  // moment v0.9.0 #13 bumped it and would have kept "passing" against the
+  // wrong assumption if this suite had been run at the time).
+  await expect(page.getByText(BUILTIN_MANIFEST.version)).toBeVisible();
 });
 
 test('installs a validly-signed newer Bundle (FR-UPD-01/02)', async ({ page }) => {
@@ -46,7 +51,7 @@ test('installs a validly-signed newer Bundle (FR-UPD-01/02)', async ({ page }) =
   await page.getByRole('button', { name: '检查并安装' }).click();
 
   await expect(page.getByText('安装成功，已切换到新版本')).toBeVisible();
-  await expect(page.getByText('0.6.0')).toBeVisible();
+  await expect(page.getByText(fixtures.install.manifest.version)).toBeVisible();
 });
 
 test('rejects a Bundle signed by an untrusted key (签名失败)', async ({ page }) => {
@@ -56,7 +61,7 @@ test('rejects a Bundle signed by an untrusted key (签名失败)', async ({ page
 
   await expect(page.getByText('签名校验失败，Bundle 可能不是受信任来源')).toBeVisible();
   // NFR-REL-03: a failed install must never touch the active Bundle.
-  await expect(page.getByText('0.5.0')).toBeVisible();
+  await expect(page.getByText(BUILTIN_MANIFEST.version)).toBeVisible();
 });
 
 test('rejects a Bundle whose requiresApp exceeds the current app version (应用版本不足)', async ({
@@ -67,7 +72,7 @@ test('rejects a Bundle whose requiresApp exceeds the current app version (应用
   await page.getByRole('button', { name: '检查并安装' }).click();
 
   await expect(page.getByText('当前应用版本过低，无法安装该 Bundle')).toBeVisible();
-  await expect(page.getByText('0.5.0')).toBeVisible();
+  await expect(page.getByText(BUILTIN_MANIFEST.version)).toBeVisible();
 });
 
 test('rolls back to the previous version after two installs (回滚)', async ({ page }) => {
@@ -76,16 +81,16 @@ test('rolls back to the previous version after two installs (回滚)', async ({ 
 
   await page.getByRole('button', { name: '检查并安装' }).click();
   await expect(page.getByText('安装成功，已切换到新版本')).toBeVisible();
-  await expect(page.getByText('0.6.0')).toBeVisible();
+  await expect(page.getByText(fixtures.install.manifest.version)).toBeVisible();
 
   route.setBundle(fixtures.rollbackNext);
   await page.getByRole('button', { name: '检查并安装' }).click();
-  await expect(page.getByText('0.7.0')).toBeVisible();
+  await expect(page.getByText(fixtures.rollbackNext.manifest.version)).toBeVisible();
 
   await page.getByRole('button', { name: '回滚到上一版本' }).click();
 
   await expect(page.getByText('已回滚到上一版本')).toBeVisible();
-  await expect(page.getByText('0.6.0')).toBeVisible();
+  await expect(page.getByText(fixtures.install.manifest.version)).toBeVisible();
 });
 
 test('an existing project stays locked to its own Bundle version after a newer one is installed elsewhere (ADR-004, 项目锁定)', async ({
@@ -104,7 +109,7 @@ test('an existing project stays locked to its own Bundle version after a newer o
   const issuesTextBefore = await issuesPanel.innerText();
 
   await page.goto('/#/bundle');
-  await expect(page.getByText('0.5.0')).toBeVisible();
+  await expect(page.getByText(BUILTIN_MANIFEST.version)).toBeVisible();
   await serveBundleAt(page, fixtures.install);
   await page.getByRole('button', { name: '检查并安装' }).click();
   await expect(page.getByText('安装成功，已切换到新版本')).toBeVisible();

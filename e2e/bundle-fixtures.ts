@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import {
+  BUILTIN_MANIFEST,
   bytesToHex,
   canonicalManifestJson,
   sha256Hex,
@@ -96,26 +97,47 @@ async function signTestBundle(options: SignTestBundleOptions): Promise<Serialize
   };
 }
 
+/**
+ * Every fixture below must outrank the *real* built-in bundle's version, or
+ * `planUpdate()` rejects it as `NOT_NEWER` before `handleCheckAndInstall`
+ * ever calls `applyUpdate`/`installBundle` — the signature/app-version
+ * rejections this file tests would never even be reached. Deriving these
+ * from the real `BUILTIN_MANIFEST.version` (rather than hardcoding a
+ * literal like `'0.6.0'`) is what keeps this file working across the next
+ * bootstrap re-issue: `packages/schema-registry/src/builtin.ts`'s own doc
+ * comment already documents this as a routinely-repeated event (~10 prior
+ * instances as of v0.9.0 #17's own re-issue), and a hardcoded literal here
+ * silently stops exercising the real rejection paths the moment the
+ * built-in version catches up to it (confirmed: this exact fixture set is
+ * what regressed when #13 bumped the built-in manifest from 0.5.0 to 0.9.0).
+ */
+function nextMinorVersion(base: string, bump: number): string {
+  const [major, minor] = base.split('.').map(Number);
+  return `${major}.${(minor ?? 0) + bump}.0`;
+}
+
 export interface BundleFixtureSet {
   readonly trustedPublicKeyHex: string;
-  /** v0.6.0, trusted signer — the plain "install this" candidate (scenario 安装, and the first of two installs in 回滚). */
+  /** One minor version above the real built-in — the plain "install this" candidate (scenario 安装, and the first of two installs in 回滚). */
   readonly install: SerializedBundle;
-  /** v0.7.0, trusted signer, newer than `install` — the second install in 回滚, so rolling back has `install` to land on. */
+  /** Two minor versions above the real built-in, newer than `install` — the second install in 回滚, so rolling back has `install` to land on. */
   readonly rollbackNext: SerializedBundle;
-  /** v0.6.0, signed by a key never added to the trust anchor override — real `BUNDLE_SIGNATURE_INVALID` (scenario 签名失败). */
+  /** One minor version above the real built-in, signed by a key never added to the trust anchor override — real `BUNDLE_SIGNATURE_INVALID` (scenario 签名失败). */
   readonly wrongSignature: SerializedBundle;
-  /** v0.6.0, trusted signer, `requiresApp` far above `CURRENT_APP_VERSION` — real `BUNDLE_APP_TOO_OLD` (scenario 应用版本不足). */
+  /** One minor version above the real built-in, trusted signer, `requiresApp` far above `CURRENT_APP_VERSION` — real `BUNDLE_APP_TOO_OLD` (scenario 应用版本不足). */
   readonly appTooOld: SerializedBundle;
 }
 
 export async function generateBundleFixtureSet(): Promise<BundleFixtureSet> {
   const trusted = await generateTestKeyPair();
   const untrusted = await generateTestKeyPair();
+  const installVersion = nextMinorVersion(BUILTIN_MANIFEST.version, 1);
+  const rollbackNextVersion = nextMinorVersion(BUILTIN_MANIFEST.version, 2);
   const [install, rollbackNext, wrongSignature, appTooOld] = await Promise.all([
-    signTestBundle({ keyPair: trusted, version: '0.6.0' }),
-    signTestBundle({ keyPair: trusted, version: '0.7.0' }),
-    signTestBundle({ keyPair: untrusted, version: '0.6.0' }),
-    signTestBundle({ keyPair: trusted, version: '0.6.0', requiresApp: '99.0.0' }),
+    signTestBundle({ keyPair: trusted, version: installVersion }),
+    signTestBundle({ keyPair: trusted, version: rollbackNextVersion }),
+    signTestBundle({ keyPair: untrusted, version: installVersion }),
+    signTestBundle({ keyPair: trusted, version: installVersion, requiresApp: '99.0.0' }),
   ]);
   return {
     trustedPublicKeyHex: trusted.publicKeyHex,
