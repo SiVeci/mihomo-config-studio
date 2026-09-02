@@ -52,7 +52,17 @@ v0.6.0）已收口（Partial）**：产品 Android 壳、PWA 离线、生命周�
 ——发布工作流本身已就绪，真实推送与密钥配置留给用户完成。如实记录不宣告，见
 [需求追踪表](docs/requirements-traceability.md)、
 [版本执行计划](docs/releases/plans/v0.6.0.md)与
-[真机验证记录](docs/releases/plans/v0.6.0-android-evidence.md)。尚未发布可用版本。
+[真机验证记录](docs/releases/plans/v0.6.0-android-evidence.md)。**M6（发布加固与
+P1 功能收尾，v0.9.0）已收口（Partial）**：CI 首次真实推送并全绿、内核测试矩阵扩到
+模块示例与迁移结果并加 Beta 轨、严格 CSP、日志脱敏、Web/更新 E2E 线、性能预算 CI
+阻断、WCAG 2.2 AA 走查、敏感字段遮罩全量走查、项目标签搜索、可关闭警告规则、静态
+规则解释器、手动导入社区 Bundle（未受信任持续警告）、`schema-cli preview`、PRD
+§13.5 五条发布阻断项的 CI 映射均已交付；九条退出条件 4 项 Done，5 项 Partial——其中
+四项（内核 Beta 轨/模块示例、E2E 三线、性能阻断、§13.5 映射）同出一个已知代价
+（决策 H3：Android 线不进 CI，`origin/main` 自身也只被真实推送过一次，多数验证仍是
+本机结构性证据），第五项（公开 Beta 发布）真正卡在用户尚未完成的 GitHub 网页侧
+配置。如实记录不宣告，见[需求追踪表](docs/requirements-traceability.md)与
+[版本执行计划](docs/releases/plans/v0.9.0.md)。**尚未发布可用版本。**
 
 ## 仓库结构
 
@@ -74,13 +84,13 @@ packages/
   storage/             Web/Android 存储抽象                  ✅ 端口 + 内存/IndexedDB + 自动保存/快照裁剪（v0.2.0 #4-5）
   project-format/      .mcsproj 导入导出                     ✅ ZIP 往返 + 导出接线（v0.2.0 #6、#15）
   ui/                  通用 UI、主题与无障碍组件               ✅ 设计令牌 + 文字色层 + 对比度断言（v0.2.0 #7-8）
-  logging/             日志/崩溃文本脱敏核心                  ✅ 零依赖纯函数 redact() + createLogger()（v0.9.0 #5，NFR-SEC-03，尚未接线）
+  logging/             日志/崩溃文本脱敏核心                  ✅ 零依赖纯函数 redact() + createLogger()，已在 apps/web/src、packages/** 全量接线（v0.9.0 #5/#6，NFR-SEC-03）
   test-fixtures/       官方样例、边界样例和 Golden Files      ✅ 含确定性大语料生成器（v0.2.0 #16）
 tools/
-  schema-cli/          Bundle 校验、签名、差异和发布           ✅ `pack`/`check`/`diff`/`sign` 子命令，迁移操作码封闭集合检查（v0.5.0 #13，ADR-025）
+  schema-cli/          Bundle 校验、签名、差异、发布和预览     ✅ `pack`/`check`/`diff`/`sign`/`preview` 子命令，迁移操作码封闭集合检查（v0.5.0 #13 ADR-025；`preview` 为 v0.9.0 #18，FR-SCHEMA-07）
   android-manifest-check/ Android 清单 VPN 权限断言（CI 强制） ✅ M0 已验证
   webcrypto-probe/     Ed25519 WebCrypto 可用性实测载体        ✅ M0 已验证（ADR-013）
-  upstream-watch/      上游文档 / 示例变更监控                 🚧 规划中，未建
+  upstream-watch/      上游文档 / 示例变更监控                 ⏸ 改期 1.x（决策 H4，FR-UPD-08）
   core-test-runner/    Mihomo 配置测试矩阵                     ✅ v1.19.29 下载+校验+内核测试 + CI job（v0.3.0 #21）
   egress-check/        packages/** 出网白名单守卫（CI 强制）   ✅ 路径级+形态级双层校验，四条原否定用例保留（v0.5.0 #3）
   csp-check/           apps/web 构建产物严格 CSP 守卫（CI 强制） ✅ 策略/unsafe-eval/unsafe-inline/外部脚本四层核对，_headers 与 index.html 一致性（v0.9.0 #4，ADR-032）

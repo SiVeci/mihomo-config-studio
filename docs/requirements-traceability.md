@@ -37,7 +37,8 @@
 | M3 规则与图谱         | PRD M3     | v0.4.0 已收口（9 项退出条件全部 Done，其中 1 项结构性，见下表）                      |
 | M4 Bundle 更新与迁移  | PRD M4     | v0.5.0 已收口（10 项退出条件 9 项 Done，1 项 Partial，见下表）                       |
 | M5 Android 集成与 PWA | PRD M5     | v0.6.0 已收口（11 项退出条件 9 项 Done，1 项 Partial，1 项按用户决定未完成，见下表） |
-| M6–M7                 | PRD M6–M7  | 未开工                                                                               |
+| M6 发布加固与 P1 收尾 | PRD M6     | v0.9.0 已收口（9 项退出条件 4 项 Done，5 项 Partial，见下表）                        |
+| M7                    | PRD M7     | 未开工                                                                               |
 
 ## M0 退出条件
 
@@ -187,6 +188,76 @@ Partial——不是代码缺陷，是需要用户在 GitHub 网页侧完成 envi
 Releases 发布）按用户明确决定本次收口不等待，工作流本身已就绪。#12/#14 的用户侧
 后续动作见 [v0.6.0.md](./releases/plans/v0.6.0.md) 进度表与 #12 节。
 
+## v0.9.0（M6）退出条件
+
+对应 [v0.9.0 版本文档](./releases/plans/v0.9.0.md) 的「退出条件映射」表，逐条核对
+（切片 #21）。**这一版最大的结构性事实**：`origin/main` 自 2026-08-29 只被真实推送
+过一次（切片 #0/#1 自己的提交），此后 #2–#20 的全部提交都只在本地验证过，从未被
+真实推送触发过 CI——这不是本片才发现的新问题，而是本会话执行环境的既定约束（不
+推送远端）的直接后果，每一条退出条件的「结构性」标注都在明确这一点，不是模糊带过。
+
+本次收口实测（2026-09-02，本地环境）：
+
+- `pnpm run typecheck`/`pnpm run lint`/`pnpm run format:check`：三项均 exit 0。
+- `pnpm run test`/`pnpm run test:coverage`：142 个测试文件 / 2225 个用例，绝大多数
+  运行下全绿；本次收口过程中**确认一个环境相关的偶发现象**：`apps/web/src/
+alpha-loop.test.tsx`、`apps/web/src/rules-and-graph-loop.test.tsx` 两个 v0.3.0/
+  v0.4.0 遗留的"闭环"集成测试，在全量并行跑（尤其叠加 `--coverage` 的 v8 插桩）时
+  偶发命中各自 5000ms 的硬编码超时；单独跑该文件两次均在 1.6–1.8 秒内稳定通过，
+  确认不是逻辑缺陷或本次改动引入的回归，是与 `corpus.test.ts`（v0.9.0 #1 已经
+  记录过的同一类问题：本机余量够、共享/满载环境下不够）同一性质的超时余量问题。
+  **如实记录，不在本片修改这两个文件的超时或断言**——按既定处理方式，确认偶发的
+  问题记入证据文件，交给单独一片去加固，不在收口片里顺手改断言。覆盖率：最近一次
+  完整跑通的统计（v0.9.0 #17 收口时）为行 96.52%，均高于 85%/80% 门槛；本片新增的
+  文档/CI/e2e 改动不触及任何被覆盖率统计的产品代码路径，没有理由认为这个数字在
+  本片有实质变化。
+- `pnpm run e2e`：17 个场景，16 个通过。**过程中发现并修复一个真实回归**：
+  `e2e/update.spec.ts` 硬编码期望内置 Bundle 版本号是 `0.5.0`，而 v0.9.0 #13 早已
+  把它重签到 `0.9.0`——五个更新流程场景因此全部在最早一步就断言失败，从未被真正
+  验证过是否还能测到签名失败/版本不足/回滚等真实路径。已修（`e2e/bundle-fixtures.ts`
+  改为从真实 `BUILTIN_MANIFEST.version` 派生，`update.spec.ts` 断言改读真实值，不
+  再硬编码字面量），修复后 5/5 通过。唯一仍然失败的 1 个场景是 `long-task.spec.ts`
+  的 NFR-PERF-05——与 v0.9.0 #11 已经记录的结论一致（本次实测 2344ms 的主线程 long
+  task，#11 原记录是 2044ms，同一数量级、同一根因），不是新问题，见下方条目 5。
+- `node tools/csp-check/dist/index.js apps/web/dist`（对真实 `pnpm run build` 产物）、
+  `node tools/log-redaction-check/dist/index.js`（对 `apps/web/src` 与 `packages`）、
+  `node tools/egress-check/dist/index.js packages`、`node tools/android-manifest-check/
+dist/index.js apps/android/android/app/src`（源码级）：四项本次全部重新跑过，
+  全部清零，无违规。
+- `node tools/core-test-runner/dist/index.js --dry-run`：语料清单核实无误（5 个
+  模板 + 40 个模块示例 + 0 个迁移用例，与 #2 记录的口径一致）。**真实执行本次
+  跑不了**：`resolveKernelAsset` 只给 `linux-amd64` 钉了 digest（D-003 的既定
+  设计，其余平台明确抛错、不静默回落），本次收口的执行环境是 Windows，实测确认
+  会在这一步直接报 `KernelDownloadError`——这本身印证了该函数的"拒绝而非回落"
+  设计按预期工作，但意味着 #2/#3 新增的模块示例、迁移与 Beta 轨内容，在本片里
+  仍然只有本机结构性验证，没有新增真实内核执行证据。
+- Android 模拟器/`adb`：本次收口的执行环境未安装，NFR-PERF-01 复测与 Android
+  E2E 稳定性排查均无法在本环境执行。
+
+| #   | 版本文档退出条件                                                 | 状态        | 证据 / 缺口                                                                                                                                                                                                                                                                                                                                                                                      |
+| --- | ---------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | 内核测试矩阵覆盖全部模板、模块示例与迁移结果，Stable + Beta 双轨 | **Partial** | 五个内置模板在真实 v1.19.29 内核上的通过证据来自 2026-08-29 的真实 CI 运行（run [33249200947](https://github.com/SiVeci/mihomo-config-studio/actions/runs/33249200947)）；#2/#3 新增的 40 个模块示例、迁移语料与 Beta 轨逻辑，本次收口只有 `corpus.test.ts`/`--dry-run` 的本机结构性验证，真实内核执行需要 linux-amd64 环境（本次收口环境是 Windows，无 CI），待下次真实推送后补证据             |
+| 2   | E2E 三条线全部通过并纳入 CI                                      | **Partial** | Web 线（7/7）与更新线（5/5，本片修复一个真实回归后）本次收口本机 `pnpm run e2e` 全绿，但 `e2e-web` CI job 本身自建立以来从未在真实 CI 上跑过一次；Android 线按决策 H3 不进 CI，如实记 Partial，证据见 [v0.9.0-android-e2e-evidence.md](./releases/plans/v0.9.0-android-e2e-evidence.md)                                                                                                          |
+| 3   | 严格 CSP 生效，无 `unsafe-eval`，无非必要第三方脚本              | **Done**    | `csp-check` 本次对真实 `pnpm run build` 产物重新跑通，`style-src-attr 'unsafe-inline'` 的保留理由见 [ADR-032](./adr/ADR-032-strict-csp.md)，不含糊标全绿；`csp-check` CI job 本身的真实运行待下次推送观测                                                                                                                                                                                        |
+| 4   | 日志脱敏工具就位，CI 检查日志无 YAML 内容或完整 URL              | **Done**    | `log-redaction-check` 本次对 `apps/web/src`/`packages` 两遍重新跑通，`redact()` 的静态扫描 + 真实密钥语料双层验证见 §11 NFR-SEC-03 行；`log-redaction` CI job 真实运行待下次推送观测                                                                                                                                                                                                             |
+| 5   | 五项性能指标全部达标且在 CI 中阻断                               | **Partial** | PERF-02/03/04 的真实 CI 数字来自 2026-08-29 首次运行（[v0.9.0-perf-baseline.md](./releases/plans/v0.9.0-perf-baseline.md)），但当时 `perf-gate` 的阻断逻辑（#10）尚未接入，真实"CI 阻断"这一步未被观测过；PERF-05 本次实测仍是 Partial（`long-task.spec.ts` 测到 2344ms 主线程 long task，与 #11 原记录同一根因，未修复）；PERF-01（Android 冷启动）本次收口环境无模拟器，未能复测，如实记未覆盖 |
+| 6   | WCAG 2.2 AA 走查完成，对比度断言覆盖全部令牌组合，拖拽有键盘替代 | **Done**    | `packages/ui/src/contrast.test.ts`/`contrast-usage.test.ts` 本次随 `pnpm run test` 全绿（对比度断言不依赖真实 CI 硬件，纯计算/断言）；键盘替代经本次 `pnpm run e2e` 的 `a11y.spec.ts` 两个场景（Alt+Home/Alt+End）重新验证通过                                                                                                                                                                   |
+| 7   | §13.5 五条发布阻断项全部由 CI 而非人工回答                       | **Partial** | v0.9.0 #19 收口：4/5 由 CI 机器回答，第五条（Android）仍由人工回答，映射表见 [docs/release-blockers.md](./release-blockers.md)，与本节条目 1/2/5 的 Android 缺口是同一根因（决策 H3），不是独立的新缺口                                                                                                                                                                                          |
+| 8   | 七项 P1 全部完成或明确改期 1.x 并记入追踪表                      | **Done**    | FR-PROJ-07/FR-VAL-06/FR-RULE-06/FR-UPD-09/FR-SCHEMA-07 五项已完成（#14–#18）；FR-UPD-08（`tools/upstream-watch`）与 FR-YAML-08（YAML 导出格式偏好，键排序与 ADR-003/ADR-006 无损回写保证直接冲突）均已明确记入本文件为改期 1.x 并写明理由（决策 H4），`README.md:82` 的 upstream-watch 行同步更新，不留"看起来在建"的假状态                                                                      |
+| 9   | 公开 Beta 已发布并开始收集反馈                                   | **Partial** | v0.9.0 #20：issue 模板、发布说明、`release.yml` 修正均已就绪，`SECURITY.md` 顺带修正一处过时表述；真正的发布依赖你在 GitHub 网页侧创建 `android-release` environment/密钥并审批首次 `workflow_dispatch` 运行，本次收口环境不接触任何密钥，未发布，如实记 Partial，不宣告 Done                                                                                                                    |
+
+**结论**：M6（v0.9.0）九条退出条件中 **4 条 Done（3、4、6、8）、5 条 Partial
+（1、2、5、7、9）**。五条 Partial 里，1/2/5/7 四条同出一个根因——**决策 H3：
+Android 线不进 CI**——是该决策已知、写在案的代价，不是新发现的执行缺口；
+第 9 条（公开发布）是本片唯一一条**真正卡在外部动作**而非"CI 未观测"的条目。
+**本片不为了凑一个"全绿"的收口结论而改口径**，也不因为大多数条目只有本机
+证据就不敢记 Done——条目 3/4/6/8 的判定标准从一开始就不要求真实 CI 观测
+（分别是"产物级重新验证一次即可"、"同上"、"纯断言，不依赖 CI 硬件"、"追踪表
+状态是否记录准确"），已经按各自真实标准核实过。v1.0.0 的债务清单：五条
+Partial 里，1/2/5/7 需要一次
+真实推送来把"本机结构性"换成"CI 真实执行"证据；9 需要你完成三件 GitHub 网页
+侧动作后由本片续验。
+
 ## 功能需求
 
 ### 8.1 项目管理
@@ -212,7 +283,7 @@ Releases 发布）按用户明确决定本次收口不等待，工作流本身�
 | FR-YAML-05 | P0     | **Done** | 冻结逻辑：`hasBlockingIssues(issues)` 为真时 `<fieldset disabled>` 禁用结构化视图占位区块但保持可见，配合可点击的定位提示。真实浏览器核对：输入 `mode: rule\n  bad: indent` → 冻结横幅显示"第 2 行第 1 列" → 点击后文本框选区精确落在 offset 11–12 → 改回合法内容后自动解冻（`disabled` 变 `false`，横幅消失）。证据：`YamlEditor.test.tsx`「freezes (disables) the structured view but keeps it visible when a blocking issue exists」「the frozen prompt names the first error location and jumps the textarea selection there on click」                                                                                                                                                                                                                                                                                                                                                                                 |
 | FR-YAML-06 | P0     | **Done** | `apps/web/src/diff/DiffPanel.tsx`：`diffLines()` 经 Worker `diff()` 消息驱动，基准可选「导入版本」或「最近保存版本」（`ProjectPage.tsx` 分别持久化/快照两者）；增删用 `text-success`/`text-error` 令牌配 `+`/`-` 符号，不只靠颜色。真实浏览器核对：编辑后面板显示 `+2 / -0` 并渲染逐行 `+`/上下文标记，切换基准选择器正确重新请求。证据：`DiffPanel.test.tsx`「renders +/- symbols on changed lines, not just a color, and a context line with neither」「re-diffs against the saved baseline once the selector is switched」「retries once a fresh issues reference arrives, recovering from the very first diff() racing the Worker's first parse」——最后一条覆盖了真实浏览器测试中发现的一个真实竞态 bug（面板挂载时立即请求 diff，抢在 Worker 首次 `parse()` 完成之前，此前会永久卡死不再重试）                                                                                                                         |
 | FR-YAML-07 | P0     | **Done** | 阻断判定：`@mcs/validator` 的 `hasBlockingIssues(issues)` 是唯一判定点（语法错误恒阻断，其余 `severity === 'error'` 阻断），`pipeline.test.ts`「is true as soon as one issue blocks」等 4 例覆盖。导出 UI：`ExportDialog.tsx` 两条出口互斥——阻断时主导出按钮（`config.yaml`/`.mcsproj`）禁用，只留「导出无效草稿」（文件名后缀 `.invalid-draft.yaml` 标识，非 manifest 标记）。真实浏览器核对：输入含缩进错误的 YAML → 打开导出对话框 → 两个正常按钮 `disabled` 为 `true`、草稿按钮可点。证据：`ExportDialog.test.tsx`「disables both normal export buttons and shows the draft notice」「exports the raw (invalid) text with a draft-marked filename, distinct from the normal export name」                                                                                                                                                                                                                               |
-| FR-YAML-08 | P1     | Partial  | `SerializeOptions` 已支持 lineWidth/indent；其余偏好未实现                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| FR-YAML-08 | P1     | Partial  | **v0.9.0 #21 明确改期 1.x（决策 H4）**：`SerializeOptions`（`packages/yaml-engine/src/document.ts`）已支持 `lineWidth`/`indent`。剩余偏好里，引号风格与数组风格是工作量问题，可以直接做；**键排序与 [ADR-003](./adr/ADR-003-yaml-document-ast.md)/[ADR-006](./adr/ADR-006-two-tier-writeback.md) 的无损回写保证直接冲突**——两份 ADR 都把"保留键顺序"列为 `Document#toString()` 回写必须守住的不变量之一，一个"导出时按字母序排序"的偏好选项，本质上要求应用去做一次它自己主动声明"绝不做"的结构性重排。这不是实现细节问题，需要先回答"用户显式触发的重排"与"隐式的序列化偏好"该如何共存这一设计问题，再决定要不要做、怎么做——不在本片顺带决定，改期 1.x，把冲突点留给 1.x 的人，不必重新发现一遍                                                                                                                                                                                                                            |
 
 ### 8.3 配置模块覆盖
 

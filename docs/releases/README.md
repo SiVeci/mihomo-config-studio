@@ -16,7 +16,7 @@
 | [v0.4.0](./v0.4.0-rules-and-graph.md)             | M3         | 不发布    | 规则、代理组与关系图          | 已完成            |
 | [v0.5.0](./v0.5.0-bundle-update-and-migration.md) | M4         | 不发布    | Bundle 更新、签名、迁移与回滚 | 已收口（Partial） |
 | [v0.6.0](./v0.6.0-android-beta.md)                | M5         | **Beta**  | Android 集成与 PWA            | 已收口（Partial） |
-| [v0.9.0](./v0.9.0-quality-and-rc.md)              | M6         | **RC**    | 内核测试矩阵、E2E、安全与性能 | 进行中            |
+| [v0.9.0](./v0.9.0-quality-and-rc.md)              | M6         | **RC**    | 内核测试矩阵、E2E、安全与性能 | 已收口（Partial） |
 | [v1.0.0](./v1.0.0-release.md)                     | M7         | **1.0**   | 发布阻断项清零与正式发布      | 未开始            |
 
 ## 文档结构约定
