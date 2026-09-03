@@ -5,6 +5,7 @@ import {
   buildFormPlan,
   collectUnknownFields,
   computeKnownPaths,
+  countArrayFormEntries,
   inferControl,
   isArrayEntryModule,
   type PlannedField,
@@ -627,6 +628,78 @@ describe('buildArrayFormPlan (FR-SCHEMA-01, v0.3.0 #14)', () => {
     expect(fields[0]?.variant?.discriminatorPath).toEqual(['items', 'provider-a', 'kind']);
     const onlyA = fields[0]?.children?.find((child) => child.key === 'onlyA');
     expect(onlyA).toMatchObject({ path: ['items', 'provider-a', 'onlyA'], value: 1 });
+  });
+
+  // NFR-PERF-05 (v1.0.0 #2): `SchemaArrayForm` must be able to size its
+  // virtual window from the collection's length alone, without paying for a
+  // full plan first — `countArrayFormEntries` is that cheap count.
+  describe('countArrayFormEntries (NFR-PERF-05, v1.0.0 #2)', () => {
+    it('counts a list-shaped collection without planning any entry', () => {
+      expect(countArrayFormEntries(ARRAY_ENTRY_MODULE, DOC)).toBe(2);
+    });
+
+    it('counts a map-shaped collection', () => {
+      expect(
+        countArrayFormEntries(ARRAY_ENTRY_MODULE, {
+          items: { 'provider-a': { kind: 'a' }, 'provider-b': { kind: 'b' } },
+        }),
+      ).toBe(2);
+    });
+
+    it('is 0 when the root is absent or neither a list nor a map', () => {
+      expect(countArrayFormEntries(ARRAY_ENTRY_MODULE, {})).toBe(0);
+      expect(countArrayFormEntries(ARRAY_ENTRY_MODULE, { items: 'not-a-collection' })).toBe(0);
+    });
+  });
+
+  // NFR-PERF-05 (v1.0.0 #2): a renderer can plan only a sub-range instead of
+  // paying the full per-entry `buildFormPlan` cost for entries it will never
+  // show. Windowing must never change *which* entry ends up at which path —
+  // only how many get planned.
+  describe('buildArrayFormPlan window option (NFR-PERF-05, v1.0.0 #2)', () => {
+    const MANY = {
+      items: Array.from({ length: 50 }, (_, index) => ({
+        kind: 'a',
+        label: `entry-${String(index)}`,
+        onlyA: index,
+      })),
+    };
+
+    it('plans only the entries inside [window.start, window.end)', () => {
+      const fields = buildArrayFormPlan(ARRAY_ENTRY_MODULE, MANY, {
+        mode: 'advanced',
+        window: { start: 10, end: 13 },
+      });
+      expect(fields).toHaveLength(3);
+      expect(fields.map((field) => field.path)).toEqual([
+        ['items', 10],
+        ['items', 11],
+        ['items', 12],
+      ]);
+    });
+
+    it('a windowed entry is planned identically to the same entry planned unwindowed — windowing changes only which entries are planned, never how', () => {
+      const windowed = buildArrayFormPlan(ARRAY_ENTRY_MODULE, MANY, {
+        mode: 'advanced',
+        window: { start: 10, end: 11 },
+      });
+      const full = buildArrayFormPlan(ARRAY_ENTRY_MODULE, MANY, { mode: 'advanced' });
+      expect(windowed[0]).toEqual(full[10]);
+    });
+
+    it('an empty window plans nothing, without throwing', () => {
+      expect(
+        buildArrayFormPlan(ARRAY_ENTRY_MODULE, MANY, {
+          mode: 'advanced',
+          window: { start: 5, end: 5 },
+        }),
+      ).toEqual([]);
+    });
+
+    it('omitting window plans every entry — the pre-v1.0.0 #2 default is unchanged', () => {
+      const fields = buildArrayFormPlan(ARRAY_ENTRY_MODULE, MANY, { mode: 'advanced' });
+      expect(fields).toHaveLength(50);
+    });
   });
 });
 

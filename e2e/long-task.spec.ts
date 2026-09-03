@@ -118,15 +118,31 @@ test('importing, validating, and diffing a real 1 MB config produces zero main-t
   // (v0.4.0 #7/#14/#15); this was the first time the proxies form section
   // was measured at this scale, and the gap was real.
   //
-  // That fix alone did not make this assertion pass, though: a long task
-  // (~1.5-2s) still appears here even with virtualized rendering. Prime
-  // suspect, not yet fixed: `buildArrayFormPlan(module, value, ...)` still
-  // plans *every* entry (all 3,182) on every render — this slice only
-  // virtualized which planned entries get a DOM node, not the planning
-  // pass itself, which measured ~130-140ms per call in isolation and reruns
-  // on each of this component's several correction re-renders. Recorded
+  // v1.0.0 #2 fixed that prime suspect: `buildArrayFormPlan` now accepts a
+  // `window` option (`packages/schema-core/src/form-plan.ts`), and
+  // `SchemaArrayForm` computes the window from a cheap `countArrayFormEntries`
+  // *before* planning, then plans only the windowed entries — confirmed via
+  // `performance.mark` instrumentation added temporarily for this
+  // investigation (removed afterward) that the planning call itself now
+  // costs ~0ms per render, down from ~130-140ms × several correction
+  // re-renders.
+  //
+  // That fix alone still does not make this assertion pass: a long task
+  // (~2s, essentially unchanged from the ~1.5-2s v0.9.0 #11 baseline) still
+  // appears here. The same instrumentation localized it to React's commit
+  // phase (DOM creation), not any schema-planning call — every candidate in
+  // `schema-core`/`form-plan.ts` (`buildArrayFormPlan`, `collectUnknownFields`,
+  // `computeKnownPaths`) measured under 150ms combined against this corpus in
+  // isolation (Node, no DOM). New prime suspect, not yet fixed: the `rules`
+  // module's field renders via `TagsControl` (`packages/form-renderer/src/
+  // controls.tsx`), a single `<textarea>` whose `value` is every rule joined
+  // by `\n` — this corpus's `rules:` list has **13,106** entries, a ~463 KB
+  // string set as one `<textarea>` value in one synchronous commit. This
+  // wasn't implicated in v0.9.0 #11's own investigation (that one measured
+  // ~2s entirely against `SchemaArrayForm`'s cost, before this corpus's
+  // `rules:` scale was ever isolated as an independent variable). Recorded
   // honestly as a known, unresolved gap (not silently downgraded) — see
-  // docs/releases/plans/v0.9.0.md #11 and
+  // docs/releases/plans/v1.0.0.md #2 and
   // docs/releases/plans/v0.9.0-perf-baseline.md for the full writeup.
   expect(longTasks).toEqual([]);
 });

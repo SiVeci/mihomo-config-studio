@@ -6,6 +6,7 @@ export {
   buildFormPlan,
   collectUnknownFields,
   computeKnownPaths,
+  countArrayFormEntries,
   flattenFields,
   inferControl,
   isArrayEntryModule,
@@ -15,6 +16,8 @@ export type { ModuleShapeIssue } from './module.ts';
 export { evaluateRules } from './rules.ts';
 export type { RuleEvaluationOptions, RuleIssue } from './rules.ts';
 export type {
+  ArrayFormPlanOptions,
+  ArrayFormWindow,
   FormMode,
   FormPlan,
   FormPlanOptions,

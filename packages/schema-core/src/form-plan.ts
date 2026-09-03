@@ -244,13 +244,53 @@ export function isArrayEntryModule(module: SchemaModule): boolean {
  * children's, and its `variant.discriminatorPath` — rewritten from a
  * leading `'item'` segment to `[...module.manifest.root, key]`.
  */
+/** A half-open index range `[start, end)` into the collection, in document order — not a byte or pixel range. */
+export interface ArrayFormWindow {
+  readonly start: number;
+  readonly end: number;
+}
+
+export interface ArrayFormPlanOptions extends FormPlanOptions {
+  /**
+   * Plans only entries in `[window.start, window.end)`, skipping the
+   * per-entry `buildFormPlan` cost for everything outside it (NFR-PERF-05,
+   * v1.0.0 #2). Omitted (the default) plans every entry, unchanged from
+   * before this option existed — **required** for any caller that needs a
+   * complete answer regardless of what is currently on screen, chiefly
+   * `collectUnknownFields`: a document-wide "which fields are unknown"
+   * answer must see every entry, not just a rendered window, or an unknown
+   * field would silently stop being reported the moment its entry scrolls
+   * out of view. Only a renderer that owns its own re-render-on-scroll loop
+   * (`SchemaArrayForm`) may narrow this — narrowing here only shrinks the
+   * *plan*, never touches the underlying document, so no entry's value is
+   * ever lost by windowing.
+   */
+  window?: ArrayFormWindow;
+}
+
+/**
+ * The collection's entry count without planning any of them — cheap (one
+ * array/object walk, no schema validation or UI resolution per entry),
+ * letting a virtualized renderer size its window (`computeVariableVirtualWindow`)
+ * *before* paying `buildArrayFormPlan`'s per-entry cost, rather than only
+ * being able to compute the window from a plan it already fully paid for
+ * (NFR-PERF-05, v1.0.0 #2).
+ */
+export function countArrayFormEntries(module: SchemaModule, documentValue: unknown): number {
+  const entries = collectionEntries(readPath(documentValue, module.manifest.root));
+  return entries?.length ?? 0;
+}
+
 export function buildArrayFormPlan(
   module: SchemaModule,
   documentValue: unknown,
-  options: FormPlanOptions = {},
+  options: ArrayFormPlanOptions = {},
 ): PlannedField[] {
   const entries = collectionEntries(readPath(documentValue, module.manifest.root));
   if (entries === null) return [];
+
+  const { window, ...formPlanOptions } = options;
+  const windowedEntries = window ? entries.slice(window.start, window.end) : entries;
 
   const probeModule: SchemaModule = {
     manifest: { id: module.manifest.id, root: [], version: module.manifest.version },
@@ -262,8 +302,8 @@ export function buildArrayFormPlan(
     ui: { fields: { item: { fields: module.ui.fields ?? {} } } },
   };
 
-  return entries.map(([key, entry]) => {
-    const plan = buildFormPlan(probeModule, { item: entry }, options);
+  return windowedEntries.map(([key, entry]) => {
+    const plan = buildFormPlan(probeModule, { item: entry }, formPlanOptions);
     // The probe schema always declares exactly one property ('item'), so
     // `planObject` always produces exactly one field for it.
     const itemField = plan.fields[0]!;

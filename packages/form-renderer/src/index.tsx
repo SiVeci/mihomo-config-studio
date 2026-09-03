@@ -1,6 +1,7 @@
 import {
   buildArrayFormPlan,
   buildFormPlan,
+  countArrayFormEntries,
   type FormMode,
   type FormPlan,
   type PlannedField,
@@ -148,16 +149,27 @@ const ARRAY_FORM_OVERSCAN = 3;
  * actually rendered and measured — ADR-022 itself anticipated this exact
  * case ("如果规则列表需要变高行...需要扩展 `computeVirtualWindow` 或换用
  * 支持变高的方案").
+ *
+ * v0.9.0 #11 virtualized the *DOM* (only the window's entries got a
+ * `<fieldset>`) but not the *plan*: `buildArrayFormPlan` still ran its full,
+ * per-entry `buildFormPlan` for all 3,182 entries every render, because the
+ * window could only be computed *after* the full plan existed (the plan's
+ * own length sized the height-estimate array `computeVariableVirtualWindow`
+ * needs). v1.0.0 #2 breaks that ordering with `countArrayFormEntries` — a
+ * cheap count with no per-entry planning — so the window can be computed
+ * *first*, then handed to `buildArrayFormPlan` as a `window` option that
+ * plans only those entries (NFR-PERF-05). The document itself is untouched
+ * either way: windowing narrows the *plan* a render pass builds, never the
+ * `MihomoYamlDocument` `onChange` writes back to — an entry scrolled out of
+ * the window keeps its real value, it just isn't planned into a `PlannedField`
+ * until it scrolls back into range.
  */
 export function SchemaArrayForm(props: SchemaArrayFormProps): JSX.Element {
   const { module, value, onChange, onDeleteEntry, containerHeight: containerHeightProp } = props;
   const translate = props.t ?? ((key: string) => key);
   const controls = { ...DEFAULT_CONTROLS, ...props.controls };
 
-  const items = buildArrayFormPlan(module, value, {
-    mode: props.mode ?? 'basic',
-    ...(props.platform !== undefined ? { platform: props.platform } : {}),
-  });
+  const totalCount = countArrayFormEntries(module, value);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const itemElements = useRef<Map<number, HTMLElement>>(new Map());
@@ -171,14 +183,14 @@ export function SchemaArrayForm(props: SchemaArrayFormProps): JSX.Element {
   // anything. Existing entries keep whatever was already measured for them.
   useEffect(() => {
     setItemHeights((previous) => {
-      if (previous.length === items.length) return previous;
-      const next = new Array<number>(items.length).fill(ARRAY_FORM_ESTIMATED_ITEM_HEIGHT);
-      for (let i = 0; i < Math.min(previous.length, items.length); i++) {
+      if (previous.length === totalCount) return previous;
+      const next = new Array<number>(totalCount).fill(ARRAY_FORM_ESTIMATED_ITEM_HEIGHT);
+      for (let i = 0; i < Math.min(previous.length, totalCount); i++) {
         next[i] = previous[i]!;
       }
       return next;
     });
-  }, [items.length]);
+  }, [totalCount]);
 
   useEffect(() => {
     if (containerHeightProp !== undefined) return;
@@ -196,14 +208,14 @@ export function SchemaArrayForm(props: SchemaArrayFormProps): JSX.Element {
     containerHeightProp ??
     (measuredContainerHeight > 0 ? measuredContainerHeight : ARRAY_FORM_DEFAULT_CONTAINER_HEIGHT);
 
-  // `itemHeights` briefly disagrees with `items.length` between an
-  // add/delete and the resize effect above committing — falling back to a
-  // fresh, fully-estimated array for that one render avoids indexing past
-  // the end of a stale, shorter cache.
+  // `itemHeights` briefly disagrees with `totalCount` between an add/delete
+  // and the resize effect above committing — falling back to a fresh,
+  // fully-estimated array for that one render avoids indexing past the end
+  // of a stale, shorter cache.
   const effectiveItemHeights =
-    itemHeights.length === items.length
+    itemHeights.length === totalCount
       ? itemHeights
-      : new Array<number>(items.length).fill(ARRAY_FORM_ESTIMATED_ITEM_HEIGHT);
+      : new Array<number>(totalCount).fill(ARRAY_FORM_ESTIMATED_ITEM_HEIGHT);
 
   const window_ = useMemo(
     () =>
@@ -241,7 +253,14 @@ export function SchemaArrayForm(props: SchemaArrayFormProps): JSX.Element {
     if (changed) setItemHeights(next);
   });
 
-  const visibleItems = items.slice(window_.startIndex, window_.endIndex);
+  // The one expensive call this component makes, now bounded by the window
+  // (typically ~10 entries with overscan) rather than the full collection —
+  // `window_` above is computed from `totalCount` alone, never from this.
+  const visibleItems = buildArrayFormPlan(module, value, {
+    mode: props.mode ?? 'basic',
+    ...(props.platform !== undefined ? { platform: props.platform } : {}),
+    window: { start: window_.startIndex, end: window_.endIndex },
+  });
 
   function itemRef(index: number): RefCallback<HTMLElement> {
     return (element) => {
