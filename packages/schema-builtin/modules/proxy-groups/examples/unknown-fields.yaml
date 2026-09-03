@@ -1,9 +1,13 @@
-# "name"/"type"/"url"/"interval" are declared; "disable-udp" is a real,
-# documented Mihomo field (disables UDP relay for this group) that is
+# "name"/"type"/"proxies"/"url"/"interval" are declared; "disable-udp" is a
+# real, documented Mihomo field (disables UDP relay for this group) that is
 # deliberately out of P0 scope — it must surface as unknown, not be
-# silently dropped.
+# silently dropped. "proxies" is included because the real kernel rejects
+# any group with neither "proxies" nor "use" present.
 name: "auto"
 type: url-test
+proxies:
+  - ss1
+  - ss2
 url: "https://cp.cloudflare.com/generate_204"
 interval: 300
 disable-udp: true

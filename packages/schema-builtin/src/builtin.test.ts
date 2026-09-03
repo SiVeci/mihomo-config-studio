@@ -968,7 +968,13 @@ describe('proxy-groups module (v0.4.0 #1 — discriminated union: select/url-tes
 
     const start = performance.now();
     const issues = validateValue(
-      { name: 'g', type: 'select', filter: catastrophic, 'exclude-filter': catastrophic },
+      {
+        name: 'g',
+        type: 'select',
+        proxies: ['a'],
+        filter: catastrophic,
+        'exclude-filter': catastrophic,
+      },
       PROXY_GROUPS_MODULE.schema,
     );
     const elapsedMs = performance.now() - start;

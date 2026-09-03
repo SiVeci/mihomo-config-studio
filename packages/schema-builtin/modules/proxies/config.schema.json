@@ -184,7 +184,8 @@
               "items": { "type": "integer" }
             }
           },
-          "required": ["type", "public-key", "private-key"]
+          "required": ["type", "public-key", "private-key"],
+          "anyOf": [{ "required": ["ip"] }, { "required": ["ipv6"] }]
         }
       ]
     }

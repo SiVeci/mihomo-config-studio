@@ -73,10 +73,22 @@ const EXAMPLE_KIND_EXPECTATION: Readonly<Record<ModuleExample['kind'], 'pass' | 
  * element vs a direct passthrough value), read here rather than re-derived
  * from the JSON Schema so a schema-shape refactor cannot silently change
  * kernel-matrix behaviour without a reviewer seeing this table too.
+ *
+ * `proxies` is deliberately `array-append`, not `array-element`, unlike its
+ * sibling `proxy-groups`: `buildBaselineSkeleton` hard-codes a `PROXY` select
+ * group that references `my-server-1`/`my-server-2`/`ss1`/`ss2` by name, so
+ * replacing the whole `proxies:` root with just the fragment under test would
+ * dangle that reference and make the kernel reject every `proxies` example
+ * for a reason that has nothing to do with the example itself (found the hard
+ * way: v1.0.0 #0's first real CI run rejected `proxies:valid`/`:edge`/
+ * `:unknown-fields` with "PROXY: 'my-server-1' not found"). `proxy-groups`
+ * has no such baseline dependency — replacing it wholesale to test exactly
+ * one group in isolation is safe and is the actual intent.
  */
 type MergeStrategy =
   | { readonly type: 'spread-root' }
   | { readonly type: 'set-path' }
+  | { readonly type: 'array-append' }
   | { readonly type: 'array-element' }
   | { readonly type: 'map-entry'; readonly syntheticKey: string };
 
@@ -87,7 +99,7 @@ const MERGE_STRATEGY: Readonly<Record<string, MergeStrategy>> = {
   sniffer: { type: 'set-path' },
   rules: { type: 'set-path' },
   'sub-rules': { type: 'set-path' },
-  proxies: { type: 'array-element' },
+  proxies: { type: 'array-append' },
   'proxy-groups': { type: 'array-element' },
   'proxy-providers': { type: 'map-entry', syntheticKey: 'provider1' },
   'rule-providers': { type: 'map-entry', syntheticKey: 'rule1' },
@@ -186,6 +198,9 @@ function overlayExample(
     }
     case 'set-path':
       base.setIn(module.manifest.root, fragmentValue);
+      return base;
+    case 'array-append':
+      base.appendIn(module.manifest.root, fragmentValue);
       return base;
     case 'array-element':
       base.setIn(module.manifest.root, [fragmentValue]);

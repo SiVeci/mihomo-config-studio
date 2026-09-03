@@ -1,6 +1,10 @@
-# Boundary-valid: the "select" branch only strictly needs "name" and "type"
-# — every optional shared/branch field (proxies/use/filter/url/interval) is
-# intentionally absent to prove the minimal-required-fields case is
-# schema-valid.
+# Boundary-valid: the "select" branch needs "name", "type", and at least one
+# of "proxies"/"use" — the real Mihomo v1.19.29 kernel rejects a group with
+# neither ("`use` or `proxies` missing", confirmed against the real kernel
+# binary), so "proxies" here is part of the minimal set, not decoration.
+# Every other optional shared/branch field (filter/exclude-filter/url/
+# interval) is intentionally absent to prove that narrower minimal set.
 name: "Proxy"
 type: select
+proxies:
+  - my-server-1

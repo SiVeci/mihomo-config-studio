@@ -10,7 +10,8 @@
         "filter": { "type": "string" },
         "exclude-filter": { "type": "string" }
       },
-      "required": ["name"]
+      "required": ["name"],
+      "anyOf": [{ "required": ["proxies"] }, { "required": ["use"] }]
     },
     "select": {
       "allOf": [

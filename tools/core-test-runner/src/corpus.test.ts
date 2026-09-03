@@ -179,7 +179,23 @@ describe('buildModuleExampleCases / merge strategies', () => {
     expect(doc.getIn(['dns'])).toEqual({ enable: false });
   });
 
-  it('wraps a root: [k] fragment as the sole element of the array at that path (proxies/proxy-groups shape)', () => {
+  it('wraps a root: [k] fragment as the sole element of the array at that path (proxy-groups shape)', () => {
+    const module = fakeModule({
+      id: 'proxy-groups',
+      root: ['proxy-groups'],
+      examples: [{ name: 'valid', kind: 'valid', path: 'examples/valid.yaml' }],
+    });
+    const read = moduleExampleReader('proxy-groups', {
+      'examples/valid.yaml': 'name: g\ntype: select\nproxies: [my-server-1]\n',
+    });
+    const cases = buildModuleExampleCases(read, [module], BASIC_PROXY_TEXT);
+    const doc = parseDoc(cases[0]!.configText);
+    expect(doc.getIn(['proxy-groups'])).toEqual([
+      { name: 'g', type: 'select', proxies: ['my-server-1'] },
+    ]);
+  });
+
+  it("appends a root: [k] fragment to the existing array at that path, rather than replacing it (proxies shape) — a wholesale replace would dangle the baseline PROXY group's references to my-server-1/my-server-2", () => {
     const module = fakeModule({
       id: 'proxies',
       root: ['proxies'],
@@ -191,6 +207,37 @@ describe('buildModuleExampleCases / merge strategies', () => {
     const cases = buildModuleExampleCases(read, [module], BASIC_PROXY_TEXT);
     const doc = parseDoc(cases[0]!.configText);
     expect(doc.getIn(['proxies'])).toEqual([
+      {
+        name: 'my-server-1',
+        type: 'ss',
+        server: 'example.com',
+        port: 8388,
+        cipher: 'aes-128-gcm',
+        password: 'CHANGE_ME',
+      },
+      {
+        name: 'my-server-2',
+        type: 'trojan',
+        server: 'example.com',
+        port: 443,
+        password: 'CHANGE_ME',
+      },
+      {
+        name: 'ss1',
+        type: 'ss',
+        server: 'ss1.example.com',
+        port: 8388,
+        cipher: 'aes-128-gcm',
+        password: 'CHANGE_ME',
+      },
+      {
+        name: 'ss2',
+        type: 'ss',
+        server: 'ss2.example.com',
+        port: 8388,
+        cipher: 'aes-128-gcm',
+        password: 'CHANGE_ME',
+      },
       { name: 'solo', type: 'ss', server: 'h', port: 1, cipher: 'c', password: 'p' },
     ]);
   });

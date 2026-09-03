@@ -4,10 +4,14 @@
 #   the round-trip path, not a claim this is how a real key looks — v0.3.0
 #   #10, reused by #19's golden "multi-line secret" sample)
 # - "reserved" in its array form rather than the string form ("U4An")
+# - "ip" is required in practice: the real Mihomo v1.19.29 kernel rejects a
+#   wireguard proxy with neither "ip" nor "ipv6" ("missing local address"),
+#   confirmed against the real kernel binary — this is not decoration.
 name: wg-edge
 type: wireguard
 server: 162.159.192.1
 port: 2480
+ip: 172.16.0.2
 public-key: Cr8hWlKvtDt7nrvf+f0brNQQzabAqrjfBvas9pmowjo=
 private-key: |
   eCtXsJZ27+4PbhDkHnB923

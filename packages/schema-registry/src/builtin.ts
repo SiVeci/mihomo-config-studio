@@ -66,14 +66,31 @@ export const BUILTIN_MODULE: SchemaModule = GENERAL_MODULE;
  * change since v0.5.0 #1, so this re-issued a fresh bootstrap keypair (same
  * discard-after-signing process as every prior re-issue) and bumped
  * `version` to `0.9.0`, the release arc this content now ships with.
+ * v1.0.0 #0's first real CI run against the real Mihomo v1.19.29 kernel
+ * found two genuine P0 schema gaps the kernel itself rejects: `proxies`'
+ * `wireguard` branch didn't require `ip`/`ipv6` ("missing local address"),
+ * and `proxy-groups`' shared branch didn't require `proxies`/`use` ("`use`
+ * or `proxies` missing") — both fixed by adding the matching `anyOf`
+ * constraint. That changed `modules/proxies.json` and
+ * `modules/proxy-groups.json`'s serialized bytes, so this re-issued a fresh
+ * bootstrap keypair (same discard-after-signing process as every prior
+ * re-issue) and bumped `version` to `0.9.1`, **not** `1.0.0`: dozens of
+ * existing fixtures across the test suite already use the literal `'1.0.0'`
+ * as an arbitrary *non-built-in* installed-bundle version (precisely because
+ * it used to be safely different from this manifest's own version) — reusing
+ * it here would make those fixtures collide with the built-in bundle instead
+ * of a distinct one, silently changing what they resolve to. `packages/**`'s
+ * own version-collapse to `1.0.0` (the app version, a different axis
+ * entirely — this manifest's `version` is the Bundle *content* version) is
+ * v1.0.0 plan #5's job, not this re-issue's.
  */
 export const BUILTIN_TRUST_ANCHORS_HEX: readonly string[] = [
-  '4b3d44beffdd48c67d3ed0a831bb3ceed02ebad14f3bdc2c063e9cae8f13b590',
+  '806774f6e52a8c2d2b8bfa8364967cf0df4f81a2d81100a3858b58a0ba906612',
 ];
 
 export const BUILTIN_MANIFEST: BundleManifest = {
   bundleId: 'builtin',
-  version: '0.9.0',
+  version: '0.9.1',
   channel: 'stable',
   formatVersion: 1,
   requiresApp: '0.1.0',
@@ -101,11 +118,11 @@ export const BUILTIN_MANIFEST: BundleManifest = {
     },
     {
       path: 'modules/proxies.json',
-      sha256: 'e72e326de71be73a831dd920e4c3d218b4e4f952872f648a32f2122217aca153',
+      sha256: '9781e27b78147f3690b4177673736788d17f3ec156d20d28edc3359ba467ce4a',
     },
     {
       path: 'modules/proxy-groups.json',
-      sha256: 'c0c1815beddc3c0bbdb410c9a52588762dff714c7ed7b2b6e3a73d981d06ce2b',
+      sha256: 'fcf4e75ffdffe940d970dfa94f221a10cadd316378e463332c62429b878883d4',
     },
     {
       path: 'modules/proxy-providers.json',
@@ -129,8 +146,8 @@ export const BUILTIN_MANIFEST: BundleManifest = {
     },
   ],
   signature:
-    '9976fcf202a262db63cc94494b4489854e063b112b1b58fd9ba49f5ca6015df274b0844e662191162f5a9c89dd2593f3873a12d874f0f2f2673257f0162e990f',
-  signedAt: '2026-09-02T00:00:00Z',
+    '75464c1246eae2e85cad60871425dffda6b2fef135cf236455d9e806543a18a83720585862d486e39209b04ccf726429896f6675426d7f7adcad9b68b6f70306',
+  signedAt: '2026-09-04T00:00:00Z',
 };
 
 export interface BuiltinBundle {
