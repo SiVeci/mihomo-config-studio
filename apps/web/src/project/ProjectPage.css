@@ -13,6 +13,14 @@
 .project-sidebar__tagline {
   color: var(--mcs-color-text-muted);
   font-size: var(--mcs-font-size-body-sm);
+  margin: 0;
+}
+
+.project-sidebar__about-link {
+  color: var(--mcs-color-primary-active);
+  font-size: var(--mcs-font-size-body-sm);
+  text-decoration: none;
+  align-self: flex-start;
   margin: 0 0 var(--mcs-spacing-sm);
 }
 

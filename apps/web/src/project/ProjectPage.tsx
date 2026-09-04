@@ -900,6 +900,9 @@ export function ProjectPage({
         <div className="project-sidebar">
           <h1 className="project-sidebar__title">{t('app.title')}</h1>
           <p className="project-sidebar__tagline">{t('app.tagline')}</p>
+          <a className="project-sidebar__about-link" href="#/about">
+            {t('app.aboutLink')}
+          </a>
           <button
             type="button"
             className="project-sidebar__new-button"

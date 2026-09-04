@@ -2,6 +2,7 @@ import { createLogger } from '@mcs/logging';
 import { IndexedDbStorageAdapter } from '@mcs/storage';
 import { useEffect, useMemo, type ReactNode } from 'react';
 
+import { AboutPage } from './about/AboutPage.js';
 import { BundlePage } from './bundle/BundlePage.js';
 import { resolveUpdateSources } from './bundle/update-sources.js';
 import { t } from './i18n/index.js';
@@ -45,9 +46,20 @@ function NotFoundPage(): ReactNode {
   return <p>{t('app.notFoundPath', { path })}</p>;
 }
 
+/**
+ * `/about` (v1.0.0 #4, PRD §2.3): worth bookmarking on its own — same
+ * "would a user want to link/reload straight into this" bar `/bundle` above
+ * already meets, per `router.tsx`'s own routing standard.
+ */
+function AboutPageRoute(): ReactNode {
+  const adapter = useMemo(() => new IndexedDbStorageAdapter(), []);
+  return <AboutPage adapter={adapter} />;
+}
+
 const ROUTES: readonly Route[] = [
   { path: '/', element: <ProjectPageRoute /> },
   { path: '/bundle', element: <BundlePageRoute /> },
+  { path: '/about', element: <AboutPageRoute /> },
 ];
 
 const logger = createLogger();
