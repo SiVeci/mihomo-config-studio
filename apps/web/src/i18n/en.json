@@ -3,6 +3,7 @@
   "app.tagline": "Local-first, schema-driven Mihomo configuration manager",
   "app.notFoundPath": "No route matches path: {path}",
   "app.aboutLink": "About",
+  "app.bundleLink": "Bundle management",
   "about.backToProject": "← Back to project",
   "about.title": "About",
   "about.disclaimer.heading": "Project statement",

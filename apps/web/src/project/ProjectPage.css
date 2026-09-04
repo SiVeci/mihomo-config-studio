@@ -16,7 +16,8 @@
   margin: 0;
 }
 
-.project-sidebar__about-link {
+.project-sidebar__about-link,
+.project-sidebar__bundle-link {
   color: var(--mcs-color-primary-active);
   font-size: var(--mcs-font-size-body-sm);
   text-decoration: none;

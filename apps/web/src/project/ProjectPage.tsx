@@ -903,6 +903,9 @@ export function ProjectPage({
           <a className="project-sidebar__about-link" href="#/about">
             {t('app.aboutLink')}
           </a>
+          <a className="project-sidebar__bundle-link" href="#/bundle">
+            {t('app.bundleLink')}
+          </a>
           <button
             type="button"
             className="project-sidebar__new-button"

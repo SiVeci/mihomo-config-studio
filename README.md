@@ -145,6 +145,7 @@ pnpm run e2e
 
 ## 文档
 
+- [用户指南](docs/user-guide.md)
 - [架构决策记录（ADR）](docs/adr/README.md)
 - [设计系统](docs/design-system.md)
 - [版本执行计划](docs/releases/README.md)
