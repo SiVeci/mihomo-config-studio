@@ -39,28 +39,40 @@ pnpm install && pnpm run check
 在一个模块的 Bundle 被签名前，用 `schema-cli` 的 `preview` 子命令把它渲染成
 每字段一行的纯文本，确认控件种类、是否必填、是否遮罩、显示条件与预期一致——
 渲染逻辑与应用本身完全相同（`@mcs/schema-core` 的 `buildFormPlan`），预览看到
-的就是签名后用户会看到的。判别式联合字段会展开列出每个分支各自的字段。
+的就是签名后用户会看到的。
 
-```bash
-node tools/schema-cli/dist/index.js preview packages/schema-builtin/modules/dns
-node tools/schema-cli/dist/index.js preview packages/schema-builtin/modules/dns --json
-```
+`preview` 的完整用法、`check`/`diff` 等其余本地验证子命令、以及
+`node dist/index.js` 字面调用当前不可用（需要用 vitest 跑同一段逻辑）这条
+已知限制，统一写在 [Schema 开发指南](docs/schema-authoring-guide.md#本地预览与验证)
+里，这里不重复一份——两处各写一半容易漂移。
 
-> 注意：`tools/schema-cli` 依赖 `packages/**` 的 ADR-007 源码导出（`.ts` 直接
-> 作为包入口，不预编译），纯 `node` 目前无法在不借助 TS-aware loader 的情况下
-> 解析这些依赖之间的相对导入。这不是 `preview` 独有的限制——`pack`/`check`/
-> `diff`/`sign` 四个既有子命令同样如此，`schema-release.yml` 的 CI 也因此改为
-> 用 vitest 跑同一段逻辑，而不是字面调用 `node dist/index.js`。本地想验证某个
-> 模块目录，可以直接用 vitest 跑通同一份代码：
->
-> ```bash
-> pnpm exec vitest run tools/schema-cli/src/preview.test.ts -t "loads and previews"
-> ```
->
-> 或参照 `preview.test.ts` 写一个几行的临时测试文件，直接调用
-> `loadModuleFromDirectory`/`buildModulePreview`/`renderModulePreviewText`
-> 并 `console.log` 结果——vitest 自己的 TS 转换不经过这条 Node 解析路径，
-> 不受此限制。
+## 发布流程
+
+三条边界，贡献者与协作的 AI 助手都不应该越过：
+
+- **内置 Bundle**（编译进应用、随构建产物发布的默认 Bundle）走
+  `schema-release.yml`，签名发生在 GitHub `schema-release` environment 保护
+  的 job 里。私钥只以 `SCHEMA_SIGNING_KEY_B64` 存在该 environment 的 secret
+  中，签名 job 只消费已构建、已过测试矩阵的产物，从不在 job 内重新构建
+  （[ADR-010](docs/adr/ADR-010-bundle-signing-and-key-custody.md) §2/§3）。
+  **贡献者与协作的 AI 助手都不接触私钥**——本仓库当前是单维护者仓库，
+  `schema-release` environment 的 required reviewers 按
+  [ADR-024](docs/adr/ADR-024-single-maintainer-release-approval.md) 降为
+  1 人（仓库唯一维护者本人），并用「deployment branches 仅限版本 tag、禁止
+  `pull_request_target`、零第三方 action、`permissions` 最小化」四项措施
+  补偿；这是记录在案、有回退条件的偏离，不是把双人审核这条要求悄悄删掉。
+- **Stable 通道**只放行已经通过 `core-config-test (stable)` 这一个 check
+  的版本——`schema-release.yml` 的发布门只查这一个结论，从不查 Beta 轨、也
+  不查"矩阵整体"：即使 Beta 轨恰好失败，Stable 该发布的还是能发布；即使
+  Beta 轨恰好通过，也不能拿它给 Stable 背书
+  （[ADR-031](docs/adr/ADR-031-kernel-matrix-dual-track.md)）。
+- **社区 Bundle** 走手动导入路径（FR-UPD-09），仍必须通过全部既有安全检查
+  （哈希自洽、格式版本范围、静态内容检查），唯一豁免的是"签名必须由已知信任
+  锚点签发"这一条；豁免后**持久标记为未受信任**，在 Bundle 管理页与每个使用
+  它的项目上持续显示警告，且**永远不能进入 Stable 通道**（见
+  [SECURITY.md](SECURITY.md)）。**不是默认拒绝，也不是隔离**——手动导入本身
+  是被支持的路径，只是永久带着"未验证来源"的标记，不会被静默拒绝或额外
+  沙箱化。
 
 ## 包边界
 
