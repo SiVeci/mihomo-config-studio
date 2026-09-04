@@ -1,6 +1,6 @@
 import { matchesGlob } from 'node:path';
 
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 const include = [
   'packages/*/src/**/*.test.ts',
@@ -9,6 +9,19 @@ const include = [
   'apps/web/src/**/*.test.ts',
   'apps/web/src/**/*.test.tsx',
 ];
+
+/**
+ * `import-success-rate.test.ts` (ADR-037, v1.0.0 #3) generates and fully
+ * validates 30 real ~1 MB corpora — real, measured cost is ~150s, unlike
+ * every other file `include` above matches. Left in the default suite it
+ * would add 150s to every `pnpm run test`/`check`/`test:coverage` invocation
+ * a contributor runs locally, not just CI. Excluded here and run instead as
+ * its own named `ci.yml` step (same reasoning as v0.9.0 #19's "release
+ * blocker" steps: an expensive or release-critical check gets its own named
+ * step, not buried inside the 2000+-case default run) — see the
+ * `1 MB import success rate` step.
+ */
+const EXCLUDED_FROM_DEFAULT_SUITE = ['packages/validator/src/import-success-rate.test.ts'];
 
 // ADR-033 (v0.9.0 #7): `e2e/**` is Playwright's own suite, run only via
 // `pnpm run e2e`, never through vitest — none of the patterns above can
@@ -29,6 +42,7 @@ for (const e2ePath of ['e2e/web.spec.ts', 'e2e/fixtures.ts']) {
 export default defineConfig({
   test: {
     include,
+    exclude: [...configDefaults.exclude, ...EXCLUDED_FROM_DEFAULT_SUITE],
     environment: 'node',
     coverage: {
       provider: 'v8',

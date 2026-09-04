@@ -62,6 +62,15 @@ jobs:
       - name: Unit tests with coverage
         run: pnpm run test:coverage
 
+      # §14.1 quality indicator 5 (ADR-037, v1.0.0 #3): 30 real ~1 MB legal
+      # corpora, zero blocking-issue failures. Excluded from the default
+      # suite above (`vitest.config.ts`'s own `exclude`) — real cost is
+      # ~150-200s, too slow to pay on every `pnpm run test`/`check` a
+      # contributor runs locally, so it gets its own named step here instead
+      # (same reasoning as the two release-blocker steps above).
+      - name: 1 MB import success rate
+        run: pnpm run test:import-success-rate
+
   android-manifest-check:
     name: android manifest has no VPN/broad-storage permissions
     runs-on: ubuntu-latest

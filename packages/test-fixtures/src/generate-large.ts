@@ -87,6 +87,59 @@ function proxyEntry(rand: () => number, index: number): string {
   return lines.join('\n');
 }
 
+/**
+ * `generateImportCorpus`'s own proxy-entry generator (v1.0.0 #3): the exact
+ * same shape as `proxyEntry` above, minus that function's `udp: true` line
+ * for the `ss` branch — `udp` is a real Mihomo field but not one the P0
+ * `proxies` schema (`config.schema.json`'s `ss` def: `type`/`cipher`/
+ * `password`/`plugin`/`plugin-opts` only) models, so every `ss` entry
+ * `proxyEntry` produces is an *unintentional* unknown-field hit. That is the
+ * right behaviour for `generateLargeCorpus`/`generateScaleCorpus` (perf
+ * benchmarks, not success-rate corpora — `udp`'s realism there is a feature),
+ * but it is exactly wrong here: at real 1 MB scale it multiplies into
+ * thousands of unknown-field issues, each paying `MihomoYamlDocument#locate()`'s
+ * per-issue `toText()` cost against the *whole* document (the same O(n²)
+ * shape NFR-PERF-04 already names, `docs/releases/plans/v0.9.0-perf-baseline.md`)
+ * — confirmed by measurement to turn a single corpus's `runPipeline()` call
+ * from ~450ms into 130+ real seconds. `generateImportCorpus` adds exactly one
+ * *deliberate* unknown field of its own (`unknown-field-probe`'s `smux`
+ * block, singular) — this function keeps the rest of the corpus genuinely
+ * P0-clean so that one deliberate probe is not drowned out by thousands of
+ * accidental ones, and so the success-rate test actually finishes.
+ */
+function p0OnlyProxyEntry(rand: () => number, index: number): string {
+  const type = PROXY_TYPES[index % PROXY_TYPES.length]!;
+  const server = randomDomain(rand);
+  const port = 10000 + Math.floor(rand() * 50000);
+  const lines = [
+    `  - name: "${proxyName(index)}"`,
+    `    type: ${type}`,
+    `    server: ${server}`,
+    `    port: ${port}`,
+  ];
+  if (type === 'ss') {
+    lines.push(
+      `    cipher: ${pick(rand, CIPHERS)}`,
+      `    password: "pw-${index}-${Math.floor(rand() * 1e6)}"`,
+    );
+  } else if (type === 'vmess') {
+    lines.push(
+      `    uuid: ${randomUuid(rand)}`,
+      '    alterId: 0',
+      '    cipher: auto',
+      '    tls: true',
+    );
+  } else {
+    lines.push(
+      `    password: "pw-${index}-${Math.floor(rand() * 1e6)}"`,
+      `    sni: ${server}`,
+      '    skip-cert-verify: false',
+    );
+  }
+  if (index % 37 === 0) lines.push(`    # rotated node ${index}`);
+  return lines.join('\n');
+}
+
 const RULE_TYPES = ['DOMAIN-SUFFIX', 'DOMAIN-KEYWORD', 'IP-CIDR', 'GEOIP'] as const;
 
 function ruleLine(rand: () => number, index: number, targets: readonly string[]): string {
@@ -185,6 +238,192 @@ export function generateLargeCorpus(options: LargeCorpusOptions = {}): string {
     '',
     'proxy-groups:',
     groups.join('\n'),
+    '',
+    'rules:',
+    ruleLines.join('\n'),
+    '',
+  ].join('\n');
+}
+
+export interface ImportCorpusOptions {
+  /** Approximate output size in bytes; generation stops once this is reached. */
+  readonly targetBytes?: number;
+  readonly seed?: number;
+}
+
+/**
+ * Deterministic ~1 MB corpus covering all ten built-in P0 modules
+ * (ADR-037), for the "1 MB import success rate" metric (§14.1 indicator 5,
+ * v1.0.0 #3) — `generateLargeCorpus` only ever exercises three
+ * (`proxies`/`proxy-groups`/`rules`), too narrow a shape for a claim about
+ * "legal test corpora" in general. Built by extending the same
+ * `proxies`/`proxy-groups`/`rules` backbone (reusing this file's own
+ * private helpers, not duplicating them) with the six modules it omits,
+ * plus the three YAML features a real large config exercises that a
+ * proxies/rules-only corpus never touches: a deliberately unmodeled field
+ * (an `unknown-fields` case, same field `schema-builtin`'s own
+ * `proxies/examples/unknown-fields.yaml` uses), an anchor, and a merge key
+ * (`<<:`) — mirroring `packages/test-fixtures/fixtures/yaml/comprehensive.yaml`'s
+ * own `health-check: {enable: true, <<: *common-hc}` pattern, the one this
+ * repo already trusts to round-trip correctly.
+ *
+ * Deliberately **not** exported as "generate a set" — the corpus *set*
+ * ADR-037 defines is simply N calls to this function with N distinct seeds,
+ * left to the caller (`import-success-rate.test.ts`) rather than baked in
+ * here, so the sample count is a test-level policy decision, not a
+ * generator-level one.
+ */
+export function generateImportCorpus(options: ImportCorpusOptions = {}): string {
+  const targetBytes = options.targetBytes ?? DEFAULT_TARGET_BYTES;
+  const rand = mulberry32(options.seed ?? DEFAULT_SEED);
+
+  const proxyLines: string[] = [];
+  const proxyNames: string[] = [];
+  let size = HEADER.length;
+  const proxyBudget = targetBytes * 0.5;
+  let index = 0;
+  while (size < proxyBudget) {
+    const entry = p0OnlyProxyEntry(rand, index);
+    proxyLines.push(entry);
+    proxyNames.push(proxyName(index));
+    size += entry.length + 1;
+    index += 1;
+  }
+
+  // A fixed (non-random), single unknown-field probe — same field
+  // `schema-builtin`'s own `proxies/examples/unknown-fields.yaml` uses
+  // (`smux`, a real, documented Mihomo field this project's P0 schema
+  // deliberately excludes), so "import succeeded" here means the same thing
+  // it means everywhere else in this repo: parsed with no syntax issues and
+  // no *blocking* validation issue — an unknown field is a real, expected,
+  // non-blocking part of that answer, not something that should vanish from
+  // the corpus for convenience.
+  const unknownFieldProbe = [
+    '  - name: "unknown-field-probe"',
+    '    type: ss',
+    '    server: probe.example.com',
+    '    port: 8388',
+    '    cipher: aes-128-gcm',
+    '    password: "probe-password"',
+    '    smux:',
+    '      enabled: false',
+    '      protocol: smux',
+  ].join('\n');
+  proxyLines.push(unknownFieldProbe);
+  proxyNames.push('unknown-field-probe');
+
+  const groupProxyRefs = proxyNames.slice(0, 200).map((name) => `      - ${name}`);
+  const groups = [
+    ['  - name: PROXY', '    type: select', '    proxies:', ...groupProxyRefs].join('\n'),
+    [
+      '  - name: AUTO',
+      '    type: url-test',
+      '    tolerance: 50',
+      '    url: "http://www.gstatic.com/generate_204"',
+      '    interval: 300',
+      '    proxies:',
+      ...groupProxyRefs,
+    ].join('\n'),
+    [
+      '  - name: FALLBACK',
+      '    type: fallback',
+      '    url: "http://www.gstatic.com/generate_204"',
+      '    interval: 300',
+      '    proxies: [DIRECT, REJECT]',
+    ].join('\n'),
+  ];
+  size += groups.reduce((total, group) => total + group.length + 1, 0);
+
+  const ruleTargets = ['PROXY', 'AUTO', 'FALLBACK', ...proxyNames.slice(0, 50)];
+  const ruleLines: string[] = [];
+  let ruleIndex = 0;
+  while (size < targetBytes) {
+    const line = ruleLine(rand, ruleIndex, ruleTargets);
+    ruleLines.push(line);
+    size += line.length + 1;
+    ruleIndex += 1;
+  }
+  ruleLines.push('  - MATCH,PROXY');
+
+  // `sniffer` (root: ['sniffer']) — `schema-builtin/modules/sniffer/examples/valid.yaml`'s shape.
+  const sniffer = [
+    'sniffer:',
+    '  enable: true',
+    '  override-destination: false',
+    '  sniff:',
+    '    HTTP:',
+    '      ports:',
+    '        - 80',
+    '        - "8080-8880"',
+    '    TLS: {}',
+    '    QUIC: {}',
+  ].join('\n');
+
+  // `inbound` (root: [], top-level keys) — `schema-builtin/modules/inbound/examples/valid.yaml`'s `tun` block (`mixed-port` is already in `HEADER`).
+  const inbound = [
+    'tun:',
+    '  enable: false',
+    '  stack: system',
+    '  dns-hijack:',
+    '    - 0.0.0.0:53',
+    '  auto-redirect: false',
+  ].join('\n');
+
+  // `proxy-providers` (map) — an anchor (`&common-provider`) merged into a
+  // second entry via `<<:`, the anchor/merge-key coverage ADR-037 calls for.
+  const proxyProviders = [
+    'proxy-providers:',
+    '  provider1: &common-provider',
+    '    type: http',
+    '    url: "https://example.com/subscribe?token=probe-1"',
+    '    interval: 3600',
+    '    path: ./provider1.yaml',
+    '    health-check:',
+    '      enable: true',
+    '      interval: 600',
+    '      url: https://cp.cloudflare.com/generate_204',
+    '  provider2:',
+    '    <<: *common-provider',
+    '    path: ./provider2.yaml',
+  ].join('\n');
+
+  // `rule-providers` (map).
+  const ruleProviders = [
+    'rule-providers:',
+    '  cn-domain:',
+    '    type: http',
+    '    behavior: domain',
+    '    format: yaml',
+    '    url: "https://example.com/rules/cn-domain.yaml"',
+    '    interval: 259200',
+    '    path: ./rule-providers/cn-domain.yaml',
+  ].join('\n');
+
+  // `sub-rules` (map of rule-line lists).
+  const subRules = [
+    'sub-rules:',
+    '  sub-rule-probe:',
+    `    - DOMAIN,${randomDomain(rand)},PROXY`,
+    '    - MATCH,DIRECT',
+  ].join('\n');
+
+  return [
+    HEADER,
+    sniffer,
+    '',
+    inbound,
+    '',
+    'proxies:',
+    proxyLines.join('\n'),
+    '',
+    'proxy-groups:',
+    groups.join('\n'),
+    '',
+    proxyProviders,
+    '',
+    ruleProviders,
+    '',
+    subRules,
     '',
     'rules:',
     ruleLines.join('\n'),

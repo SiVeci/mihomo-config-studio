@@ -128,6 +128,35 @@ describe('schemaStage (FR-VAL-01, FR-VAL-05, v0.3.0 #12)', () => {
     expect(issues.filter((issue) => issue.code === 'unknown-field')).toEqual([]);
   });
 
+  /**
+   * v1.0.0 #3 regression: a module whose *root* schema is directly a scalar
+   * array — `rules`' real shape, `{type:'array', items:{type:'string'}}`,
+   * not a named property on an object like `dns.nameserver` above —
+   * `buildFormPlan` produces zero `PlannedField`s for it (`planObject` only
+   * ever walks `schema.properties`, and a root-array schema has none), so
+   * the existing per-field `registerKnownPath` loop below never ran for it.
+   * Found for real building the ADR-037 import corpus (v1.0.0 #3): a config
+   * with a real, large `rules:` list showed one false `unknown-field` issue
+   * *per rule* — thousands on a realistic corpus — which is also what made
+   * `runPipeline` on such a document catastrophically slow (each issue pays
+   * `MihomoYamlDocument#locate()`'s per-call `toText()` cost against the
+   * whole document; this one bug fix took the NFR-PERF-04 1,000-entity/
+   * 10,000-rule full-validation benchmark from ~17.2s to ~0.5s — see
+   * `docs/releases/plans/v0.9.0-perf-baseline.md`).
+   */
+  it("does not flag the elements of a module whose own root schema is directly a scalar array as unknown (v1.0.0 #3 regression: `rules`' real shape, not a named property)", () => {
+    const rootArrayModule: SchemaModule = {
+      manifest: { id: 'rules', root: ['rules'], version: '1.0.0' },
+      schema: { type: 'array', items: { type: 'string' } },
+      ui: {},
+    };
+    const parse = MihomoYamlDocument.parse(
+      ['rules:', '  - DOMAIN-SUFFIX,example.com,DIRECT', '  - MATCH,DIRECT'].join('\n'),
+    );
+    const issues = schemaStage.run({ parse, modules: [rootArrayModule] });
+    expect(issues.filter((issue) => issue.code === 'unknown-field')).toEqual([]);
+  });
+
   it('never blocks on unknown fields no matter how many — a config full of real P1/P2 protocol fields stays fully non-blocking', () => {
     const parse = MihomoYamlDocument.parse(
       [
@@ -524,6 +553,25 @@ describe('runPipeline with real schema-registry-resolved modules (FR-VAL-01, FR-
     const issues = runPipeline(ctx);
 
     expect(hasBlockingIssues(issues)).toBe(false);
+  });
+
+  it("does not flag a real document's own rules: entries as unknown-field through the full production path (v1.0.0 #3 regression, real RULES_MODULE — see the schemaStage-level test above for the isolated case)", () => {
+    const parse = MihomoYamlDocument.parse(
+      [
+        'mode: rule',
+        'rules:',
+        '  - DOMAIN-SUFFIX,example.com,DIRECT',
+        '  - DOMAIN-SUFFIX,another.example.com,DIRECT',
+        '  - MATCH,DIRECT',
+      ].join('\n'),
+    );
+    const ctx: PipelineContext = { parse, modules };
+
+    const issues = runPipeline(ctx);
+
+    expect(
+      issues.filter((issue) => issue.code === 'unknown-field' && issue.path?.[0] === 'rules'),
+    ).toEqual([]);
   });
 
   it('does not block a real document with actual proxy nodes and a provider — the exact real-world shape the v0.3.0 #17 regression above targets, now proven through the full production path (registry -> pipeline)', () => {

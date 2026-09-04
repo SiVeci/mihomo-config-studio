@@ -3,12 +3,24 @@ import { describe, expect, it } from 'vitest';
 import { createWorkerState, handleWorkerRequest } from './protocol.js';
 import type { IssueFix, WorkerState } from './protocol.js';
 
+// `unknown-field-probe` is a top-level key no P0 module's schema declares
+// (`general`'s root doesn't list it in `properties`) — a deliberate,
+// permanently-unknown marker for the tests below that need "a field
+// `schemaStage` reliably flags unknown" as their canary. Earlier versions of
+// this fixture used `rules[0]` for that instead, on the mistaken belief that
+// `rules` "belongs to no P0 module's schema" (v0.3.0 #14's own comment,
+// since corrected) — `rules` *is* one of the ten P0 modules; a real
+// `pipeline.ts` bug (found and fixed alongside `import-success-rate.test.ts`,
+// v1.0.0 #3, ADR-037) made every one of `rules:`'s own entries misread as
+// unknown, and it just so happened to have been treated as expected
+// behaviour here rather than caught as a defect.
 const SAMPLE = `mode: rule
 port: 7890
 hosts:
   example.com: 1.2.3.4
 rules:
   - DOMAIN,example.com,DIRECT
+unknown-field-probe: true
 `;
 
 function parsed(text: string = SAMPLE): WorkerState {
@@ -24,16 +36,18 @@ describe('handleWorkerRequest / parse', () => {
 
     if (response.type !== 'parse') throw new Error('unreachable');
     // Not `issues: []`: real Schema modules are resolved into every pipeline
-    // call now (v0.3.0 #14), and `rules` belongs to no P0 module's schema —
-    // `schemaStage` correctly flags it `unknown-field` (info, non-blocking).
-    // This test's own job is syntax cleanliness; the dedicated test below
-    // covers the real-module wiring this response now reflects.
+    // call now (v0.3.0 #14), and `unknown-field-probe` is a field no P0
+    // module declares — `schemaStage` correctly flags it `unknown-field`
+    // (info, non-blocking). This test's own job is syntax cleanliness; the
+    // dedicated test below covers the real-module wiring this response now
+    // reflects.
     expect(response.issues.some((issue) => issue.module === 'yaml')).toBe(false);
     expect(response.value).toEqual({
       mode: 'rule',
       port: 7890,
       hosts: { 'example.com': '1.2.3.4' },
       rules: ['DOMAIN,example.com,DIRECT'],
+      'unknown-field-probe': true,
     });
   });
 
@@ -48,7 +62,7 @@ describe('handleWorkerRequest / parse', () => {
         code: 'unknown-field',
         module: 'schema',
         blocking: false,
-        path: ['rules', 0],
+        path: ['unknown-field-probe'],
       }),
     );
     expect(response.issues.every((issue) => issue.blocking === false)).toBe(true);
@@ -95,11 +109,16 @@ describe('handleWorkerRequest / validate', () => {
     const state = parsed();
     const response = handleWorkerRequest(state, { type: 'validate', requestId: 'r1' });
 
-    // Same `rules` unknown-field as the parse test above — `validate` re-runs
-    // the identical pipeline against the document `parse` already composed.
+    // Same `unknown-field-probe` unknown-field as the parse test above —
+    // `validate` re-runs the identical pipeline against the document `parse`
+    // already composed.
     if (response.type !== 'validate') throw new Error('unreachable');
     expect(response.issues).toContainEqual(
-      expect.objectContaining({ code: 'unknown-field', module: 'schema', path: ['rules', 0] }),
+      expect.objectContaining({
+        code: 'unknown-field',
+        module: 'schema',
+        path: ['unknown-field-probe'],
+      }),
     );
   });
 });
@@ -126,7 +145,7 @@ describe('handleWorkerRequest / configureModules (v0.5.0 #11, decision F14)', ()
     });
   });
 
-  it('actually changes what later parse/validate calls flag — the default modules flag `rules[0]` unknown-field (per the parse test above); an empty module set does not, because schemaStage has nothing left to check field shapes against', () => {
+  it('actually changes what later parse/validate calls flag — the default modules flag `unknown-field-probe` unknown-field (per the parse test above); an empty module set does not, because schemaStage has nothing left to check field shapes against', () => {
     const state = createWorkerState();
     handleWorkerRequest(state, { type: 'configureModules', requestId: 'r0', modules: [] });
     const response = handleWorkerRequest(state, { type: 'parse', requestId: 'r1', text: SAMPLE });
@@ -143,7 +162,11 @@ describe('handleWorkerRequest / configureModules (v0.5.0 #11, decision F14)', ()
 
     if (response.type !== 'validate') throw new Error('unreachable');
     expect(response.issues).toContainEqual(
-      expect.objectContaining({ code: 'unknown-field', module: 'schema', path: ['rules', 0] }),
+      expect.objectContaining({
+        code: 'unknown-field',
+        module: 'schema',
+        path: ['unknown-field-probe'],
+      }),
     );
   });
 });
@@ -182,7 +205,11 @@ describe('handleWorkerRequest / configureDisabledRules (FR-VAL-06, v0.9.0 #15)',
 
     if (response.type !== 'validate') throw new Error('unreachable');
     expect(response.issues).toContainEqual(
-      expect.objectContaining({ code: 'unknown-field', module: 'schema', path: ['rules', 0] }),
+      expect.objectContaining({
+        code: 'unknown-field',
+        module: 'schema',
+        path: ['unknown-field-probe'],
+      }),
     );
   });
 });
@@ -944,6 +971,7 @@ describe('handleWorkerRequest / value', () => {
         port: 7890,
         hosts: { 'example.com': '1.2.3.4' },
         rules: ['DOMAIN,example.com,DIRECT'],
+        'unknown-field-probe': true,
       },
     });
   });

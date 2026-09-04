@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { generateLargeCorpus, generateScaleCorpus } from './generate-large.js';
+import {
+  generateImportCorpus,
+  generateLargeCorpus,
+  generateScaleCorpus,
+} from './generate-large.js';
 
 describe('generateLargeCorpus', () => {
   it('is deterministic: the same seed produces byte-identical output', () => {
@@ -50,6 +54,65 @@ describe('generateLargeCorpus', () => {
 
   it('always ends the rules list with a catch-all MATCH', () => {
     const corpus = generateLargeCorpus({ targetBytes: 20_000 });
+
+    expect(corpus.trimEnd().endsWith('- MATCH,PROXY')).toBe(true);
+  });
+});
+
+describe('generateImportCorpus (ADR-037, v1.0.0 #3)', () => {
+  it('is deterministic: the same seed produces byte-identical output', () => {
+    const a = generateImportCorpus({ seed: 1 });
+    const b = generateImportCorpus({ seed: 1 });
+
+    expect(a).toBe(b);
+  });
+
+  it('a different seed produces different output', () => {
+    const a = generateImportCorpus({ seed: 1 });
+    const b = generateImportCorpus({ seed: 2 });
+
+    expect(a).not.toBe(b);
+  });
+
+  it('defaults to approximately 1 MiB', () => {
+    const corpus = generateImportCorpus();
+
+    const bytes = Buffer.byteLength(corpus, 'utf8');
+    expect(bytes).toBeGreaterThan(1024 * 1024 * 0.95);
+    expect(bytes).toBeLessThan(1024 * 1024 * 1.15);
+  });
+
+  it('covers all ten built-in P0 modules — general/inbound (root keys), sniffer, dns, proxies, proxy-groups, proxy-providers, rule-providers, rules, sub-rules', () => {
+    const corpus = generateImportCorpus({ targetBytes: 50_000 });
+
+    expect(corpus).toContain('mode: rule'); // general
+    expect(corpus).toContain('dns:'); // dns
+    expect(corpus).toContain('tun:'); // inbound
+    expect(corpus).toContain('sniffer:'); // sniffer
+    expect(corpus).toContain('proxies:');
+    expect(corpus).toContain('proxy-groups:');
+    expect(corpus).toContain('proxy-providers:');
+    expect(corpus).toContain('rule-providers:');
+    expect(corpus).toContain('sub-rules:');
+    expect(corpus).toContain('rules:');
+  });
+
+  it("includes a deliberately unmodeled (unknown) field — the same one schema-builtin's own proxies/examples/unknown-fields.yaml uses", () => {
+    const corpus = generateImportCorpus({ targetBytes: 50_000 });
+
+    expect(corpus).toContain('unknown-field-probe');
+    expect(corpus).toContain('smux:');
+  });
+
+  it('includes an anchor merged into a second entry via a merge key (<<:)', () => {
+    const corpus = generateImportCorpus({ targetBytes: 50_000 });
+
+    expect(corpus).toContain('&common-provider');
+    expect(corpus).toContain('<<: *common-provider');
+  });
+
+  it('always ends the rules list with a catch-all MATCH', () => {
+    const corpus = generateImportCorpus({ targetBytes: 50_000 });
 
     expect(corpus.trimEnd().endsWith('- MATCH,PROXY')).toBe(true);
   });

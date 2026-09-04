@@ -140,7 +140,9 @@ export const schemaStage: ValidationStage = {
       // A module's own section can be entirely absent (no module here
       // declares any top-level `required`) — `undefined`/`null` would
       // otherwise read as a spurious `schema.type` violation against that
-      // module's (always object-shaped) root schema.
+      // module's root schema (usually object-shaped, but `rules` is a bare
+      // `{type:'array', items:{type:'string'}}` — see the `registerKnownPath`
+      // call below, which is what actually covers that shape).
       const scope = document.getIn(module.manifest.root);
       if (scope !== undefined && scope !== null) {
         for (const schemaIssue of validateValue(scope, module.schema, {
@@ -157,6 +159,26 @@ export const schemaStage: ValidationStage = {
 
       if (scope !== undefined && scope !== null) {
         registerDictionaryKnownPaths(knownPaths, module.manifest.root, module.schema, scope);
+        // `buildFormPlan` below only ever recognises named `schema.properties`
+        // (`planObject`'s own contract) — a module whose root schema is
+        // *directly* an array (`rules`: `{type:'array', items:{type:'string'}}`,
+        // no `.properties` to walk) gets zero `PlannedField`s from it, so
+        // `registerKnownPath`'s scalar-array handling (which is what is
+        // supposed to mark every element of a scalar array as known, not
+        // just the array's own path) never runs for it. Real bug, found here:
+        // every one of a real config's `rules:` entries showed up as a false
+        // `unknown-field` issue — one per rule, not caught earlier because
+        // `golden.test.ts`'s unknown-field survival check does not include
+        // `RULES_MODULE`, and `ModuleFormPage` renders zero fields for a
+        // module `buildFormPlan` cannot plan either, so nothing on screen
+        // ever surfaced it. Calling `registerKnownPath` for every module's
+        // own root scope directly (not just array-rooted ones) is safe for
+        // the object-shaped modules too: it only *adds* `module.manifest.root`
+        // itself (redundant with what `buildFormPlan`'s per-property walk
+        // already adds) and only touches the scalar-array branch when
+        // `module.schema.type === 'array'`, which no object-shaped module's
+        // root schema is.
+        registerKnownPath(knownPaths, module.manifest.root, module.schema, scope);
       }
 
       const plan = buildFormPlan(module, fullValue, { mode: 'advanced' });

@@ -41,6 +41,7 @@
 | [ADR-034](./ADR-034-perf-ci-gating.md)                              | 性能基准的 CI 阻断阈值，与"阈值对着什么硬件说"                    | Accepted | v0.9.0 切片 #10 |
 | [ADR-035](./ADR-035-relative-import-extensions-for-node-runtime.md) | 内部相对导入改用字面 `.ts` 扩展名，修复裸 Node 对多文件包的解析   | Accepted | v0.9.0 切片 #2  |
 | [ADR-036](./ADR-036-minimum-version-two-tier.md)                    | 最低支持版本的双口径：安装下限（API 29）与运行下限（WebView 107） | Accepted | v1.0.0 切片 #1  |
+| [ADR-037](./ADR-037-import-corpus-and-success-rate.md)              | 1 MB 导入成功率的语料集构成与判据（N=30，零阻断失败）             | Accepted | v1.0.0 切片 #3  |
 
 ADR-001 至 ADR-005 直接来自 PRD §17，本仓库补全其背景与工程约束。
 ADR-031–034 编号由 `docs/releases/plans/v0.9.0.md` 预先分配给切片 #3/#4/#7/#10；
