@@ -155,7 +155,7 @@ pnpm run e2e
 - [PRD 与上游行为差异记录](docs/upstream-divergences.md)
 - [自托管部署头（CSP 等）](docs/self-hosting-headers.md)
 - [贡献指南](CONTRIBUTING.md)
-- [安全策略](SECURITY.md)
+- [隐私与安全说明](SECURITY.md)
 
 ## 声明
 
