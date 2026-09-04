@@ -1,6 +1,6 @@
 {
   "name": "mihomo-config-studio",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Schema-driven visual Mihomo configuration manager for Web and Android. Local-first, modular, and privacy-friendly.",
   "license": "MIT",

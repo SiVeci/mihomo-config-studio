@@ -27,7 +27,7 @@ const STABLE_SOURCE: BundleSource = {
   fileBaseUrl: 'https://updates.example/stable/files',
 };
 
-const CURRENT_APP_VERSION = '0.1.0';
+const CURRENT_APP_VERSION = '1.0.0';
 
 /**
  * `@mcs/schema-registry`'s own `generateTestKeyPair` lives under

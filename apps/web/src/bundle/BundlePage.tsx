@@ -26,7 +26,7 @@ import { resolveEd25519Verifier } from './verify-options.js';
 import './BundlePage.css';
 
 /** Matches `apps/web/package.json`'s own `version` — the same value every `requiresApp` fixture/test in this repo already assumes. */
-const CURRENT_APP_VERSION = '0.1.0';
+const CURRENT_APP_VERSION = '1.0.0';
 const MIN_FORMAT_VERSION = 1;
 const MAX_FORMAT_VERSION = 1;
 const CHANNELS: readonly BundleChannel[] = ['stable', 'beta'];

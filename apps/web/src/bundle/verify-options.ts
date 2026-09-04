@@ -5,7 +5,7 @@ import { NobleEd25519Verifier } from './noble-verifier.js';
 import { BUNDLE_TRUST_ANCHORS } from './trust-anchors.js';
 
 /** Matches `apps/web/package.json`'s own `version` — the same value every `requiresApp` fixture/test in this repo already assumes (mirrors `BundlePage.tsx`'s own constant). */
-export const CURRENT_APP_VERSION = '0.1.0';
+export const CURRENT_APP_VERSION = '1.0.0';
 export const MIN_FORMAT_VERSION = 1;
 export const MAX_FORMAT_VERSION = 1;
 

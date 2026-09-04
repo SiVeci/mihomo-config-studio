@@ -8,7 +8,7 @@ import {
 import { MemoryStorageAdapter } from '@mcs/storage';
 import { describe, expect, it } from 'vitest';
 
-import { defaultVerifyOptions } from '../bundle/verify-options.js';
+import { CURRENT_APP_VERSION, defaultVerifyOptions } from '../bundle/verify-options.js';
 import { buildSignedBundle, generateTestKeyPair } from '../testing/signed-bundle.js';
 import { getProjectSchemaLock, saveProjectSchemaLock } from './model.js';
 import { resolveProjectSchema } from './schema-resolution.js';
@@ -94,7 +94,7 @@ describe('resolveProjectSchema (ADR-004, v0.5.0 #11, decision F14)', () => {
     expect(
       (
         await installUntrustedBundle(store, manifest, files, {
-          currentAppVersion: '0.1.0',
+          currentAppVersion: CURRENT_APP_VERSION,
           minFormatVersion: 1,
           maxFormatVersion: 1,
         })

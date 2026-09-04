@@ -11,7 +11,7 @@ import type { StorageAdapter, StorageQuota } from '@mcs/storage';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { defaultVerifyOptions } from '../bundle/verify-options.js';
+import { CURRENT_APP_VERSION, defaultVerifyOptions } from '../bundle/verify-options.js';
 import type { DiffPanelWorkerClient } from '../diff/DiffPanel.js';
 import { WorkerClient } from '../worker/client.js';
 import type { WorkerLike, WorkerMessageEvent } from '../worker/client.js';
@@ -2083,7 +2083,7 @@ describe('ProjectPage / schema-lock (ADR-004, v0.5.0 #11, decision F14/F15)', ()
     expect(
       (
         await installUntrustedBundle(store, manifest, files, {
-          currentAppVersion: '0.1.0',
+          currentAppVersion: CURRENT_APP_VERSION,
           minFormatVersion: 1,
           maxFormatVersion: 1,
         })

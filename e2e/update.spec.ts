@@ -5,6 +5,19 @@ import { loadBundleFixtureSet, serveBundleAt, type BundleFixtureSet } from './bu
 import { createProject, importYaml, SAMPLE_CONFIG_WITH_REFERENCES } from './fixtures.js';
 
 /**
+ * This test needs the raw text (for the round-trip check below) to also
+ * produce exactly one real issue, to prove the issues panel survives the
+ * bundle swap unchanged — not just the raw text. `SAMPLE_CONFIG_WITH_REFERENCES`
+ * alone resolves cleanly with zero issues (fixed by the v1.0.0 #3
+ * `schemaStage` root-scope-array registration fix, which correctly stopped
+ * flagging every `rules:` entry as `unknown-field`), so a deliberate unknown
+ * top-level field — same `unknown-field-probe` device `protocol.test.ts`
+ * uses — is added here to keep a real, non-coincidental "1" for the panel to
+ * assert against.
+ */
+const SAMPLE_CONFIG_WITH_ONE_ISSUE = `${SAMPLE_CONFIG_WITH_REFERENCES}unknown-field-probe: true\n`;
+
+/**
  * `playwright.config.ts`'s top-level await already generated (or reused —
  * see `loadOrGenerateBundleFixtureSet`'s own doc comment) this run's
  * fixture set and baked its trusted public key into
@@ -100,7 +113,7 @@ test('an existing project stays locked to its own Bundle version after a newer o
   // Bundle page this file's `beforeEach` starts every other test from.
   await page.goto('/');
   await createProject(page);
-  await importYaml(page, SAMPLE_CONFIG_WITH_REFERENCES);
+  await importYaml(page, SAMPLE_CONFIG_WITH_ONE_ISSUE);
 
   const rawEditor = page.getByRole('textbox', { name: '原文编辑器' });
   const issuesPanel = page.getByRole('complementary', { name: '辅助面板' });

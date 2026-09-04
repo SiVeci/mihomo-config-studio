@@ -7,8 +7,14 @@ apply plugin: 'kotlin-android'
 // existing static defaults when these are absent keeps local
 // `assembleDebug`/`assembleRelease` working unsigned.
 def releaseKeystorePath = System.getenv('MCS_RELEASE_KEYSTORE_PATH')
-def releaseVersionName = System.getenv('MCS_RELEASE_VERSION_NAME') ?: '0.1.0'
-def releaseVersionCode = (System.getenv('MCS_RELEASE_VERSION_CODE') ?: '1') as Integer
+def releaseVersionName = System.getenv('MCS_RELEASE_VERSION_NAME') ?: '1.0.0'
+// v1.0.0 #5: versionCode must be monotonically increasing forever (Android
+// refuses to let a user "upgrade" to a lower code) — fixed here once and
+// documented so a future release does not have to re-derive the rule.
+// Formula: major*10000 + minor*100 + patch (e.g. 1.0.0 -> 10000, 1.2.3 ->
+// 10203), leaving 99 patch slots and 100 minor slots per major version
+// before the ranges would collide.
+def releaseVersionCode = (System.getenv('MCS_RELEASE_VERSION_CODE') ?: '10000') as Integer
 
 android {
     namespace "studio.mihomoconfig.app"

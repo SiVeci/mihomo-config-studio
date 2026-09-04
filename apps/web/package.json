@@ -1,6 +1,6 @@
 {
   "name": "@mcs/web",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Web application shell: routing, i18n, and (from #10 on) the Worker-boundary config editor.",

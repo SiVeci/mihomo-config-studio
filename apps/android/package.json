@@ -1,6 +1,6 @@
 {
   "name": "@mcs/android",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Capacitor product shell loading apps/web's build output (FR-AND-01..06, ADR-001/ADR-026). webDir is ../web/dist — run `pnpm run build` (web) before `cap sync android`.",
