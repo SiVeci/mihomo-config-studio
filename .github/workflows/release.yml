@@ -120,6 +120,21 @@ jobs:
         with:
           name: release-build
 
+      # v1.0.0 #11: this job previously had no JDK setup at all — real first
+      # signed run failed with `error: invalid source release: 21` compiling
+      # `:capacitor-android`. `@capacitor/android` 7.6.8's own build.gradle
+      # hard-requires `JavaVersion.VERSION_21`
+      # (`sourceCompatibility`/`targetCompatibility`); `ubuntu-latest`'s
+      # default `JAVA_HOME` is an older JDK, and nothing in this workflow —
+      # or `verify-and-build`, which never invokes Gradle at all (`cap sync
+      # android` only copies files) — had ever selected JDK 21 before. This
+      # is the first time this pipeline has ever actually compiled the
+      # Android app.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
       # v1.0.0 #11: this job previously had no `pnpm install` (and no
       # checkout to install *from*) at all — real first run failed with
       # Gradle unable to resolve `:capacitor-android`/`:capacitor-app`
