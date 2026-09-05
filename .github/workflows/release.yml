@@ -63,7 +63,18 @@ jobs:
       - name: Build the manifest checker (needed standalone in the sign job, no pnpm there)
         run: pnpm --filter @mcs/android-manifest-check exec tsc -p tsconfig.json
 
+      # v1.0.0 #11: without these, the production build ships with no
+      # configured Stable update source (`resolveUpdateSources()` returns
+      # `{}`, and "检查更新" shows "尚未配置更新源" forever) — #10 published
+      # a real Stable Bundle Release (`schema-v0.9.1`) specifically so a real
+      # build could point at it. The trust anchor override is left unset on
+      # purpose: `packages/schema-registry/src/builtin.ts`'s own
+      # `BUILTIN_TRUST_ANCHORS_HEX` already defaults to the same production
+      # key (re-signed in #10), so there is nothing to override yet — this
+      # env var exists for a *future* key rotation, not this release.
       - name: Build the Web bundle
+        env:
+          MCS_BUNDLE_UPDATE_SOURCES_JSON: '{"stable":{"manifestUrl":"https://github.com/SiVeci/mihomo-config-studio/releases/download/schema-v0.9.1/signed-manifest.json","fileBaseUrl":"https://github.com/SiVeci/mihomo-config-studio/releases/download/schema-v0.9.1"}}'
         run: pnpm run build
 
       - name: Sync the Web build into the Android shell
@@ -90,7 +101,7 @@ jobs:
             apps/web/dist
             apps/android/android
             tools/android-manifest-check/dist
-            docs/releases/v0.9.0-rc-release-notes.md
+            docs/releases/v1.0.0-release-notes.md
 
   sign-and-release:
     name: sign APK, publish GitHub Release
@@ -108,14 +119,33 @@ jobs:
         with:
           node-version: 22
 
+      # v1.0.0 #11: `versionCode` was `github.run_number` — an arbitrary,
+      # ever-incrementing workflow-run counter, unrelated to the app version
+      # and unrelated to the formula `build.gradle` itself documents
+      # (`major*10000 + minor*100 + patch`, #5's own comment). Deriving it
+      # from the real released version here is what that formula was for;
+      # `versionName` also had the tag's leading "v" (`v1.0.0`) baked
+      # straight into the Android-visible version string instead of the
+      # conventional bare `1.0.0`.
+      - name: Derive versionName/versionCode from the release version
+        id: android-version
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.verify-and-build.outputs.version }}"
+          VERSION_NAME="${VERSION#v}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_NAME"
+          VERSION_CODE=$((MAJOR * 10000 + MINOR * 100 + PATCH))
+          echo "name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+
       - name: Decode release keystore, build the signed APK, then wipe the keystore
         env:
           MCS_RELEASE_KEYSTORE_B64: ${{ secrets.MCS_RELEASE_KEYSTORE_B64 }}
           MCS_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.MCS_RELEASE_KEYSTORE_PASSWORD }}
           MCS_RELEASE_KEY_ALIAS: ${{ secrets.MCS_RELEASE_KEY_ALIAS }}
           MCS_RELEASE_KEY_PASSWORD: ${{ secrets.MCS_RELEASE_KEY_PASSWORD }}
-          MCS_RELEASE_VERSION_NAME: ${{ needs.verify-and-build.outputs.version }}
-          MCS_RELEASE_VERSION_CODE: ${{ github.run_number }}
+          MCS_RELEASE_VERSION_NAME: ${{ steps.android-version.outputs.name }}
+          MCS_RELEASE_VERSION_CODE: ${{ steps.android-version.outputs.code }}
         run: |
           set -euo pipefail
           chmod +x apps/android/android/gradlew
@@ -144,6 +174,10 @@ jobs:
           sha256sum "$WEB_ARCHIVE" "mihomo-config-studio-${VERSION}.apk" > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
+      # No `--prerelease`: v0.9.0 was genuinely a release candidate (hence
+      # its own `--prerelease` flag), but v1.0.0 is the real first stable
+      # release — marking it prerelease on GitHub would misrepresent it as
+      # not production-ready, the opposite of what this release means.
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -153,8 +187,7 @@ jobs:
           gh release create "$VERSION" \
             --repo "${{ github.repository }}" \
             --title "$VERSION" \
-            --notes-file docs/releases/v0.9.0-rc-release-notes.md \
-            --prerelease \
+            --notes-file docs/releases/v1.0.0-release-notes.md \
             "mihomo-config-studio-web-${VERSION}.zip" \
             "mihomo-config-studio-${VERSION}.apk" \
             "SHA256SUMS.txt"
