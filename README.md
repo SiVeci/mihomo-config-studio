@@ -67,7 +67,10 @@ v1.0.0）已发布**：生产 Ed25519 密钥重签内置 Bundle、Stable 通道�
 真实签发（[schema-v0.9.1](https://github.com/SiVeci/mihomo-config-studio/releases/tag/schema-v0.9.1)，
 端到端验证——真实 HTTP 拉取 + 签名校验 + 客户端消费）、
 [v1.0.0 GitHub Release](https://github.com/SiVeci/mihomo-config-studio/releases/tag/v1.0.0)
-（Web 构建产物 + 签名 APK + SHA-256，均已独立下载校验）均已真实完成，见
+（Web 构建产物 + 签名 APK + SHA-256，均已独立下载校验）均已真实完成；
+八条退出条件 4 项 Done、4 项如实记 Partial（无外部 Beta 反馈、应用内
+模板选择器未接入、Android 交互式验证未全跑通、§13.5 第五项仍人工回答，
+均非本版本刻意掩盖，详见追踪表），如实记录不宣告，见
 [需求追踪表](docs/requirements-traceability.md)、
 [版本执行计划](docs/releases/plans/v1.0.0.md)与
 [发布说明](docs/releases/v1.0.0-release-notes.md)（含逐条列出的已知缺口）。

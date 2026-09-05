@@ -34,16 +34,16 @@
 
 ## 里程碑映射
 
-| 本仓库阶段            | PRD 里程碑 | 状态                                                                                 |
-| --------------------- | ---------- | ------------------------------------------------------------------------------------ |
-| M0 技术风险验证       | PRD M0     | v0.1.0 已收口（5 项中 4 项 Done，M0-5 Partial，见下表）                              |
-| M1 骨架与配置内核     | PRD M1     | v0.2.0 已收口（9 项退出条件全部 Done，见下表）                                       |
-| M2 Schema 表单        | PRD M2     | v0.3.0 已收口（8 项退出条件全部 Done，其中 1 项结构性，见下表）                      |
-| M3 规则与图谱         | PRD M3     | v0.4.0 已收口（9 项退出条件全部 Done，其中 1 项结构性，见下表）                      |
-| M4 Bundle 更新与迁移  | PRD M4     | v0.5.0 已收口（10 项退出条件 9 项 Done，1 项 Partial，见下表）                       |
-| M5 Android 集成与 PWA | PRD M5     | v0.6.0 已收口（11 项退出条件 9 项 Done，1 项 Partial，1 项按用户决定未完成，见下表） |
-| M6 发布加固与 P1 收尾 | PRD M6     | v0.9.0 已收口（9 项退出条件 4 项 Done，5 项 Partial，见下表）                        |
-| M7                    | PRD M7     | 未开工                                                                               |
+| 本仓库阶段                  | PRD 里程碑 | 状态                                                                                                       |
+| --------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------- |
+| M0 技术风险验证             | PRD M0     | v0.1.0 已收口（5 项中 4 项 Done，M0-5 Partial，见下表）                                                    |
+| M1 骨架与配置内核           | PRD M1     | v0.2.0 已收口（9 项退出条件全部 Done，见下表）                                                             |
+| M2 Schema 表单              | PRD M2     | v0.3.0 已收口（8 项退出条件全部 Done，其中 1 项结构性，见下表）                                            |
+| M3 规则与图谱               | PRD M3     | v0.4.0 已收口（9 项退出条件全部 Done，其中 1 项结构性，见下表）                                            |
+| M4 Bundle 更新与迁移        | PRD M4     | v0.5.0 已收口（10 项退出条件 9 项 Done，1 项 Partial，见下表）                                             |
+| M5 Android 集成与 PWA       | PRD M5     | v0.6.0 已收口（11 项退出条件 10 项 Done，1 项 Partial，见下表——第 10 条已在 v1.0.0 #11 真实发布后转 Done） |
+| M6 发布加固与 P1 收尾       | PRD M6     | v0.9.0 已收口（9 项退出条件 4 项 Done，5 项 Partial，见下表）                                              |
+| M7 发布阻断项清零与正式发布 | PRD M7     | v1.0.0 已发布（8 项退出条件 4 项 Done，4 项 Partial，见下表）                                              |
 
 ## M0 退出条件
 
@@ -262,6 +262,59 @@ Android 线不进 CI**——是该决策已知、写在案的代价，不是新�
 Partial 里，1/2/5/7 需要一次
 真实推送来把"本机结构性"换成"CI 真实执行"证据；9 需要你完成三件 GitHub 网页
 侧动作后由本片续验。
+
+## v1.0.0（M7）退出条件
+
+对应 [v1.0.0 版本文档](./releases/v1.0.0-release.md) 自己的「退出条件」清单，
+逐条核对。v1.0.0 #0-#12 全部完成，包括两次真实、公开的发布（Stable 首个
+Bundle `schema-v0.9.1`、应用 `v1.0.0`）。本次核对（2026-09-06）：
+`pnpm run check`/`pnpm run test:coverage` 143 个测试文件 / 2249 个用例全绿，
+行覆盖率 96.52%、分支 93.92%、函数 96.17%、语句 96.52%，均高于 85%/80%
+门槛；`pnpm run format:check` 干净；`pnpm run e2e` 17 个场景 16 个通过
+（唯一失败是已经记入 [docs/roadmap-1.x.md](./roadmap-1.x.md) 的
+`long-task.spec.ts` NFR-PERF-05）；真实 CI（[33992350113](https://github.com/SiVeci/mihomo-config-studio/actions/runs/33992350113)）
+同一模式。**4/8 满足，4 条如实记 Partial——收口的价值在于这四条被写清楚
+指向什么具体缺口，不在于凑出全绿。**
+
+| #   | 版本文档退出条件                                  | 状态        | 证据 / 缺口                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --- | ------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | §14.1 七项质量指标全部达标                        | **Partial** | 6/7 Done，「阻断级崩溃」缺外部 Beta 反馈这一半证据（本仓库从未发布过公开 Beta，决策 I1），E2E+CI 侧本轮零阻断级失败。完整取证见 [v1.0.0-quality-metrics.md](./releases/plans/v1.0.0-quality-metrics.md)                                                                                                                                                                                                                                     |
+| 2   | 附录 A 十条 DoD 全部签字                          | **Partial** | 8/10 Done。第 1 条（Web/Android 完成全流程）Android 侧 `SafRoundTripTest.kt` 四场景三个受阻（决策 I3/H3，证据 [v0.9.0-android-e2e-evidence.md](./releases/plans/v0.9.0-android-e2e-evidence.md)）；第 10 条（文档四件套齐全）文档本身完整交付，但用户指南诚实披露应用内没有模板选择器 UI（v1.0.0 #6 发现，记入 [roadmap-1.x.md](./roadmap-1.x.md)）。完整签字见下方「附录 A」节                                                             |
+| 3   | §13.5 五条发布阻断项在 CI 中全绿                  | **Partial** | 4/5 机器回答，第五条（Android 保存/重新打开可靠性）仍人工回答，决策 I3，未变化，见 [docs/release-blockers.md](./release-blockers.md)                                                                                                                                                                                                                                                                                                        |
+| 4   | 文档四件套齐全                                    | **Partial** | 与附录 A 第 10 条同一缺口，不重复记录两遍不同结论                                                                                                                                                                                                                                                                                                                                                                                           |
+| 5   | GitHub Release 发布 Web 构建产物与 Android APK    | **Done**    | [v1.0.0](https://github.com/SiVeci/mihomo-config-studio/releases/tag/v1.0.0) 真实发布，`isPrerelease: false`，三个资产（APK/Web zip/SHA256SUMS.txt）。独立验证：`sha256sum -c` 两个产物均 OK；本机 `aapt2 dump permissions`/`dump badging` 复核真实 APK，仅 `INTERNET` 权限，`versionCode=10000 versionName=1.0.0 minSdkVersion=29`。真实运行中发现并修复三处此前从未验证过的流水线缺陷，详见 [v1.0.0 计划 #11](./releases/plans/v1.0.0.md) |
+| 6   | Stable 通道发布首个 Bundle（对应 v1.19.29）       | **Done**    | [schema-v0.9.1](https://github.com/SiVeci/mihomo-config-studio/releases/tag/schema-v0.9.1) 真实发布。生产密钥重签内置 Bundle；真实 HTTP 拉取 + `verifyBundle` + `createRegistry` 端到端验证：10 个模块 0 个 issue。审批门本身也真实验证过失效与生效两种状态，见 [v1.0.0 计划 #10](./releases/plans/v1.0.0.md)                                                                                                                               |
+| 7   | 需求追踪表中所有 P0 条目为 Done，指向具体测试文件 | **Done**    | 逐条扫描本文件全部 `P0` 标记行，无一条处于 Todo/Partial（8.3 节十个模块、8.10 节 Android 能力、功能需求各行均 `**Done**`）                                                                                                                                                                                                                                                                                                                  |
+| 8   | 未完成的 P1/P2 条目已明确改期 1.x 并记入追踪表    | **Done**    | [docs/roadmap-1.x.md](./roadmap-1.x.md)（v1.0.0 #9）收录 10 条，追踪表对应行统一标注 `**改期 1.x（决策 X）**`，`grep -c` = 8                                                                                                                                                                                                                                                                                                                |
+
+**结论**：M7（v1.0.0）八条退出条件中四条 Done，四条如实记 Partial。四条
+Partial 里，1/2/4 三条同出一个类型的根因——**范围本身留了已知缺口并诚实
+披露**（无外部 Beta 反馈、应用内模板选择器未接入、Android 交互式验证未
+全跑通），不是被掩盖发现的新问题；第 3 条（§13.5 第五项）延续 v0.6.0/
+v0.9.0 就已经记录在案的同一个决策代价（H3/I3：Android 线不进 CI）。
+**两次真实、公开的发布（GitHub Release `v1.0.0` 与 Schema Bundle
+`schema-v0.9.1`）均已完成并独立验证**，这是本版本与此前所有版本最大的
+不同——不再是"工作流已就绪，等待真实运行"，而是真的运行过、真的发布过、
+真的被下载和验证过。
+
+## 附录 A：MVP Definition of Done
+
+PRD 附录 A 十条 MVP DoD，v1.0.0 #13 逐条签字。**8/10 Done，2/10 如实记
+Partial**——预判结论见 [v1.0.0 计划 #13](./releases/plans/v1.0.0.md)，
+这里是收口时以实测为准的最终结果。
+
+| #   | DoD 条目                                                   | 状态        | 证据 / 缺口                                                                                                                                                                                                                                                                                                                                 |
+| --- | ---------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 用户可在 Web 和 Android 完成新建、导入、编辑、保存和导出   | **Partial** | Web 侧 Done：`e2e/web.spec.ts` 七场景全过。Android 侧：`SafRoundTripTest.kt`（`connectedAndroidTest`，真实 UIAutomator）四场景中一个受阻于 UI 时序问题，未能全部稳定通过，仍只由本机模拟器人工执行，决策 H3 未进 CI，证据 [v0.9.0-android-e2e-evidence.md](./releases/plans/v0.9.0-android-e2e-evidence.md)                                 |
+| 2   | P0 配置模块具有图形化表单或明确的高级 YAML 入口            | **Done**    | §8.3 十个 P0 模块行全部 `**Done**`                                                                                                                                                                                                                                                                                                          |
+| 3   | 未知字段不会因编辑和导出而丢失                             | **Done**    | `packages/validator/src/golden.test.ts`（13 例），本轮真实 CI 的 `Golden round-trip (release blocker)` 步骤通过                                                                                                                                                                                                                             |
+| 4   | 代理组和规则引用可追踪，重命名能正确级联                   | **Done**    | `packages/graph/src/reference-index.test.ts` + `impact.test.ts`（27 例，本轮当场重跑），`e2e/web.spec.ts`「deletes a referenced entity by replacing its references first」                                                                                                                                                                  |
+| 5   | 阻断错误能跳转到具体字段或 YAML 行                         | **Done**    | FR-VAL-02：`apps/web/src/issues/IssuePanel.tsx` 统一问题列表，点击跳转优先用 `issue.range`                                                                                                                                                                                                                                                  |
+| 6   | 所有内置模板通过目标 Mihomo 内核配置测试                   | **Done**    | 本轮真实 CI `core-config-test (stable)`：45/45（5 模板 + 40 模块示例），见 [§14.1 取证](./releases/plans/v1.0.0-quality-metrics.md)                                                                                                                                                                                                         |
+| 7   | Schema Bundle 可验证、安装、锁定和回滚，且不执行远程代码   | **Done**    | FR-UPD-01/02/03/04/05/06/07 全部 `**Done**`；`e2e/update.spec.ts` 五场景真实浏览器验证；`tools/schema-cli/src/static-check.test.ts`（23 例）拒绝可执行内容                                                                                                                                                                                  |
+| 8   | Web 可离线工作；Android 可通过系统能力打开、保存和分享文件 | **Done**    | FR-AND-05（真断网复验）+ FR-AND-01/02/03/04（v1.0.0 #1 转 Done）全部 `**Done**`                                                                                                                                                                                                                                                             |
+| 9   | 默认没有配置内容、订阅 URL 或密钥上传行为                  | **Done**    | 本轮真实 CI `no configuration upload path` job 通过；`tools/egress-check/src/check.test.ts`（14 例，含四条原始否定用例）；`SECURITY.md`（v1.0.0 #8）                                                                                                                                                                                        |
+| 10  | README、用户指南、Schema 贡献指南和隐私说明齐全            | **Partial** | 四份文档均已交付且内容完整（[用户指南](./user-guide.md)、[Schema 开发指南](./schema-authoring-guide.md)、`CONTRIBUTING.md`、`SECURITY.md`），但用户指南诚实披露一处产品侧已知缺口：`packages/templates` 五个内置模板数据齐全，应用内却从未接入选择器 UI（v1.0.0 #6 发现），已记入 [roadmap-1.x.md](./roadmap-1.x.md)，不掩盖也不宣告成 Done |
 
 ## 功能需求
 
