@@ -111,13 +111,34 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Checkout must come *before* download-artifact: actions/checkout
+      # defaults to `git clean -ffdx`, which would delete the artifact's
+      # (untracked) files if it ran after them.
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           name: release-build
 
+      # v1.0.0 #11: this job previously had no `pnpm install` (and no
+      # checkout to install *from*) at all — real first run failed with
+      # Gradle unable to resolve `:capacitor-android`/`:capacitor-app`
+      # ("No variants exist"). `apps/android/android/capacitor.settings.
+      # gradle` (Capacitor-generated, not hand-written) points those local
+      # Gradle projects at `node_modules/.pnpm/@capacitor+android@.../...` —
+      # paths that only exist after a real `pnpm install`. This does not
+      # rebuild anything ADR-010 §4 cares about (the Web bundle and Android
+      # sync already happened in verify-and-build and arrive via the
+      # artifact) — it only resolves the native Gradle project graph that
+      # `assembleRelease` below needs to run at all.
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
 
       # v1.0.0 #11: `versionCode` was `github.run_number` — an arbitrary,
       # ever-incrementing workflow-run counter, unrelated to the app version
