@@ -472,3 +472,25 @@ CI job/step 上，完整映射表、逐条推理与"为什么是步骤不是新�
 | 3   | Bundle 携带可执行代码或绕过签名校验      | 机器回答                 | `check` job 新增 `Schema static check (release blocker)` 步骤，单独跑 `packages/schema-registry/src/static-check.test.ts`；`e2e-web` job 里 `e2e/update.spec.ts` 的签名失败用例从真实浏览器安装流程再验证一次  |
 | 4   | 敏感配置进入日志或未预期的网络请求       | 机器回答                 | `log-redaction` job + `no-network-egress` job，均为既有独立 job，本片未改动，只是首次正式纳入这张映射表                                                                                                        |
 | 5   | Android 无法可靠保存并重新打开 YAML      | **仍由人回答 → Partial** | `SafRoundTripTest.kt`（`connectedAndroidTest`，本机模拟器，决策 H3 未进 CI），证据见 [v0.9.0-android-e2e-evidence.md](./releases/plans/v0.9.0-android-e2e-evidence.md)（如实记录：一个场景受阻于 UI 时序问题） |
+
+## 14.1 质量指标
+
+PRD §14.1 七项质量指标，v1.0.0 #12 逐条取证——**本轮实测数字或 run URL，
+不引用历史记录**。完整推导与证据见独立文件
+[v1.0.0-quality-metrics.md](./releases/plans/v1.0.0-quality-metrics.md)（本节
+只放结论表，避免同一份证据在两处各改一半而漂移）。**6/7 Done，1 项
+（阻断级崩溃）如实记 Partial**——不是数字不达标，是取证方式本身只覆盖了
+PRD 原文"Beta 反馈与 E2E"里的一半（本仓库从未发布过公开 Beta，决策 I1）。
+
+真实 CI run（`main` 分支，commit `099997c`）：
+[33991203956](https://github.com/SiVeci/mihomo-config-studio/actions/runs/33991203956)。
+
+| #   | 指标                   | 目标  | 本轮实测                                                    | 状态        |
+| --- | ---------------------- | ----- | ----------------------------------------------------------- | ----------- |
+| 1   | 内置模板内核测试通过率 | 100%  | 100%（45/45，5 模板 + 40 模块示例）                         | **Done**    |
+| 2   | 未知字段语义保留率     | 100%  | 100%（13/13，Golden round-trip）                            | **Done**    |
+| 3   | P0 字段 Schema 覆盖率  | 100%  | 100%（10/10 模块）                                          | **Done**    |
+| 4   | 引用重命名级联正确率   | 100%  | 100%（27/27 单测 + 1/1 e2e）                                | **Done**    |
+| 5   | 1 MB 导入成功率        | ≥ 99% | 100%（30/30，本地 + CI 双验证）                             | **Done**    |
+| 6   | 阻断级崩溃             | 0     | 0（E2E+CI 侧；无外部 Beta 反馈这一半缺失，决策 I1，如实记） | **Partial** |
+| 7   | 默认配置内容网络上传   | 0     | 0                                                           | **Done**    |
