@@ -62,7 +62,16 @@ P1 功能收尾，v0.9.0）已收口（Partial）**：CI 首次真实推送并�
 （决策 H3：Android 线不进 CI，`origin/main` 自身也只被真实推送过一次，多数验证仍是
 本机结构性证据），第五项（公开 Beta 发布）真正卡在用户尚未完成的 GitHub 网页侧
 配置。如实记录不宣告，见[需求追踪表](docs/requirements-traceability.md)与
-[版本执行计划](docs/releases/plans/v0.9.0.md)。**尚未发布可用版本。**
+[版本执行计划](docs/releases/plans/v0.9.0.md)。**M7（发布阻断项清零与正式发布，
+v1.0.0）已发布**：生产 Ed25519 密钥重签内置 Bundle、Stable 通道首个 Bundle
+真实签发（[schema-v0.9.1](https://github.com/SiVeci/mihomo-config-studio/releases/tag/schema-v0.9.1)，
+端到端验证——真实 HTTP 拉取 + 签名校验 + 客户端消费）、
+[v1.0.0 GitHub Release](https://github.com/SiVeci/mihomo-config-studio/releases/tag/v1.0.0)
+（Web 构建产物 + 签名 APK + SHA-256，均已独立下载校验）均已真实完成，见
+[需求追踪表](docs/requirements-traceability.md)、
+[版本执行计划](docs/releases/plans/v1.0.0.md)与
+[发布说明](docs/releases/v1.0.0-release-notes.md)（含逐条列出的已知缺口）。
+**当前已发布版本：v1.0.0。**
 
 ## 仓库结构
 
