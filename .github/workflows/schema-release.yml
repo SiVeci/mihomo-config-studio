@@ -4,14 +4,22 @@ name: Schema Bundle Release
 # reach the signing job — never a plain push to any branch (tighter than
 # ADR-010 §2's own "tag and main", per ADR-024's compensating measures).
 # `pull_request_target` is never used anywhere in this file.
+#
+# v1.0.0 #10: `schema-v*`, not `v*` — `release.yml` (the Web/APK release)
+# triggers on any `v*.*.*` tag, and a bare `v*` here would match every one of
+# those too, firing both release pipelines off a single app-version tag like
+# `v1.0.0`. A distinct prefix keeps the two release trains fully independent:
+# a Schema Bundle version and the app version are different axes (see
+# `packages/schema-registry/src/builtin.ts`'s own manifest-version comment)
+# and were never meant to share a tag.
 on:
   push:
     tags:
-      - "v*"
+      - "schema-v*"
   workflow_dispatch:
     inputs:
       version:
-        description: 'Bundle version (e.g. 2026.08.0) — required for a manual run; ignored for a tag push, where the tag name (minus a leading "v") is used instead.'
+        description: 'Bundle version (e.g. 0.9.1) — required for a manual run; ignored for a tag push, where the tag name (minus the leading "schema-v") is used instead.'
         required: false
 
 permissions:
@@ -52,6 +60,25 @@ jobs:
 
       - name: Assert the real built-in modules directory itself passes schema-cli's static check
         run: pnpm vitest run tools/schema-cli/src/index.test.ts -t "accepts the real, shipping built-in modules directory"
+
+      # Dry run of the actual pack step below (unsigned, thrown away here) —
+      # this job has no way to gate `sign-and-release` on it directly (a
+      # separate job can't fail this one after the fact), but it does mean a
+      # regression in `ci-pack-builtin.test.ts` shows up in the un-gated
+      # part of the pipeline rather than only inside the approval-gated job.
+      - name: Smoke-test the Bundle pack step (dry run, no signing)
+        env:
+          CI_PACK_OUT_DIR: dry-run-pack
+          CI_BUNDLE_ID: official
+          CI_BUNDLE_VERSION: 0.0.0-dry-run
+          CI_BUNDLE_CHANNEL: stable
+          CI_FORMAT_VERSION: "1"
+          CI_REQUIRES_APP: "0.1.0"
+          CI_MIHOMO_MIN_VERSION: "1.19.29"
+          CI_MIHOMO_MAX_TESTED_VERSION: "1.19.29"
+          CI_MIHOMO_UPSTREAM_COMMIT: e26714a181ac0e2fa803453c0a8e9a9ce94e31cb
+          CI_MIHOMO_DOCS_SNAPSHOT: "2026-08-19"
+        run: pnpm run schema-release:pack
 
       - name: Built-in templates pass the real v1.19.29 kernel config test
         run: node tools/core-test-runner/dist/index.js
@@ -101,13 +128,13 @@ jobs:
 
       - run: pnpm exec tsc -b tsconfig.build.json
 
-      - name: Resolve the Bundle version (tag name minus a leading "v", or the manual dispatch input)
+      - name: Resolve the Bundle version (tag name minus the leading "schema-v", or the manual dispatch input)
         id: version
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ inputs.version }}"
           else
-            VERSION="${GITHUB_REF_NAME#v}"
+            VERSION="${GITHUB_REF_NAME#schema-v}"
           fi
           if [ -z "$VERSION" ]; then
             echo "No version resolved (manual dispatch needs the 'version' input)." >&2
@@ -115,31 +142,44 @@ jobs:
           fi
           echo "value=$VERSION" >> "$GITHUB_OUTPUT"
 
-      # ADR-010 §1 / ADR-024: this job has no access to the production key.
-      # `pack-unsigned.mjs` generates a fresh, throwaway keypair used once
-      # and held only in memory — the resulting signature is meaningless and
-      # gets fully replaced by the real one in sign-and-release below.
-      - name: Pack the built-in Bundle (static check + hash real content; signature is a throwaway placeholder)
-        run: >
-          node .github/scripts/pack-unsigned.mjs
-          --source packages/schema-builtin/modules
-          --bundle-id official
-          --version ${{ steps.version.outputs.value }}
-          --channel stable
-          --format-version 1
-          --requires-app 0.1.0
-          --mihomo-min-version 1.19.29
-          --mihomo-max-tested-version 1.19.29
-          --mihomo-upstream-commit e26714a181ac0e2fa803453c0a8e9a9ce94e31cb
-          --mihomo-docs-snapshot 2026-08-19
-          --out unsigned-manifest.json
+      # v1.0.0 #10: runs via `pnpm exec vitest`, not plain `node` — every
+      # package this touches (`@mcs/schema-builtin`, `@mcs/schema-registry`)
+      # is an ADR-007 source export, and plain `node` cannot resolve the
+      # `.js`-suffixed relative imports inside those `.ts` files
+      # (confirmed empirically: `node tools/schema-cli/dist/index.js <any
+      # subcommand>` fails with `ERR_MODULE_NOT_FOUND` — this is what the
+      # old `node .github/scripts/pack-unsigned.mjs` step here actually did,
+      # via a spawned child process, and would have failed identically on
+      # its first real run). See `tools/schema-cli/src/ci-pack-builtin.
+      # test.ts`'s own doc comment for the full reasoning, including why it
+      # reuses `@mcs/schema-builtin`'s already-assembled `BUILTIN_MODULE_
+      # FILES` rather than re-deriving modules from the raw multi-file
+      # source tree the way `pack --source` used to be pointed at here (that
+      # tree is an *authoring* layout, not a packed-Bundle layout — pointing
+      # `pack` at it directly hashed 96 scattered component files instead of
+      # 10 assembled modules, which no real client could have loaded).
+      #
+      # ADR-010 §1 / ADR-024: this job has no access to the production key —
+      # the manifest this step writes has an empty `signature`, replaced by
+      # the real one in sign-and-release below.
+      - name: Pack the built-in Bundle (static check + hash real content; signature left empty)
+        env:
+          CI_PACK_OUT_DIR: unsigned-bundle
+          CI_BUNDLE_ID: official
+          CI_BUNDLE_VERSION: ${{ steps.version.outputs.value }}
+          CI_BUNDLE_CHANNEL: stable
+          CI_FORMAT_VERSION: "1"
+          CI_REQUIRES_APP: "0.1.0"
+          CI_MIHOMO_MIN_VERSION: "1.19.29"
+          CI_MIHOMO_MAX_TESTED_VERSION: "1.19.29"
+          CI_MIHOMO_UPSTREAM_COMMIT: e26714a181ac0e2fa803453c0a8e9a9ce94e31cb
+          CI_MIHOMO_DOCS_SNAPSHOT: "2026-08-19"
+        run: pnpm run schema-release:pack
 
       - uses: actions/upload-artifact@v4
         with:
           name: unsigned-bundle
-          path: |
-            unsigned-manifest.json
-            packages/schema-builtin/modules
+          path: unsigned-bundle
 
   sign-and-release:
     name: sign with the production key and publish the GitHub Release
@@ -154,9 +194,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Explicit `path:` — without one, `download-artifact@v4` drops the
+      # artifact's files straight into the checkout root (this repo's own
+      # `package.json` and friends live there too), which would both make
+      # the `unsigned-bundle/...` paths below wrong and let the release
+      # step's `*.json` glob catch unrelated repo files.
       - uses: actions/download-artifact@v4
         with:
           name: unsigned-bundle
+          path: unsigned-bundle
 
       # Version comes from package.json's `packageManager` — see the note on
       # the first pnpm/action-setup step in .github/workflows/ci.yml.
@@ -171,14 +217,18 @@ jobs:
 
       - run: pnpm exec tsc -b tsconfig.build.json
 
-      # ADR-010 §4: the key is injected via `env:` (GitHub masks the exact
-      # secret string wherever it is used) and read from `process.env` inside
-      # sign-manifest.mjs, then written directly to the child process's
-      # stdin — it never appears on this or any shell command line.
+      # v1.0.0 #10: `pnpm exec vitest`, not plain `node` — same module-
+      # resolution reasoning as the pack step above (`ci-sign-manifest.
+      # test.ts`'s own doc comment has the full explanation). ADR-010 §4
+      # still holds: the key is injected via `env:` (GitHub masks the exact
+      # secret string wherever it is used) and read from `process.env`
+      # inside the test file — it never appears on a command line.
       - name: Sign the manifest with the production key
         env:
           SCHEMA_SIGNING_KEY_B64: ${{ secrets.SCHEMA_SIGNING_KEY_B64 }}
-        run: node .github/scripts/sign-manifest.mjs unsigned-manifest.json signed-manifest.json
+          CI_SIGN_MANIFEST_IN: unsigned-bundle/unsigned-manifest.json
+          CI_SIGN_MANIFEST_OUT: signed-manifest.json
+        run: pnpm run schema-release:sign
 
       # Uploaded regardless of trigger — this is the "the approval-gated job
       # actually produced a signed artifact" evidence for a manual
@@ -189,11 +239,21 @@ jobs:
           name: signed-manifest
           path: signed-manifest.json
 
-      - name: Archive the module files as a single release asset
+      # Every module file is its own release asset, not a zip — a GitHub
+      # Release asset has no directory structure, and the client
+      # (`updater.ts`'s `fetchBundle`) fetches each file individually as
+      # `${fileBaseUrl}/${entry.path}`. `ci-pack-builtin.test.ts` already
+      # wrote flat, slash-free filenames (`dns.json`, not `modules/dns.json`)
+      # for exactly this reason — a zip's contents are not individually
+      # addressable by URL, so archiving them would ship a Bundle no client
+      # could actually update from.
+      #
+      # The unsigned manifest already did its job (it was read above, in the
+      # sign step) — it must not also get uploaded as a release asset next
+      # to the real, signed one.
+      - name: Drop the now-superseded unsigned manifest before publishing
         if: github.event_name == 'push'
-        run: |
-          cd packages/schema-builtin/modules
-          zip -r ../../../bundle-files.zip .
+        run: rm unsigned-bundle/unsigned-manifest.json
 
       # Only a real tag push publishes a GitHub Release — a workflow_dispatch
       # run (used to verify the approval gate itself) must never create one.
@@ -203,6 +263,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: >
           gh release create ${{ github.ref_name }}
-          signed-manifest.json bundle-files.zip
+          signed-manifest.json unsigned-bundle/*.json
           --title "Schema Bundle ${{ github.ref_name }}"
           --generate-notes

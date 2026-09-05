@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@mcs/migration": "workspace:*",
+    "@mcs/schema-builtin": "workspace:*",
     "@mcs/schema-core": "workspace:*",
     "@mcs/schema-registry": "workspace:*",
     "@mcs/yaml-engine": "workspace:*"

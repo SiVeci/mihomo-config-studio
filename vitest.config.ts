@@ -21,7 +21,21 @@ const include = [
  * step, not buried inside the 2000+-case default run) — see the
  * `1 MB import success rate` step.
  */
-const EXCLUDED_FROM_DEFAULT_SUITE = ['packages/validator/src/import-success-rate.test.ts'];
+/**
+ * `ci-pack-builtin.test.ts`/`ci-sign-manifest.test.ts` (v1.0.0 #10) are not
+ * tests — they are `schema-release.yml`'s actual pack/sign steps, run via
+ * `pnpm exec vitest run <file>` because every package they touch is an
+ * ADR-007 source export that plain `node` cannot resolve. Real content only
+ * appears when their own required env vars are set (never true for a normal
+ * `pnpm run test`/`check`); left in the default suite they would run to a
+ * no-op every time and contribute nothing but uncovered branches against
+ * the 85%/80% thresholds.
+ */
+const EXCLUDED_FROM_DEFAULT_SUITE = [
+  'packages/validator/src/import-success-rate.test.ts',
+  'tools/schema-cli/src/ci-pack-builtin.test.ts',
+  'tools/schema-cli/src/ci-sign-manifest.test.ts',
+];
 
 // ADR-033 (v0.9.0 #7): `e2e/**` is Playwright's own suite, run only via
 // `pnpm run e2e`, never through vitest — none of the patterns above can

@@ -17,6 +17,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:import-success-rate": "vitest run --config vitest.slow.config.ts",
+    "schema-release:pack": "vitest run --config vitest.schema-release.config.ts tools/schema-cli/src/ci-pack-builtin.test.ts",
+    "schema-release:sign": "vitest run --config vitest.schema-release.config.ts tools/schema-cli/src/ci-sign-manifest.test.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",

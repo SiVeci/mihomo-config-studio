@@ -83,9 +83,21 @@ export const BUILTIN_MODULE: SchemaModule = GENERAL_MODULE;
  * own version-collapse to `1.0.0` (the app version, a different axis
  * entirely — this manifest's `version` is the Bundle *content* version) is
  * v1.0.0 plan #5's job, not this re-issue's.
+ *
+ * **v1.0.0 #10: re-signed with the real production key.** The user generated
+ * an Ed25519 keypair offline (this assistant never generated, read, or held
+ * the private key — the user ran a standalone local script against their own
+ * key file and reported back only the resulting public key and signature).
+ * The signature below was independently re-verified against the real
+ * `canonicalManifestJson`/`SubtleCryptoEd25519Verifier` (not just the local
+ * signing script's own output) before being committed here. Content
+ * (`version`/`files`/module bytes) is byte-for-byte identical to the
+ * bootstrap-signed manifest above — this re-issue only swaps which key
+ * signed it, retiring the bootstrap keypair per ADR-020's "production key
+ * re-sign is still a v0.5.0 obligation" note, finally discharged here.
  */
 export const BUILTIN_TRUST_ANCHORS_HEX: readonly string[] = [
-  '806774f6e52a8c2d2b8bfa8364967cf0df4f81a2d81100a3858b58a0ba906612',
+  'ec953eeb3b6e83a6997f4ae6b16ccbb3d53864d3ac2828188c169fdd5c28d4d3',
 ];
 
 export const BUILTIN_MANIFEST: BundleManifest = {
@@ -146,8 +158,8 @@ export const BUILTIN_MANIFEST: BundleManifest = {
     },
   ],
   signature:
-    '75464c1246eae2e85cad60871425dffda6b2fef135cf236455d9e806543a18a83720585862d486e39209b04ccf726429896f6675426d7f7adcad9b68b6f70306',
-  signedAt: '2026-09-04T00:00:00Z',
+    '2add02e2fbe69c494a48963b0d114f6bb31389dee0eeb8ef60e17d4a9eb6d69f6bd1a29ac6df16d757822c47470dc5f72be70c1abe856de10a6073677137da03',
+  signedAt: '2026-09-05T00:00:00Z',
 };
 
 export interface BuiltinBundle {
