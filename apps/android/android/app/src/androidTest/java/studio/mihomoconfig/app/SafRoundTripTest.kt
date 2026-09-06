@@ -137,11 +137,22 @@ class SafRoundTripTest {
      * Scrolls the long project-detail form into view first — most of this
      * app's buttons are well below the fold on a phone. `UiScrollable`'s own
      * `scrollable(true)` auto-detection is tried first but is not fully
-     * trusted alone: this page can have more than one scrollable node (the
-     * import textarea is itself one), so a manual swipe-and-recheck loop
-     * backs it up rather than assuming the first node `UiScrollable` finds
-     * is the outer page. Screens with no scrollable container at all (the
-     * project list) just skip both and go straight to the direct find.
+     * trusted alone: a manual swipe-and-recheck loop backs it up rather
+     * than assuming the first node `UiScrollable` finds is the outer page.
+     * Screens with no scrollable container at all just skip both and go
+     * straight to the direct find.
+     *
+     * That `UiScrollable` step is now known never to succeed here — a live
+     * host-side dump shows **no** node on this page is `scrollable="true"`
+     * (Chromium scrolls the document itself without exposing a scrollable
+     * node), so it can only search to `setMaxSearchSwipes` and give up, at
+     * a measured cost of ~87 seconds per call. It is deliberately still
+     * here anyway: removing it on its own was tried and made things *worse*
+     * (4 scenarios failing instead of 3), because
+     * `cancelingThePickerDoesNotCrashTheApp` turns out to depend on the
+     * multi-second implicit settle it incidentally provides after returning
+     * from the SAF picker. Whoever removes it must add a real explicit wait
+     * in the same change — see the evidence doc's fourth round.
      *
      * `isLaidOut` exists because `findObject` alone matches the instant a
      * selector's text/resource-id exists anywhere in the accessibility
@@ -151,14 +162,28 @@ class SafRoundTripTest {
      * (collapsed to the origin, or clipped to zero height at the viewport's
      * bottom edge) while genuinely off-screen. Without this check,
      * `tapText`/`tapResourceId` stopped swiping the moment `findObject`
-     * returned non-null, before the page had scrolled at all. This check
-     * is confirmed necessary but **not sufficient**: `docs/releases/plans/
-     * v0.9.0-android-e2e-evidence.md` records a further, still-unresolved
-     * finding from the same investigation — once this in-process
-     * `device.swipe()` runs even once, `findObject` stops finding "导出"
-     * at all (not just with bad bounds), unlike the same gesture issued
-     * externally via `adb shell input swipe`, which reliably scrolls it
-     * into view within a few tries. Root cause not yet confirmed.
+     * returned non-null, before the page had scrolled at all.
+     *
+     * This check is confirmed necessary but **not sufficient**, and the
+     * reason is *not* the one earlier rounds of this investigation
+     * recorded. `docs/releases/plans/v0.9.0-android-e2e-evidence.md`'s
+     * fourth round replaces the old "an in-process `device.swipe()` breaks
+     * `findObject`, an external `adb shell input swipe` does not" reading —
+     * that was measured and disproved; both gestures behave identically.
+     * What in-process logging of the live tree actually shows: the moment
+     * this WebView scrolls *by any means at all*, its entire Chromium
+     * virtual view hierarchy disappears from the accessibility tree **as
+     * this instrumentation process sees it** — 54 nodes carrying real text
+     * before the first scroll, 8 (the bare native `Activity` shell, no text
+     * at all) after it, and it never comes back for the rest of the test
+     * method. A *separate, external* accessibility client (`adb shell
+     * uiautomator dump` from the host) looking at the same screen at the
+     * same moment still sees the complete tree with correct, clickable
+     * bounds, and host-side screenshots show the button plainly rendered.
+     * It is not a stale client-side node cache either: forcing
+     * `AccessibilityInteractionClient`'s cache to drop (via
+     * `UiAutomation.setServiceInfo`) leaves the count at 8. Why Chromium
+     * stops exposing the tree on this connection is still unconfirmed.
      */
     private fun UiObject2.isLaidOut(): Boolean = visibleBounds.let { it.width() > 0 && it.height() > 0 }
 
