@@ -34,10 +34,27 @@
   .app-shell--narrow-sidebar .app-shell__main {
     display: none;
   }
-  .status-bar {
+  /**
+   * Scoped to the ancestor these two actually render into (AppShell.tsx's
+   * `<main className="app-shell__main">`) so they out-specify the
+   * `display: none` defaults in StatusBar.css/BottomNav.css.
+   *
+   * A bare `.status-bar`/`.bottom-nav` here does NOT work, and did not:
+   * a media query adds no specificity, so those rules tied with the
+   * component defaults at (0,1,0) and lost on source order — Vite emits
+   * this file (imported by AppShell.tsx) before StatusBar.css/BottomNav.css
+   * (imported further down the module graph), so `display: none` came last
+   * and won. The result was that PRD §7.3's narrow-screen status bar and
+   * bottom nav never rendered at any viewport width: on a phone there was
+   * no save-status indicator and no "返回项目列表" control at all, leaving
+   * a narrow-screen user with no way back to the project list. Found by
+   * `SafRoundTripTest` (v0.9.0 #9), which could not reach either element;
+   * `AppShell.test.tsx` now pins this precedence directly.
+   */
+  .app-shell__main .status-bar {
     display: flex;
   }
-  .bottom-nav {
+  .app-shell__main .bottom-nav {
     display: flex;
   }
   .app-shell__main {

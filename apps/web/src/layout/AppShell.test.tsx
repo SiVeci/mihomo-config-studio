@@ -70,6 +70,32 @@ describe('AppShell', () => {
     expect(css).toContain('.project-mobile-page--active');
   });
 
+  it('turns StatusBar/BottomNav on with a selector that out-specifies their own display:none defaults — a media query adds no specificity, so a bare .status-bar rule here loses to StatusBar.css on source order and the narrow-screen chrome never renders at all', () => {
+    const css = readResponsiveCss();
+    const componentDefaults = ['StatusBar.css', 'BottomNav.css'].map((file) =>
+      readFileSync(join(dirname(fileURLToPath(import.meta.url)), file), 'utf8'),
+    );
+
+    // The defaults these have to beat are single-class, specificity (0,1,0).
+    expect(componentDefaults[0]).toMatch(/\.status-bar\s*\{[^}]*display:\s*none/);
+    expect(componentDefaults[1]).toMatch(/\.bottom-nav\s*\{[^}]*display:\s*none/);
+
+    // So the activation rules must carry an extra class, not sit at (0,1,0)
+    // too and depend on which file the bundler happens to emit last.
+    expect(css).toMatch(/\.app-shell__main\s+\.status-bar\s*\{[^}]*display:\s*flex/);
+    expect(css).toMatch(/\.app-shell__main\s+\.bottom-nav\s*\{[^}]*display:\s*flex/);
+  });
+
+  it('renders StatusBar/BottomNav inside .app-shell__main, which is what makes the scoped narrow-screen selectors above match', () => {
+    const { container } = render(
+      <AppShell sidebar={<p>sidebar</p>}>
+        <div className="status-bar">status</div>
+      </AppShell>,
+    );
+
+    expect(container.querySelector('.app-shell__main .status-bar')).not.toBeNull();
+  });
+
   it('defaults to the main column on a narrow screen, not a squeezed sidebar+main split — caught by loading a real build at a 375px viewport, since jsdom never applies @media at all', () => {
     const { container } = render(<AppShell sidebar={<p>sidebar</p>}>main</AppShell>);
 

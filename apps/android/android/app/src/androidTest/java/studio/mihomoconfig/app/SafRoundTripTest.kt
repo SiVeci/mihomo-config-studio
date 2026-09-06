@@ -1,13 +1,12 @@
 package studio.mihomoconfig.app
 
 import android.content.Intent
+import android.graphics.Rect
+import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
-import androidx.test.uiautomator.UiObject2
-import androidx.test.uiautomator.UiObjectNotFoundException
-import androidx.test.uiautomator.UiScrollable
 import androidx.test.uiautomator.UiSelector
 import androidx.test.uiautomator.Until
 import java.security.MessageDigest
@@ -23,6 +22,11 @@ private const val PACKAGE_NAME = "studio.mihomoconfig.app"
 private const val DOCUMENTSUI_PACKAGE = "com.google.android.documentsui"
 private const val DOWNLOADS_DIR = "/storage/emulated/0/Download"
 private const val WAIT_MS = 15_000L
+
+private const val SETTLE_POLL_MS = 150L
+
+/** How long to let the accessibility event stream go quiet before trusting a coordinate — see `awaitNodeOnScreen`. */
+private const val IDLE_MS = 3_000L
 
 /**
  * v0.9.0 #9 (PRD §13.4 Android line; §13.5 release-blocker #5). **Real
@@ -134,110 +138,169 @@ class SafRoundTripTest {
     // ---- WebView (this app's own UI) helpers ----
 
     /**
-     * Scrolls the long project-detail form into view first — most of this
-     * app's buttons are well below the fold on a phone. `UiScrollable`'s own
-     * `scrollable(true)` auto-detection is tried first but is not fully
-     * trusted alone: a manual swipe-and-recheck loop backs it up rather
-     * than assuming the first node `UiScrollable` finds is the outer page.
-     * Screens with no scrollable container at all just skip both and go
-     * straight to the direct find.
+     * Everything below locates nodes by walking the live accessibility tree
+     * (see [findNode]) and taps real screen coordinates, instead of the
+     * `UiScrollable` + swipe-until-found + `UiDevice.findObject` apparatus
+     * this suite used through its first four investigation rounds. That
+     * apparatus is gone because all three of its parts were measured and
+     * found to be either useless or actively harmful here — the full
+     * derivation is in `docs/releases/plans/v0.9.0-android-e2e-evidence.md`,
+     * the short version:
      *
-     * That `UiScrollable` step is now known never to succeed here — a live
-     * host-side dump shows **no** node on this page is `scrollable="true"`
-     * (Chromium scrolls the document itself without exposing a scrollable
-     * node), so it can only search to `setMaxSearchSwipes` and give up, at
-     * a measured cost of ~87 seconds per call. It is deliberately still
-     * here anyway: removing it on its own was tried and made things *worse*
-     * (4 scenarios failing instead of 3), because
-     * `cancelingThePickerDoesNotCrashTheApp` turns out to depend on the
-     * multi-second implicit settle it incidentally provides after returning
-     * from the SAF picker. Whoever removes it must add a real explicit wait
-     * in the same change — see the evidence doc's fourth round.
-     *
-     * `isLaidOut` exists because `findObject` alone matches the instant a
-     * selector's text/resource-id exists anywhere in the accessibility
-     * tree — including this app's own self-built list virtualization's
-     * not-yet-laid-out sections, confirmed live (`uiautomator dump` right
-     * after pasting+importing) to report a real but degenerate bounds rect
-     * (collapsed to the origin, or clipped to zero height at the viewport's
-     * bottom edge) while genuinely off-screen. Without this check,
-     * `tapText`/`tapResourceId` stopped swiping the moment `findObject`
-     * returned non-null, before the page had scrolled at all.
-     *
-     * This check is confirmed necessary but **not sufficient**, and the
-     * reason is *not* the one earlier rounds of this investigation
-     * recorded. `docs/releases/plans/v0.9.0-android-e2e-evidence.md`'s
-     * fourth round replaces the old "an in-process `device.swipe()` breaks
-     * `findObject`, an external `adb shell input swipe` does not" reading —
-     * that was measured and disproved; both gestures behave identically.
-     * What in-process logging of the live tree actually shows: the moment
-     * this WebView scrolls *by any means at all*, its entire Chromium
-     * virtual view hierarchy disappears from the accessibility tree **as
-     * this instrumentation process sees it** — 54 nodes carrying real text
-     * before the first scroll, 8 (the bare native `Activity` shell, no text
-     * at all) after it, and it never comes back for the rest of the test
-     * method. A *separate, external* accessibility client (`adb shell
-     * uiautomator dump` from the host) looking at the same screen at the
-     * same moment still sees the complete tree with correct, clickable
-     * bounds, and host-side screenshots show the button plainly rendered.
-     * It is not a stale client-side node cache either: forcing
-     * `AccessibilityInteractionClient`'s cache to drop (via
-     * `UiAutomation.setServiceInfo`) leaves the count at 8. Why Chromium
-     * stops exposing the tree on this connection is still unconfirmed.
+     * - `UiScrollable(UiSelector().scrollable(true))` could never work: a
+     *   live host-side dump shows **no** node on this page is
+     *   `scrollable="true"` (Chromium scrolls the document itself without
+     *   exposing a scrollable node), so it only ever searched to
+     *   `setMaxSearchSwipes` and gave up, at a measured ~87 seconds a call.
+     * - The swipe loop was worse than useless: scrolling this WebView by
+     *   touch gesture — issued in-process via `UiDevice.swipe()` *or*
+     *   externally via `adb shell input swipe`, the two behave identically
+     *   — collapses its entire Chromium virtual view hierarchy out of the
+     *   accessibility tree as this process sees it (54 nodes carrying real
+     *   text before, 8 bare native shell nodes after, never recovering
+     *   within the test method), while an external client looking at the
+     *   same screen still sees the complete tree.
+     * - And none of that scrolling was ever needed: the target was on
+     *   screen the whole time. `findObject` simply could not see it.
      */
-    private fun UiObject2.isLaidOut(): Boolean = visibleBounds.let { it.width() > 0 && it.height() > 0 }
+    private fun rootNode(): AccessibilityNodeInfo? =
+        InstrumentationRegistry.getInstrumentation().uiAutomation.rootInActiveWindow
+
+    /**
+     * Depth-first walk of the live accessibility tree, and the reason this
+     * suite no longer locates anything inside its own WebView through
+     * `UiDevice.findObject`.
+     *
+     * The two obvious shortcuts do not work here. `AccessibilityNodeInfo`'s
+     * own `findAccessibilityNodeInfosByText`/`...ByViewId` are optional for
+     * a virtual view hierarchy to implement and Chromium's does not — asked
+     * for "导出" against a live tree that demonstrably contained it, they
+     * return an empty list. And `UiDevice.findObject`, which does walk,
+     * goes selectively blind on this page: logged live, at the exact moment
+     * this walk found "导出" sitting at `Rect(63, 1816 - 175, 1887)` —
+     * on screen, correct size, ready to tap — `findObject(By.text("导出"))`
+     * returned `null` for the same string on the same screen. Smaller
+     * screens on the way there (26 and 42 nodes) resolved identically
+     * through both; the divergence showed up on the 54-node project page.
+     * The likely mechanism is that `findObject` searches the roots handed
+     * out by `UiAutomation.getWindows()` while this walk starts from
+     * `rootInActiveWindow`, and only the latter is fresh — but that is
+     * inference, not something this suite has proved, so treat it as the
+     * observation it is: on this page, walk the tree, do not ask
+     * `findObject`.
+     *
+     * This also retires the whole swipe-until-it-appears apparatus that
+     * used to live here. "导出" was never actually off-screen and never
+     * needed scrolling; the scrolling only ever existed to work around the
+     * blind lookup, and it was itself what tore this WebView's
+     * accessibility tree down (evidence doc, fourth round).
+     */
+    private fun findNode(node: AccessibilityNodeInfo?, match: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? {
+        if (node == null) return null
+        if (match(node)) return node
+        for (i in 0 until node.childCount) {
+            findNode(node.getChild(i), match)?.let { return it }
+        }
+        return null
+    }
+
+    private fun AccessibilityNodeInfo.screenBounds(): Rect = Rect().also { getBoundsInScreen(it) }
+
+    /** Only for failure messages — a bare "never appeared" on a screen this dense is not enough to debug from. */
+    private fun visibleTexts(): List<String> {
+        val found = mutableListOf<String>()
+        fun walk(node: AccessibilityNodeInfo?) {
+            if (node == null) return
+            node.text?.toString()?.takeIf { it.isNotBlank() }?.let { found.add(it) }
+            for (i in 0 until node.childCount) walk(node.getChild(i))
+        }
+        walk(rootNode())
+        return found
+    }
+
+    /**
+     * Waits for [desc] to appear, scrolls it into view, and returns the
+     * screen rect to tap — but only once Chromium has actually finished
+     * laying the page out.
+     *
+     * That last part is the whole difficulty. Chromium's accessibility
+     * bounds lag this page's layout after a re-render, and they lag it
+     * *stably*, which defeats a naive "wait until it stops moving" check:
+     * measured, after switching to the 表单 tab, `/ipv6` kept reporting the
+     * position it held on the previous layout, identically on read after
+     * read, and a tap at that centre landed on the 运行模式 `<select>`
+     * above it and opened that dropdown (`[rule, global, direct]`) instead.
+     * The same lag put "导出" at y=1816 while that band of screen was
+     * showing the form's 常规 fieldset.
+     *
+     * Two things fix it, and both are needed. [UiDevice.waitForIdle] waits
+     * out the accessibility event stream, which is what Chromium emits as
+     * it relayouts, so reads happen after the dust settles rather than
+     * during. And `ACTION_SHOW_ON_SCREEN` — a DOM scroll-into-view, a no-op
+     * when the element is already visible — makes Chromium republish real
+     * bounds for anything below the fold; it is what turns that stale
+     * y=1816 for "导出" into its true y=1199.
+     *
+     * Clicking the node directly via `ACTION_CLICK` instead of tapping
+     * coordinates was tried and does not work here: Chromium reports the
+     * node clickable and returns success for the action, but no DOM click
+     * is dispatched and the UI does not react at all.
+     */
+    private fun awaitNodeOnScreen(desc: String, match: (AccessibilityNodeInfo) -> Boolean): Rect {
+        val deadline = System.currentTimeMillis() + WAIT_MS
+        var lastSeen: Rect? = null
+        var settledAt: Rect? = null
+        var nudged = false
+        while (System.currentTimeMillis() < deadline) {
+            device.waitForIdle(IDLE_MS)
+            val node = findNode(rootNode(), match)
+            if (node == null) {
+                settledAt = null
+                Thread.sleep(SETTLE_POLL_MS)
+                continue
+            }
+            if (!nudged) {
+                nudged = true
+                node.performAction(android.R.id.accessibilityActionShowOnScreen)
+                device.waitForIdle(IDLE_MS)
+                continue
+            }
+            val bounds = node.screenBounds()
+            lastSeen = bounds
+            if (bounds.width() > 0 && bounds.height() > 0 && bounds.bottom > 0 && bounds.top < device.displayHeight) {
+                if (bounds == settledAt) return bounds
+                settledAt = bounds
+            } else {
+                settledAt = null
+                node.performAction(android.R.id.accessibilityActionShowOnScreen)
+            }
+            Thread.sleep(SETTLE_POLL_MS)
+        }
+        throw AssertionError("'$desc' never appeared (last seen bounds: $lastSeen; on screen now: ${visibleTexts()})")
+    }
+
+    /** A real touch at the target's real centre — the same gesture a user makes. */
+    private fun tapNodeAt(bounds: Rect) {
+        device.click(bounds.centerX(), bounds.centerY())
+        device.waitForIdle(IDLE_MS)
+    }
 
     private fun tapText(text: String) {
-        try {
-            UiScrollable(UiSelector().scrollable(true)).scrollIntoView(UiSelector().text(text))
-        } catch (_: UiObjectNotFoundException) {
-            // No scrollable container on this screen.
-        }
-        var target = device.findObject(By.text(text))?.takeIf { it.isLaidOut() }
-        var remainingSwipes = 12
-        while (target == null && remainingSwipes > 0) {
-            device.swipe(540, 1600, 540, 400, 20)
-            target = device.findObject(By.text(text))?.takeIf { it.isLaidOut() }
-            remainingSwipes--
-        }
-        if (target == null) {
-            val deadline = System.currentTimeMillis() + WAIT_MS
-            while (target == null && System.currentTimeMillis() < deadline) {
-                Thread.sleep(200)
-                target = device.findObject(By.text(text))?.takeIf { it.isLaidOut() }
-            }
-        }
-        assertNotNull("'$text' never appeared", target)
-        target!!.click()
+        tapNodeAt(awaitNodeOnScreen(text) { it.text?.toString() == text })
     }
 
     private fun waitForText(text: String) {
-        assertTrue("'$text' never appeared", device.wait(Until.hasObject(By.text(text)), WAIT_MS))
+        val deadline = System.currentTimeMillis() + WAIT_MS
+        while (System.currentTimeMillis() < deadline) {
+            if (findNode(rootNode()) { it.text?.toString() == text } != null) return
+            Thread.sleep(100)
+        }
+        throw AssertionError("'$text' never appeared")
     }
 
-    /** For form controls specifically — see the class doc comment on why these need `resource-id`, not text, as the selector, and `tapText`'s doc comment on why the swipe loop checks real bounds rather than mere existence. */
+    /** For form controls specifically — see the class doc comment on why these need `resource-id`, not text, as the selector. */
     private fun tapResourceId(id: String) {
-        try {
-            UiScrollable(UiSelector().scrollable(true)).scrollIntoView(UiSelector().resourceId(id))
-        } catch (_: UiObjectNotFoundException) {
-            // No scrollable container on this screen.
-        }
-        var target = device.findObject(By.res(id))?.takeIf { it.isLaidOut() }
-        var remainingSwipes = 12
-        while (target == null && remainingSwipes > 0) {
-            device.swipe(540, 1600, 540, 400, 20)
-            target = device.findObject(By.res(id))?.takeIf { it.isLaidOut() }
-            remainingSwipes--
-        }
-        if (target == null) {
-            val deadline = System.currentTimeMillis() + WAIT_MS
-            while (target == null && System.currentTimeMillis() < deadline) {
-                Thread.sleep(200)
-                target = device.findObject(By.res(id))?.takeIf { it.isLaidOut() }
-            }
-        }
-        assertNotNull("resource-id '$id' never appeared", target)
-        target!!.click()
+        tapNodeAt(awaitNodeOnScreen("resource-id '$id'") { it.viewIdResourceName == id })
     }
 
     /** Input side of every scenario below — see the class doc comment for why this replaces opening a pre-staged on-device file. `ImportPanel.tsx`'s textarea (`id="import-paste"`) has the same label-not-surfaced shape `tapResourceId` already works around. */
@@ -351,7 +414,17 @@ class SafRoundTripTest {
         // controls above it was never confirmed reachable by resource-id on
         // this WebView, and this suite does not assert through a mechanism
         // it has not independently verified.
-        device.pressBack()
+        // `ExportDialog` deliberately stays open after a save (`handleExportYaml`
+        // never calls `onClose` — exporting twice in a row is a supported
+        // thing to do), so leaving it is its own explicit step, the same
+        // "关闭" a user taps. Backing out of it with `pressBack` instead
+        // would spend the back press on the dialog and leave the project
+        // page still showing.
+        tapText("关闭")
+        // `StatusBar`'s own control (PRD §7.3), the only way back to the
+        // list on a narrow screen — the sidebar holding the project list is
+        // hidden at this width.
+        tapText("返回项目列表")
         tapText("新建项目")
         tapText("选择文件")
         pickFileInDocumentsUi(firstSaveName)
